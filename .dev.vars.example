@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local development. Both values below are safe defaults:
+# the Turnstile key is Cloudflare's public "always passes" test secret.
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+TICKET_SECRET=dev-only-ticket-secret-change-me

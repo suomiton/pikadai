@@ -1,0 +1,81 @@
+/*
+ * Design tokens.
+ * Palette: "Golden Twilight" (six colours). Swap the --gt-* values to re-theme everything.
+ */
+:root {
+  color-scheme: dark;
+
+  --gt-gold-1: #f0c05b;
+  --gt-gold-2: #f1a029;
+  --gt-gold-3: #d28a2b;
+  --gt-gold-4: #b76f2d;
+  --gt-violet: #6a4b8a;
+  --gt-indigo: #2e2a54;
+
+  /* Semantic tokens, dark theme (default) */
+  --bg: #1c1939;
+  --bg-elev: var(--gt-indigo);
+  --bg-elev-2: #3a3467;
+  --bg-inset: #171433;
+  --border: #463d73;
+  --border-strong: var(--gt-violet);
+  --text: #f5ead4;
+  --text-muted: #bfb0cf;
+  --text-faint: #8d7fa6;
+
+  --accent: var(--gt-gold-1);
+  --accent-strong: var(--gt-gold-2);
+  --accent-hover: var(--gt-gold-3);
+  --accent-active: var(--gt-gold-4);
+  --on-accent: var(--gt-indigo);
+
+  --secondary: var(--gt-violet);
+  --secondary-hover: #7d5aa3;
+  --on-secondary: #f5ead4;
+
+  --yes: var(--gt-gold-1);
+  --maybe: var(--gt-gold-3);
+  --no: var(--gt-violet);
+  --best-bg: rgba(240, 192, 91, 0.12);
+  --danger: #d8716c;
+  --focus: var(--gt-gold-2);
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --font: 'Iosevka Charon Mono', 'Iosevka', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+
+    --bg: #faf3e6;
+    --bg-elev: #fffaf1;
+    --bg-elev-2: #f3e7d1;
+    --bg-inset: #f4ecdc;
+    --border: #e3d4b9;
+    --border-strong: #cdb48c;
+    --text: var(--gt-indigo);
+    --text-muted: #5f5582;
+    --text-faint: #9a8fb3;
+
+    --accent: var(--gt-gold-4);
+    --accent-strong: var(--gt-gold-3);
+    --accent-hover: var(--gt-gold-2);
+    --accent-active: var(--gt-gold-1);
+    --on-accent: #fffaf1;
+
+    --secondary: var(--gt-violet);
+    --secondary-hover: #5a3f76;
+    --on-secondary: #fffaf1;
+
+    --yes: var(--gt-gold-3);
+    --maybe: var(--gt-gold-2);
+    --no: var(--gt-violet);
+    --best-bg: rgba(210, 138, 43, 0.14);
+    --danger: #b7433d;
+    --focus: var(--gt-gold-4);
+    --shadow: 0 12px 32px rgba(46, 42, 84, 0.12);
+  }
+}

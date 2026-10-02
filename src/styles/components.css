@@ -1,0 +1,578 @@
+/* Cards */
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+/* Hero */
+.hero {
+  padding: 1rem 0 1.75rem;
+  max-width: 44rem;
+}
+.hero h1 {
+  margin-bottom: 0.75rem;
+}
+.hero h1::before {
+  content: '> ';
+  color: var(--accent);
+}
+.hero p {
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+/* Event header */
+.event-head h1 {
+  margin-bottom: 0.5rem;
+}
+.event-description {
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  font-weight: 300;
+  max-width: 60ch;
+}
+.meta {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+}
+
+/* Tags */
+.tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+.tag-accent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-decoration: none;
+  line-height: 1.2;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 80ms ease;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-lg {
+  padding: 0.75rem 1.4rem;
+  font-size: 1.05rem;
+}
+.btn-sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-active);
+}
+
+.btn-secondary {
+  background: var(--secondary);
+  color: var(--on-secondary);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--secondary-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text);
+  font-weight: 400;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-elev-2);
+}
+.btn-ghost.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.icon-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  width: 2rem;
+  height: 2rem;
+  display: inline-grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+.icon-btn.danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+/* Forms */
+.field {
+  display: block;
+}
+.field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.field-label em {
+  font-style: normal;
+  font-weight: 300;
+  font-size: 0.8rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  transition: border-color 120ms ease;
+}
+.input::placeholder {
+  color: var(--text-faint);
+  font-weight: 300;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.input-sm {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.9rem;
+}
+textarea.input {
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+.check input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+}
+
+.field-error,
+.form-error {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+.form-error::before {
+  content: '! ';
+  font-weight: 700;
+}
+
+.hint {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  font-weight: 300;
+}
+
+/* Chips */
+.chips {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+.chip button {
+  background: transparent;
+  border: 0;
+  padding: 0 0.3rem;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+.chip button:hover {
+  color: var(--danger);
+}
+
+/* Calendar */
+.calendar {
+  max-width: 24rem;
+  padding: 0.75rem;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.calendar-title {
+  font-weight: 700;
+  text-transform: lowercase;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
+}
+.calendar-weekday {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  padding-bottom: 0.2rem;
+}
+.calendar-day {
+  aspect-ratio: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+  transition:
+    background-color 100ms ease,
+    border-color 100ms ease;
+}
+.calendar-day:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+.calendar-day.is-today {
+  color: var(--accent);
+  font-weight: 700;
+}
+.calendar-day.is-selected {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+.calendar-day.is-selected:hover {
+  background: var(--accent-hover);
+}
+.calendar-day.is-past {
+  color: var(--text-faint);
+  opacity: 0.45;
+}
+.calendar-day.is-taken {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* Copy fields */
+.copy-row {
+  display: flex;
+  gap: 0.5rem;
+}
+.copy-row .input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+.copy-field .hint {
+  margin-top: 0.35rem;
+}
+
+/* Vote table */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: -0.25rem;
+  padding: 0.25rem;
+}
+.vote-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  min-width: max-content;
+}
+.vote-table th,
+.vote-table td {
+  padding: 0.5rem 0.6rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.vote-table thead th {
+  vertical-align: bottom;
+  font-weight: 400;
+}
+.vote-table tfoot th,
+.vote-table tfoot td {
+  border-bottom: 0;
+  border-top: 1px solid var(--border-strong);
+  font-size: 0.85rem;
+}
+.vote-table .name-col {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--bg-elev);
+  min-width: 9rem;
+  max-width: 14rem;
+  font-weight: 400;
+  z-index: 1;
+}
+.vote-table tbody .name-col {
+  font-weight: 700;
+}
+.vote-table thead .name-col {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.participant-name {
+  overflow-wrap: anywhere;
+}
+.vote-table .actions-col {
+  width: 4.5rem;
+  text-align: right;
+}
+.vote-table tr.is-me .name-col {
+  color: var(--accent);
+}
+.vote-table tr.is-editing td,
+.vote-table tr.is-editing th {
+  background: var(--bg-elev-2);
+}
+.vote-table tr.is-editing .name-col {
+  background: var(--bg-elev-2);
+}
+.vote-table .is-empty td {
+  color: var(--text-faint);
+  font-weight: 300;
+  text-align: left;
+}
+
+.option-col {
+  min-width: 4.5rem;
+}
+.option-col span {
+  display: block;
+  line-height: 1.25;
+}
+.opt-weekday {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.opt-day {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.opt-year {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+.opt-tag {
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  color: var(--accent-strong);
+}
+.option-col .icon-btn {
+  margin: 0.2rem auto 0;
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.vote-cell {
+  font-size: 1.1rem;
+}
+.vote-glyph,
+.vote-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: var(--radius-sm);
+}
+.vote-btn {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  font-size: 1.1rem;
+  transition:
+    background-color 100ms ease,
+    border-color 100ms ease;
+}
+.vote-btn:hover {
+  border-color: var(--accent);
+}
+.vote-cell.is-yes {
+  color: var(--yes);
+  font-weight: 700;
+}
+.vote-cell.is-maybe {
+  color: var(--maybe);
+}
+.vote-cell.is-no {
+  color: var(--no);
+}
+.vote-cell.is-none {
+  color: var(--text-faint);
+}
+.vote-cell.is-yes .vote-btn {
+  background: color-mix(in srgb, var(--yes) 18%, var(--bg-inset));
+  border-color: var(--yes);
+}
+.vote-cell.is-maybe .vote-btn {
+  border-color: var(--maybe);
+}
+.vote-cell.is-no .vote-btn {
+  border-color: var(--no);
+}
+
+.is-best {
+  background: var(--best-bg);
+}
+thead th.is-best .opt-day {
+  color: var(--accent);
+}
+.tally strong {
+  color: var(--accent);
+}
+
+.edit-panel {
+  padding-top: 0.25rem;
+}
+
+.turnstile {
+  min-height: 65px;
+}
+
+/* Creation progress overlay */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(3px);
+  animation: fade-in 180ms ease-out;
+}
+.progress-card {
+  width: min(100%, 26rem);
+  box-shadow: var(--shadow);
+  animation: rise-in 220ms ease-out;
+}
+
+.progress-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  transition: color 200ms ease;
+}
+.step-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  font-weight: 700;
+}
+.step.is-pending {
+  color: var(--text-faint);
+  font-weight: 300;
+}
+.step.is-active {
+  color: var(--text);
+}
+.step.is-active .step-icon {
+  color: var(--accent);
+}
+.step.is-done {
+  color: var(--text-muted);
+}
+.step.is-done .step-icon {
+  color: var(--accent-strong);
+}
+.step.is-failed .step-icon {
+  color: var(--danger);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .card {
+    padding: 1rem;
+  }
+  .site-main {
+    padding: 1rem 0.75rem 2.5rem;
+  }
+  .copy-row {
+    flex-direction: column;
+  }
+}
