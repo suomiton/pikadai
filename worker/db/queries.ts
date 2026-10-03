@@ -1,4 +1,4 @@
-import type { Answer, EventOption, EventView, Participant } from '@shared/types';
+import type { Answer } from '@shared/types';
 import { computeExpiresAt } from '../lib/expiry';
 
 export interface EventRow {
@@ -30,7 +30,7 @@ export interface ParticipantRow {
   updated_at: number;
 }
 
-interface VoteRow {
+export interface VoteRow {
   participant_id: string;
   option_id: string;
   answer: Answer;
@@ -264,39 +264,20 @@ export async function getVotesForEvent(db: D1Database, eventId: string): Promise
   return results;
 }
 
-export async function buildEventView(db: D1Database, event: EventRow, isAdmin: boolean): Promise<EventView> {
+/** Everything under one event, read in parallel; `toEventView` in worker/lib/eventView.ts shapes it for the client. */
+export interface EventRows {
+  options: OptionRow[];
+  participants: ParticipantRow[];
+  votes: VoteRow[];
+}
+
+export async function fetchEventRows(db: D1Database, eventId: string): Promise<EventRows> {
   const [options, participants, votes] = await Promise.all([
-    getOptions(db, event.id),
-    getParticipants(db, event.id),
-    getVotesForEvent(db, event.id),
+    getOptions(db, eventId),
+    getParticipants(db, eventId),
+    getVotesForEvent(db, eventId),
   ]);
-
-  const votesByParticipant = new Map<string, Record<string, Answer>>();
-  for (const v of votes) {
-    let bucket = votesByParticipant.get(v.participant_id);
-    if (!bucket) {
-      bucket = {};
-      votesByParticipant.set(v.participant_id, bucket);
-    }
-    bucket[v.option_id] = v.answer;
-  }
-
-  return {
-    id: event.id,
-    title: event.title,
-    description: event.description,
-    allowSuggestions: event.allow_suggestions === 1,
-    createdAt: event.created_at,
-    expiresAt: event.expires_at,
-    options: options.map((o): EventOption => ({ id: o.id, date: o.date, suggestedBy: o.suggested_by })),
-    participants: participants.map((p): Participant => ({
-      id: p.id,
-      nickname: p.nickname,
-      votes: votesByParticipant.get(p.id) ?? {},
-      createdAt: p.created_at,
-    })),
-    viewer: { isAdmin },
-  };
+  return { options, participants, votes };
 }
 
 export async function deleteExpiredEvents(db: D1Database, now: number): Promise<number> {

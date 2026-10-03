@@ -177,16 +177,16 @@ Cascades remove the poll's options, participants, and votes. The handler logs th
 
 All SQL lives in `worker/db/queries.ts`. The main ones:
 
-| Function                                          | Used by                       | Query shape                                                                                    |
-| ------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------- |
-| `getEventRow`                                     | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                            |
-| `buildEventView`                                  | GET                           | three selects (options, participants, votes joined to participants) assembled into `EventView` |
-| `insertEventWithOptions`                          | POST events                   | batch: 1 event insert + N option inserts                                                       |
-| `insertParticipantWithVotes`                      | POST participants             | batch: 1 insert + N vote inserts                                                               |
-| `updateParticipantWithVotes`                      | PUT participant               | batch: update, delete votes, insert votes                                                      |
-| `nicknameTaken`                                   | POST/PUT participant          | `… WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`              |
-| `insertOption` / `deleteOption` / `refreshExpiry` | options routes                | insert or delete, then recompute `expires_at`                                                  |
-| `deleteExpiredEvents`                             | cron                          | the purge above                                                                                |
+| Function                                          | Used by                       | Query shape                                                                                                           |
+| ------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `getEventRow`                                     | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                                                   |
+| `fetchEventRows` + `toEventView`                  | GET                           | three selects (options, participants, votes joined to participants), then a pure mapping in `worker/lib/eventView.ts` |
+| `insertEventWithOptions`                          | POST events                   | batch: 1 event insert + N option inserts                                                                              |
+| `insertParticipantWithVotes`                      | POST participants             | batch: 1 insert + N vote inserts                                                                                      |
+| `updateParticipantWithVotes`                      | PUT participant               | batch: update, delete votes, insert votes                                                                             |
+| `nicknameTaken`                                   | POST/PUT participant          | `… WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                     |
+| `insertOption` / `deleteOption` / `refreshExpiry` | options routes                | insert or delete, then recompute `expires_at`                                                                         |
+| `deleteExpiredEvents`                             | cron                          | the purge above                                                                                                       |
 
 A poll view costs roughly 3 + participants + options row reads, and creating a poll costs 1 + options row
 writes. See the D1 free-plan limits in [cloudflare.md](cloudflare.md#d1) for why this is comfortable.

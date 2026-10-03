@@ -3,8 +3,9 @@ import { LIMITS } from '@shared/limits';
 import { createEventSchema, updateEventSchema } from '@shared/schemas';
 import type { CreateEventResponse } from '@shared/types';
 import type { AppEnv } from '../env';
-import { buildEventView, deleteEvent, insertEventWithOptions, updateEvent } from '../db/queries';
+import { deleteEvent, fetchEventRows, insertEventWithOptions, updateEvent } from '../db/queries';
 import { isAdmin, loadEvent, requireAdmin } from '../lib/auth';
+import { toEventView } from '../lib/eventView';
 import { computeExpiresAt } from '../lib/expiry';
 import { randomId, randomToken, sha256Hex } from '../lib/crypto';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
@@ -71,7 +72,7 @@ events.get(
   async (c) => {
     const event = await loadEvent(c);
     const admin = await isAdmin(c, event);
-    return c.json(await buildEventView(c.env.DB, event, admin));
+    return c.json(toEventView(event, await fetchEventRows(c.env.DB, event.id), admin));
   },
 );
 

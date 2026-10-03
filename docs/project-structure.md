@@ -42,9 +42,10 @@ pikadai/
 │   │   ├── turnstile.ts       siteverify call and the hostname/action check
 │   │   ├── ratelimit.ts       clientIp, rateLimitKey (IPv6 by /64), rateLimit middleware factory
 │   │   ├── expiry.ts          computeExpiresAt: when a poll is purged
+│   │   ├── eventView.ts       toEventView: rows → the EventView JSON, pure
 │   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, participantFromToken
 │   ├── db/
-│   │   └── queries.ts         All SQL; row types; buildEventView
+│   │   └── queries.ts         All SQL; row types; fetchEventRows
 │   └── test/                  Integration tests: the whole Worker in workerd with a local D1
 │       ├── setup.ts           Applies migrations/ before each file
 │       ├── helpers.ts         API client per address, aged tickets, siteverify stub, D1 helpers
