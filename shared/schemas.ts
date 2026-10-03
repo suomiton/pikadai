@@ -15,7 +15,7 @@ export const isoDateSchema = z
 
 export const answerSchema = z.enum(['yes', 'no', 'maybe']);
 
-export const nicknameSchema = z.string().trim().min(1, 'Nickname is required').max(LIMITS.nicknameMax);
+export const nameSchema = z.string().trim().min(1, 'Name is required').max(LIMITS.nameMax);
 
 /** The part of event creation the user fills in; validated client-side before the wait starts. */
 export const eventDraftSchema = z.object({
@@ -49,13 +49,13 @@ export const addOptionSchema = z.object({
 export const votesSchema = z.record(z.string().min(1).max(64), answerSchema);
 
 export const createParticipantSchema = z.object({
-  nickname: nicknameSchema,
+  name: nameSchema,
   votes: votesSchema,
   turnstileToken: z.string().min(1),
 });
 
 export const updateParticipantSchema = z.object({
-  nickname: nicknameSchema.optional(),
+  name: nameSchema.optional(),
   votes: votesSchema,
 });
 

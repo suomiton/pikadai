@@ -57,10 +57,17 @@ export interface DateScore {
  * earlier date. Dates nobody said yes to are left out, so a 0-of-3 row never reads as a top date.
  * Null until TOP_DATES_MIN_ANSWERS people have answered; before that a single yes would top the table.
  */
+/**
+ * Whether a participant has saved an answer for at least one date. Joining creates the row before any
+ * date is answered, and someone may join only to comment or change their name; until they answer, the
+ * page shows them only their own row and the top dates leave them out.
+ */
+export function hasAnswered(participant: Pick<Participant, 'votes'>): boolean {
+  return Object.keys(participant.votes).length > 0;
+}
+
 export function topDates(options: readonly EventOption[], participants: readonly Participant[]): DateScore[] | null {
-  // Joining creates a row before any date is answered, and someone may join only to comment; they have
-  // not answered, so they count for neither the threshold nor the share.
-  const answered = participants.filter((p) => Object.keys(p.votes).length > 0);
+  const answered = participants.filter(hasAnswered);
   const total = answered.length;
   if (total < TOP_DATES_MIN_ANSWERS) return null;
   // computeTallies has an entry for every option, so the lookups below never miss.

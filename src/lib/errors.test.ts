@@ -21,7 +21,7 @@ const WORKER_CODES = [
   'too_many_options',
   'date_exists',
   'event_full',
-  'nickname_taken',
+  'name_taken',
   'unknown_option',
   'not_owner',
   'not_participant',

@@ -3,7 +3,7 @@ import { FormError } from './FormError';
 interface Props {
   busy: boolean;
   error: string | null;
-  /** The id the nickname input points at when the error is about it. */
+  /** The id the name input points at when the error is about it. */
   errorId: string;
   onSave: () => void;
   onCancel: () => void;

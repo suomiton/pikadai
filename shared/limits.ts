@@ -2,7 +2,7 @@
 export const LIMITS = {
   titleMax: 100,
   descriptionMax: 500,
-  nicknameMax: 32,
+  nameMax: 32,
   optionsMax: 40,
   participantsMax: 100,
   /** Longest comment, in UTF-16 code units, which is what both the textarea and zod count. */

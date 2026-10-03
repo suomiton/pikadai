@@ -401,8 +401,8 @@ textarea.input {
   position: relative;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  /* Room for focus rings on the top, right and bottom. None on the left: the sticky nickname column
-     anchors inside the padding, so a left strip would let scrolled cells show beside it. The nickname
+  /* Room for focus rings on the top, right and bottom. None on the left: the sticky name column
+     anchors inside the padding, so a left strip would let scrolled cells show beside it. The name
      cells' own padding keeps their focus rings clear of that edge. */
   margin: -0.25rem -0.25rem -0.25rem 0;
   padding: 0.25rem 0.25rem 0.25rem 0;
@@ -598,9 +598,12 @@ thead th.is-best .opt-day {
   padding-top: 0.25rem;
 }
 
-/* The nickname step above the table, before anyone has joined from this browser. */
-.join-form {
+/* The Name tile: the join form before joining, the current name and a rename afterwards. */
+.name-card form {
   max-width: 28rem;
+}
+.name-card .section-head p {
+  margin: 0;
 }
 
 /* Comments */

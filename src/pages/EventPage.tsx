@@ -1,10 +1,13 @@
 import { useEffect } from 'react';
 import { Link, useParams } from 'react-router';
+import { LIMITS } from '@shared/limits';
 import { AdminPanel } from '../components/AdminPanel';
 import { Comments } from '../components/Comments';
+import { NameCard } from '../components/NameCard';
 import { ShareBox } from '../components/ShareBox';
 import { VoteGrid } from '../components/VoteGrid';
 import { formatTimestamp } from '../lib/dates';
+import { hasAnswered } from '../lib/votes';
 import { useAppState, usePollActions } from '../state/AppStateProvider';
 
 export function EventPage() {
@@ -52,8 +55,19 @@ export function EventPage() {
     );
   }
 
-  const { event, adminToken, error } = current;
+  const { event, adminToken, me, error } = current;
   const isAdmin = event.viewer.isAdmin;
+
+  /*
+   * The page unfolds in steps for someone answering. First only the Name tile; once they have joined,
+   * their own row and the comments; once they have answered a date, everyone's answers, the tallies
+   * and the share links. The organiser sees everything from the start, and so does a visitor who can
+   * no longer join because the poll is full.
+   */
+  const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
+  const isFull = event.participants.length >= LIMITS.participantsMax;
+  const showAll = isAdmin || (mine !== undefined && hasAnswered(mine)) || (me === null && isFull);
+  const joined = me !== null;
 
   return (
     <div className="stack-lg">
@@ -79,9 +93,10 @@ export function EventPage() {
         </div>
       )}
 
-      <VoteGrid />
-      <Comments />
-      <ShareBox />
+      {!(me === null && isFull) && <NameCard />}
+      {(joined || showAll) && <VoteGrid showAll={showAll} />}
+      {(joined || showAll) && <Comments />}
+      {showAll && <ShareBox />}
       {adminToken && <AdminPanel />}
     </div>
   );

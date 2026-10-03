@@ -135,7 +135,7 @@ export const api = {
       headers: authHeaders(auth),
     }),
 
-  /** Always as the participant: a comment is posted under a nickname, which the admin token does not have. */
+  /** Always as the participant: a comment is posted under a name, which the admin token does not have. */
   addComment: (id: string, input: CreateCommentInput, participant: ParticipantIdentity) =>
     request<Comment>(`${eventPath(id)}/comments`, {
       method: 'POST',

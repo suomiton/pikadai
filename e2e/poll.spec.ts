@@ -1,6 +1,6 @@
 import type { EventView } from '../shared/types';
 import { createPollViaApi, DUMMY_TURNSTILE_TOKEN, expect, futureIso, test } from './fixtures';
-import { answerDate, pickDate, waitForTurnstile } from './helpers';
+import { answerDate, nameField, pickDate, waitForTurnstile } from './helpers';
 
 test.describe('creating a poll', () => {
   test('walks through the form, the progress dialog and lands on the organiser view', async ({ page }) => {
@@ -80,7 +80,7 @@ test.describe('creating a poll', () => {
 });
 
 test.describe('answering a poll', () => {
-  test('a participant joins with a nickname, answers in the row that opens and can change it later', async ({
+  test('a participant joins with a name, answers in the row that opens and can change it later', async ({
     page,
     request,
     clientIp,
@@ -88,28 +88,33 @@ test.describe('answering a poll', () => {
     const poll = await createPollViaApi(request, clientIp);
     await page.goto(poll.participantUrl);
     await expect(page.getByRole('heading', { level: 1, name: 'Board game night' })).toBeVisible();
-    await expect(page.getByText('No answers yet. Be the first.')).toBeVisible();
 
-    // The nickname comes before the dates: the form sits above the table, the table has no Add button.
-    const nickname = page.getByLabel('Your nickname');
-    await expect(nickname).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add your availability' })).toHaveCount(0);
-    await nickname.fill('Ada');
+    // Step one: only the Name tile. No table, no comments, no share links yet.
+    await expect(page.getByRole('heading', { name: 'Name' })).toBeVisible();
+    await expect(page.getByRole('table')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Comments' })).toHaveCount(0);
+    await expect(page.getByLabel('Participant link')).toHaveCount(0);
+    await nameField(page).fill('Ada');
     const join = page.getByRole('button', { name: 'Join' });
     await waitForTurnstile(join);
     await join.click();
 
-    // The new row opens for editing straight away, with focus on its first date cell.
+    // Step two: the new row opens for editing with focus on its first date cell, alone in the table.
     const editing = page.locator('tbody tr.is-editing');
     await expect(editing).toHaveCount(1);
-    await expect(editing.getByLabel('Nickname', { exact: true })).toHaveValue('Ada');
+    await expect(editing.locator('.participant-name')).toHaveText('Ada');
     await expect(editing.locator('button.vote-btn').first()).toBeFocused();
-    await expect(nickname).toHaveCount(0);
-    await expect(page.getByRole('status').filter({ hasText: 'You joined as Ada.' })).toBeAttached();
+    await expect(page.getByText('You are in this poll as')).toContainText('Ada');
+    await expect(page.getByRole('button', { name: 'Join' })).toHaveCount(0);
+    await expect(page.getByText('Answer at least one date and save to see what others have answered.')).toBeVisible();
+    await expect(page.locator('tfoot')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Comments' })).toBeVisible();
+    await expect(page.getByLabel('Participant link')).toHaveCount(0);
     await answerDate(page, 0, 1); // yes
     await answerDate(page, 1, 2); // if need be
     await page.getByRole('button', { name: 'Save' }).click();
 
+    // Step three: everyone's answers, the tallies and the share links.
     const row = page.getByRole('row', { name: /Ada/ });
     await expect(row).toBeVisible();
     await expect(row.getByText('you')).toBeVisible();
@@ -118,11 +123,13 @@ test.describe('answering a poll', () => {
     await expect(row.getByRole('img', { name: 'Yes' })).toHaveCount(1);
     await expect(row.getByRole('img', { name: 'If need be' })).toHaveCount(1);
     await expect(page.getByRole('status').filter({ hasText: 'Your answers were saved.' })).toBeAttached();
+    await expect(page.locator('tfoot')).toHaveCount(1);
+    await expect(page.getByLabel('Participant link')).toBeVisible();
 
     // The identity survives the re-fetch, so this browser can still edit the answer after a reload.
     await page.reload();
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
-    await expect(page.getByLabel('Your nickname')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Join' })).toHaveCount(0);
 
     const tallies = page.locator('tfoot td.tally');
     await expect(tallies.nth(0)).toHaveText(/1\s*\/\s*0/);
@@ -133,30 +140,67 @@ test.describe('answering a poll', () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(tallies.nth(0)).toHaveText(/0\s*\/\s*1/);
     await expect(page.getByRole('button', { name: 'Edit your answers' })).toBeFocused();
+
+    // The name is changed in the Name tile; the row follows.
+    await page.getByRole('button', { name: 'Change name' }).click();
+    await nameField(page).fill('Ada L.');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('row', { name: /Ada L\./ }).getByText('you')).toBeVisible();
+    await expect(page.getByText('You are in this poll as')).toContainText('Ada L.');
+    await expect(page.getByRole('button', { name: 'Change name' })).toBeFocused();
   });
 
-  test('two people cannot use the same nickname, ignoring case', async ({ page, otherPerson, request, clientIp }) => {
+  test('a participant sees nobody else until they have answered a date', async ({ page, request, clientIp }) => {
     const poll = await createPollViaApi(request, clientIp);
+    const headers = { 'CF-Connecting-IP': clientIp };
+    const view = (await (await request.get(`/api/events/${poll.id}`, { headers })).json()) as EventView;
+    const answered = await request.post(`/api/events/${poll.id}/participants`, {
+      headers,
+      data: { name: 'Ada', votes: { [view.options[0].id]: 'yes' }, turnstileToken: DUMMY_TURNSTILE_TOKEN },
+    });
+    expect(answered.status()).toBe(201);
+
     await page.goto(poll.participantUrl);
-    await page.getByLabel('Your nickname').fill('Grace');
+    await expect(page.getByRole('table')).toHaveCount(0);
+    await nameField(page).fill('Grace');
     const join = page.getByRole('button', { name: 'Join' });
     await waitForTurnstile(join);
     await join.click();
     await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
+    await expect(page.getByRole('row', { name: /Ada/ })).toHaveCount(0);
+    await expect(page.locator('tfoot')).toHaveCount(0);
+
+    // Cancelling keeps the row closed, and still alone, until an answer is saved.
     await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(page.getByRole('row', { name: /Grace/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit your answers' })).toBeFocused();
+    await expect(page.getByRole('row', { name: /Ada/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Edit your answers' }).click();
+    await answerDate(page, 0, 3); // no
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('row', { name: /Ada/ })).toBeVisible();
+    await expect(page.locator('tfoot td.tally').nth(0)).toHaveText(/1\s*\/\s*0/);
+  });
+
+  test('two people cannot use the same name, ignoring case', async ({ page, otherPerson, request, clientIp }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    await page.goto(poll.participantUrl);
+    await nameField(page).fill('Grace');
+    const join = page.getByRole('button', { name: 'Join' });
+    await waitForTurnstile(join);
+    await join.click();
+    await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
 
     const other = await otherPerson.newPage();
     await other.goto(poll.participantUrl);
-    await other.getByLabel('Your nickname').fill('grace');
+    await nameField(other).fill('grace');
     const otherJoin = other.getByRole('button', { name: 'Join' });
     await waitForTurnstile(otherJoin);
     await otherJoin.click();
-    await expect(other.getByRole('alert')).toHaveText('Someone in this poll already uses that nickname.');
-    // The first Grace is still the only participant; the second still has the form, with the draft.
-    await expect(other.locator('tbody .participant-name')).toHaveText(['Grace']);
-    await expect(other.getByLabel('Your nickname')).toHaveValue('grace');
-    await waitForTurnstile(otherJoin); // a fresh token after the failure
+    await expect(other.getByRole('alert')).toHaveText('Someone in this poll already uses that name.');
+    // Still at the first step, with the draft kept and a fresh token for the next attempt.
+    await expect(other.getByRole('table')).toHaveCount(0);
+    await expect(nameField(other)).toHaveValue('grace');
+    await waitForTurnstile(otherJoin);
   });
 
   test('a participant comments once per page load, within the limit, and others read it', async ({
@@ -167,16 +211,15 @@ test.describe('answering a poll', () => {
   }) => {
     const poll = await createPollViaApi(request, clientIp);
     await page.goto(poll.participantUrl);
-    await expect(page.getByText('No comments yet.')).toBeVisible();
-    await expect(page.getByText('Join the poll with your nickname above to comment.')).toBeVisible();
-    await expect(page.getByLabel('Add a comment')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Comments' })).toHaveCount(0);
 
-    await page.getByLabel('Your nickname').fill('Ada');
+    await nameField(page).fill('Ada');
     const join = page.getByRole('button', { name: 'Join' });
     await waitForTurnstile(join);
     await join.click();
     await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
     await page.getByRole('button', { name: 'Cancel' }).click(); // commenting without answering is fine
+    await expect(page.getByText('No comments yet.')).toBeVisible();
 
     const comment = page.getByLabel('Add a comment');
     await expect(comment).toBeVisible();
@@ -218,26 +261,35 @@ test.describe('answering a poll', () => {
     await expect(page.getByLabel('Add a comment')).toBeVisible();
     await expect(page.getByRole('listitem').filter({ hasText: 'I can host if Saturday wins.' })).toBeVisible();
 
-    // Anyone with the link reads comments; posting needs a nickname.
+    // Comments are for people in the poll: the other person joins and reads it under Ada's name.
     const other = await otherPerson.newPage();
     await other.goto(poll.participantUrl);
+    await expect(other.getByRole('heading', { name: 'Comments' })).toHaveCount(0);
+    await nameField(other).fill('Grace');
+    const otherJoin = other.getByRole('button', { name: 'Join' });
+    await waitForTurnstile(otherJoin);
+    await otherJoin.click();
+    await expect(other.locator('tbody tr.is-editing')).toHaveCount(1);
     const seen = other.getByRole('listitem').filter({ hasText: 'I can host if Saturday wins.' });
     await expect(seen).toContainText('Ada');
     await expect(seen.getByText('you')).toHaveCount(0);
-    await expect(other.getByLabel('Add a comment')).toHaveCount(0);
+    await expect(other.getByLabel('Add a comment')).toBeVisible();
   });
 
   test('a participant can suggest another date', async ({ page, request, clientIp }) => {
     const poll = await createPollViaApi(request, clientIp);
     await page.goto(poll.participantUrl);
+    await nameField(page).fill('Ada');
+    const join = page.getByRole('button', { name: 'Join' });
+    await waitForTurnstile(join);
+    await join.click();
     await expect(page.locator('thead th.option-col')).toHaveCount(3);
 
     await page.getByRole('button', { name: 'Suggest a date' }).click();
     await pickDate(page, futureIso(30));
-    // On a phone the Add button sits below the fold. A click straight after Playwright's own scroll
-    // can be routed to whatever occupied that screen position before the scroll, here the Turnstile
-    // frame in the join form, because the compositor's hit-test data lags a frame on slow machines.
-    // Bring the button on screen and wait until it is there, so the click itself needs no scroll.
+    // On a phone the Add button sits below the fold. Bring it on screen and wait until it is there, so
+    // the click needs no scroll of its own; a click straight after Playwright's scroll once landed on
+    // what occupied that spot before the scroll, because compositor hit-test data lags on slow machines.
     const add = page.getByRole('button', { name: /^Add (?!your availability)/ });
     await add.scrollIntoViewIfNeeded();
     await expect(add).toBeInViewport();
@@ -283,12 +335,13 @@ test.describe('organising a poll', () => {
     await expect(page).toHaveURL(/\/e\/[A-Za-z0-9_-]{22}$/, { timeout: 20_000 });
     await expect(page.getByText('organiser view')).toBeVisible();
     await expect(page.getByLabel('Admin link')).toHaveValue(/#admin=[A-Za-z0-9_-]{43}$/);
-    // Two notices: one by the organiser link, one by the nickname form; the organiser one is the point here.
     await expect(page.getByRole('note').filter({ hasText: 'organiser link' })).toBeVisible();
+    // The join form carries its own notice once the organiser opens it.
+    await page.getByRole('button', { name: 'Join this poll' }).click();
     await expect(page.getByRole('note').filter({ hasText: 'not saving site data' })).toHaveCount(2);
   });
 
-  test('the organiser joins under a nickname and is marked on their row and their comments', async ({
+  test('the organiser joins under a name and is marked on their row and their comments', async ({
     page,
     otherPerson,
     request,
@@ -296,8 +349,14 @@ test.describe('organising a poll', () => {
   }) => {
     const poll = await createPollViaApi(request, clientIp);
     await page.goto(poll.adminUrl);
-    await page.getByLabel('Your nickname').fill('Host');
-    const join = page.getByRole('button', { name: 'Join' });
+    // The organiser sees everything from the start; the Name tile offers to join, without the widget
+    // until asked.
+    await expect(page.getByRole('table')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Name' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Join this poll' }).click();
+    await expect(nameField(page)).toBeFocused();
+    await nameField(page).fill('Host');
+    const join = page.getByRole('button', { name: 'Join', exact: true });
     await waitForTurnstile(join);
     await join.click();
     await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
@@ -311,18 +370,21 @@ test.describe('organising a poll', () => {
     const comment = page.getByRole('listitem').filter({ hasText: 'Welcome, everyone.' });
     await expect(comment.getByText('organiser', { exact: true })).toBeVisible();
 
-    // Everyone sees the pill on the organiser's row and comment; an ordinary participant gets none.
+    // A participant sees the pill on the organiser's comment at once and on their row once they have
+    // answered; their own row gets none.
     const other = await otherPerson.newPage();
     await other.goto(poll.participantUrl);
-    await expect(other.getByRole('row', { name: /Host/ }).getByText('organiser', { exact: true })).toBeVisible();
-    await expect(
-      other.getByRole('listitem').filter({ hasText: 'Welcome, everyone.' }).getByText('organiser', { exact: true }),
-    ).toBeVisible();
-    await other.getByLabel('Your nickname').fill('Guest');
+    await nameField(other).fill('Guest');
     const otherJoin = other.getByRole('button', { name: 'Join' });
     await waitForTurnstile(otherJoin);
     await otherJoin.click();
-    await other.getByRole('button', { name: 'Cancel' }).click();
+    await expect(other.locator('tbody tr.is-editing')).toHaveCount(1);
+    await expect(
+      other.getByRole('listitem').filter({ hasText: 'Welcome, everyone.' }).getByText('organiser', { exact: true }),
+    ).toBeVisible();
+    await answerDate(other, 0, 1);
+    await other.getByRole('button', { name: 'Save' }).click();
+    await expect(other.getByRole('row', { name: /Host/ }).getByText('organiser', { exact: true })).toBeVisible();
     const guest = other.getByRole('row', { name: /Guest/ });
     await expect(guest.getByText('you')).toBeVisible();
     await expect(guest.getByText('organiser', { exact: true })).toHaveCount(0);
@@ -376,10 +438,10 @@ test.describe('organising a poll', () => {
     const headers = { 'CF-Connecting-IP': clientIp };
     const view = (await (await request.get(`/api/events/${poll.id}`, { headers })).json()) as EventView;
     const [first, second, third] = view.options;
-    const answer = async (nickname: string, votes: Record<string, string>) => {
+    const answer = async (name: string, votes: Record<string, string>) => {
       const res = await request.post(`/api/events/${poll.id}/participants`, {
         headers,
-        data: { nickname, votes, turnstileToken: DUMMY_TURNSTILE_TOKEN },
+        data: { name, votes, turnstileToken: DUMMY_TURNSTILE_TOKEN },
       });
       expect(res.status()).toBe(201);
     };
@@ -414,7 +476,11 @@ test.describe('organising a poll', () => {
     const poll = await createPollViaApi(request, clientIp, { allowSuggestions: false });
     const other = await otherPerson.newPage();
     await other.goto(poll.participantUrl);
-    await expect(other.getByRole('heading', { level: 1 })).toBeVisible();
+    await nameField(other).fill('Grace');
+    const join = other.getByRole('button', { name: 'Join' });
+    await waitForTurnstile(join);
+    await join.click();
+    await expect(other.locator('tbody tr.is-editing')).toHaveCount(1);
     await expect(other.getByRole('button', { name: 'Suggest a date' })).toHaveCount(0);
 
     await page.goto(poll.adminUrl);
@@ -435,7 +501,7 @@ test.describe('when the poll changes underneath', () => {
     const answered = await request.post(`/api/events/${poll.id}/participants`, {
       headers,
       data: {
-        nickname: 'Ada',
+        name: 'Ada',
         votes: { [first.id]: 'yes', [second.id]: 'yes' },
         turnstileToken: DUMMY_TURNSTILE_TOKEN,
       },
@@ -444,7 +510,7 @@ test.describe('when the poll changes underneath', () => {
 
     await page.goto(poll.adminUrl);
     await page.getByRole('button', { name: 'Edit Ada' }).click();
-    await page.getByLabel('Nickname', { exact: true }).fill('Ada B.');
+    await page.locator('tr.is-editing').getByLabel('Name').fill('Ada B.');
 
     // The organiser removes the first date while the answer is still open for editing.
     await page
@@ -457,7 +523,7 @@ test.describe('when the poll changes underneath', () => {
       .click();
     await expect(page.locator('thead th.option-col')).toHaveCount(2);
     await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
-    await expect(page.getByLabel('Nickname', { exact: true })).toHaveValue('Ada B.');
+    await expect(page.locator('tr.is-editing').getByLabel('Name')).toHaveValue('Ada B.');
 
     await page.getByRole('button', { name: 'Save' }).click();
     const row = page.getByRole('row', { name: /Ada B\./ });
@@ -521,7 +587,7 @@ test.describe('layout', () => {
     expect(widths.page).toBe(widths.viewport);
   });
 
-  test('a scrolled table shows only the nickname column at its left edge', async ({ page, request, clientIp }) => {
+  test('a scrolled table shows only the name column at its left edge', async ({ page, request, clientIp }) => {
     // A phone width, so the table scrolls in both the desktop and the mobile project.
     await page.setViewportSize({ width: 390, height: 780 });
     const dates = [14, 15, 16, 17, 18, 19, 20, 21].map(futureIso);
@@ -531,17 +597,17 @@ test.describe('layout', () => {
     const answered = await request.post(`/api/events/${poll.id}/participants`, {
       headers,
       data: {
-        nickname: 'Ada',
+        name: 'Ada',
         votes: Object.fromEntries(view.options.map((option) => [option.id, 'yes'])),
         turnstileToken: DUMMY_TURNSTILE_TOKEN,
       },
     });
     expect(answered.status()).toBe(201);
 
-    await page.goto(poll.participantUrl);
+    await page.goto(poll.adminUrl); // the organiser sees every row without joining
     await expect(page.getByRole('row', { name: /Ada/ })).toBeVisible();
 
-    // Whatever is painted at the scroller's left edge must be the sticky nickname column, not dates,
+    // Whatever is painted at the scroller's left edge must be the sticky name column, not dates,
     // answers or tallies that have scrolled underneath it.
     const scroller = page.locator('.table-scroll');
     for (const scrollLeft of [150, 300, 'end'] as const) {

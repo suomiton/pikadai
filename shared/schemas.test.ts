@@ -6,7 +6,7 @@ import {
   createParticipantSchema,
   eventDraftSchema,
   isoDateSchema,
-  nicknameSchema,
+  nameSchema,
   updateEventSchema,
   updateParticipantSchema,
   votesSchema,
@@ -96,11 +96,11 @@ describe('updateEventSchema', () => {
   });
 });
 
-describe('nicknameSchema', () => {
+describe('nameSchema', () => {
   it('trims and bounds the length', () => {
-    expect(nicknameSchema.parse('  Ada ')).toBe('Ada');
-    expect(firstMessage(nicknameSchema.safeParse('   '))).toBe('Nickname is required');
-    expect(nicknameSchema.safeParse('x'.repeat(LIMITS.nicknameMax + 1)).success).toBe(false);
+    expect(nameSchema.parse('  Ada ')).toBe('Ada');
+    expect(firstMessage(nameSchema.safeParse('   '))).toBe('Name is required');
+    expect(nameSchema.safeParse('x'.repeat(LIMITS.nameMax + 1)).success).toBe(false);
   });
 });
 
@@ -117,8 +117,8 @@ describe('votesSchema', () => {
 
 describe('participant schemas', () => {
   it('requires a Turnstile token only when creating', () => {
-    expect(createParticipantSchema.safeParse({ nickname: 'Ada', votes: {} }).success).toBe(false);
-    expect(createParticipantSchema.safeParse({ nickname: 'Ada', votes: {}, turnstileToken: 'x' }).success).toBe(true);
+    expect(createParticipantSchema.safeParse({ name: 'Ada', votes: {} }).success).toBe(false);
+    expect(createParticipantSchema.safeParse({ name: 'Ada', votes: {}, turnstileToken: 'x' }).success).toBe(true);
     expect(updateParticipantSchema.safeParse({ votes: {} }).success).toBe(true);
   });
 });

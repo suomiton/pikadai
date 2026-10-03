@@ -40,7 +40,7 @@ erDiagram
     participants {
         text id PK
         text event_id FK
-        text nickname
+        text name
         text edit_token_hash
         int  created_at
         int  updated_at
@@ -60,7 +60,7 @@ erDiagram
 ```
 
 Nothing in the database identifies a person. There are no IP addresses, user agents, emails, or
-fingerprints. Nicknames and comments are free text chosen by the participant.
+fingerprints. Names and comments are free text chosen by the participant.
 
 ## Conventions
 
@@ -110,20 +110,20 @@ Constraints: `UNIQUE (event_id, date)`, so a date appears at most once per poll.
 
 One row per answer in a poll.
 
-| Column            | Type                                  | Notes                                                                                          |
-| ----------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                          |
-| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                                |
-| `nickname`        | TEXT                                  | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`)   |
-| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                        |
-| `is_organiser`    | INTEGER                               | 1 when the join request carried the admin token (migration 0004); shown as an "organiser" pill |
-| `created_at`      | INTEGER                               |                                                                                                |
-| `updated_at`      | INTEGER                               |                                                                                                |
+| Column            | Type                                  | Notes                                                                                                                         |
+| ----------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                                                         |
+| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                                                               |
+| `name`            | TEXT                                  | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`); `nickname` until migration 0005 |
+| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                                                       |
+| `is_organiser`    | INTEGER                               | 1 when the join request carried the admin token (migration 0004); shown as an "organiser" pill                                |
+| `created_at`      | INTEGER                               |                                                                                                                               |
+| `updated_at`      | INTEGER                               |                                                                                                                               |
 
-Indexes: `idx_participants_event_id (event_id)` and the unique `idx_participants_event_nickname (event_id,
-nickname COLLATE NOCASE)` from migration 0002. SQLite accepts a collation per indexed column, so the index
+Indexes: `idx_participants_event_id (event_id)` and the unique `idx_participants_event_name (event_id,
+name COLLATE NOCASE)`, from migration 0002 and renamed with the column in 0005. SQLite accepts a collation per indexed column, so the index
 enforces case-insensitive uniqueness without changing the column. The Worker still runs a pre-check so the
-normal path returns a friendly `nickname_taken` before any write; the index catches the race where two
+normal path returns a friendly `name_taken` before any write; the index catches the race where two
 requests pass the pre-check together, and the Worker maps that UNIQUE violation to the same error.
 
 ### `votes`
@@ -144,13 +144,13 @@ one batch, so partial updates cannot occur.
 
 One row per comment, from migration 0003.
 
-| Column           | Type                                        | Notes                                                                                 |
-| ---------------- | ------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `id`             | TEXT PK                                     |                                                                                       |
-| `event_id`       | TEXT FK → events, `ON DELETE CASCADE`       |                                                                                       |
-| `participant_id` | TEXT FK → participants, `ON DELETE CASCADE` | the author; the nickname is read from that row, so a rename shows on old comments too |
-| `body`           | TEXT                                        | 1–512 characters, trimmed                                                             |
-| `created_at`     | INTEGER                                     |                                                                                       |
+| Column           | Type                                        | Notes                                                                             |
+| ---------------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
+| `id`             | TEXT PK                                     |                                                                                   |
+| `event_id`       | TEXT FK → events, `ON DELETE CASCADE`       |                                                                                   |
+| `participant_id` | TEXT FK → participants, `ON DELETE CASCADE` | the author; the name is read from that row, so a rename shows on old comments too |
+| `body`           | TEXT                                        | 1–512 characters, trimmed                                                         |
+| `created_at`     | INTEGER                                     |                                                                                   |
 
 Indexes: `idx_comments_event_created (event_id, created_at)` for the poll view, which lists comments
 oldest first, and `idx_comments_participant_created (participant_id, created_at)` for the one-per-interval
@@ -162,7 +162,7 @@ removal by the organiser) or with the poll.
 **Enforced by SQLite**
 
 - Foreign keys with cascades, as listed above. D1 enables foreign-key enforcement by default.
-- One date per poll; one nickname per poll ignoring case; one vote per participant per option; valid
+- One date per poll; one name per poll ignoring case; one vote per participant per option; valid
   `answer` values; unique ticket nonce.
 
 **Enforced by the Worker** (`worker/routes/*.ts`, `shared/schemas.ts`)
@@ -171,13 +171,13 @@ removal by the organiser) or with the poll.
   two caps are checked before the insert, not inside the transaction, so simultaneous requests can overshoot
   by a few rows; accepted at this scale.
 - Votes may only reference options belonging to the same event; others are rejected with `unknown_option`.
-- A nickname pre-check for the friendly error; the unique index above is the guarantee.
+- A name pre-check for the friendly error; the unique index above is the guarantee.
 - At most 200 comments per poll, checked before the insert like the other caps. One comment per 10 seconds
   per participant, which the insert statement decides itself (`INSERT … SELECT … WHERE NOT EXISTS` a newer
   comment by that participant), so two simultaneous posts cannot both get in.
 - Expired events (`expires_at <= now`) are treated as gone even before the purge deletes them.
 - Writes that need to be all-or-nothing use `db.batch()`, which D1 runs as one transaction: event plus
-  options on creation; participant plus votes on insert; nickname update plus vote replacement on edit.
+  options on creation; participant plus votes on insert; name update plus vote replacement on edit.
 
 ## Expiry
 
@@ -221,7 +221,7 @@ All SQL lives in `worker/db/queries.ts`. The main ones:
 | `insertEventWithOptions`         | POST events                   | batch: 1 event insert + N option inserts                                                                                          |
 | `insertParticipantWithVotes`     | POST participants             | batch: 1 insert + N vote inserts                                                                                                  |
 | `updateParticipantWithVotes`     | PUT participant               | batch: update, delete votes, insert votes                                                                                         |
-| `nicknameTaken`                  | POST/PUT participant          | `… WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                                 |
+| `nameTaken`                      | POST/PUT participant          | `… WHERE event_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                                     |
 | `insertOption` / `deleteOption`  | options routes                | batch: insert or delete, plus the `expires_at` recalculation from the rows in the same transaction                                |
 | `insertComment`                  | POST comments                 | one `INSERT … SELECT … WHERE NOT EXISTS` carrying the one-per-interval rule; `countComments` runs first for the cap               |
 | `deleteExpiredEvents`            | cron                          | the purge above                                                                                                                   |
@@ -263,6 +263,9 @@ npm run db:migrate:remote     # production, after review
 - SQLite's `ALTER TABLE` supports adding columns and renaming, but not dropping constraints or changing
   types. For those, create a new table, copy data, drop the old one, rename.
 - Never edit a migration that has been applied remotely. Add a new one.
+- Migration 0005 is the one exception to "additive" so far: it renames `participants.nickname` to `name`.
+  The Worker before it would fail against the renamed table, so that migration and the Worker using it
+  go out together, and a rollback of the Worker alone would need the column renamed back.
 - Local and remote migration state are independent. After pulling a branch with new migrations, run the
   local apply again.
 - There is no "down" migration. For an emergency revert of production data use D1 Time Travel.
@@ -288,7 +291,7 @@ Any SQLite client can open the `.sqlite` file directly for read-only inspection.
 
 ## Privacy and retention summary
 
-- Stored: poll text, chosen dates, nicknames, votes, comments, hashed tokens, timestamps.
+- Stored: poll text, chosen dates, names, votes, comments, hashed tokens, timestamps.
 - Not stored: IP addresses, user agents, emails, device identifiers, Turnstile tokens, creation tickets
   (only their nonce, which is random).
 - Retention: until 30 days after the last date, or 90 days without dates, or earlier if the organiser

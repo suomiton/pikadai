@@ -26,7 +26,7 @@ export interface OptionRow {
 export interface ParticipantRow {
   id: string;
   event_id: string;
-  nickname: string;
+  name: string;
   edit_token_hash: string;
   /** 1 when the join request carried the admin token. */
   is_organiser: number;
@@ -48,9 +48,9 @@ export interface CommentRow {
   created_at: number;
 }
 
-/** A comment as the view reads it: joined to its participant for the current nickname and role. */
+/** A comment as the view reads it: joined to its participant for the current name and role. */
 export interface CommentWithAuthor extends CommentRow {
-  nickname: string;
+  name: string;
   is_organiser: number;
 }
 
@@ -209,19 +209,19 @@ export async function countParticipants(db: D1Database, eventId: string): Promis
   return row?.n ?? 0;
 }
 
-export async function nicknameTaken(
+export async function nameTaken(
   db: D1Database,
   eventId: string,
-  nickname: string,
+  name: string,
   excludeParticipantId: string | null,
 ): Promise<boolean> {
   const row = await db
     .prepare(
       `SELECT 1 AS hit FROM participants
-       WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)
+       WHERE event_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)
        LIMIT 1`,
     )
-    .bind(eventId, nickname, excludeParticipantId, excludeParticipantId)
+    .bind(eventId, name, excludeParticipantId, excludeParticipantId)
     .first<{ hit: number }>();
   return row !== null;
 }
@@ -234,13 +234,13 @@ export async function insertParticipantWithVotes(
   const statements = [
     db
       .prepare(
-        `INSERT INTO participants (id, event_id, nickname, edit_token_hash, is_organiser, created_at, updated_at)
+        `INSERT INTO participants (id, event_id, name, edit_token_hash, is_organiser, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         participant.id,
         participant.event_id,
-        participant.nickname,
+        participant.name,
         participant.edit_token_hash,
         participant.is_organiser,
         participant.created_at,
@@ -254,12 +254,12 @@ export async function insertParticipantWithVotes(
 export async function updateParticipantWithVotes(
   db: D1Database,
   participant: ParticipantRow,
-  nickname: string,
+  name: string,
   votes: Record<string, Answer>,
   now: number,
 ): Promise<void> {
   const statements = [
-    db.prepare('UPDATE participants SET nickname = ?, updated_at = ? WHERE id = ?').bind(nickname, now, participant.id),
+    db.prepare('UPDATE participants SET name = ?, updated_at = ? WHERE id = ?').bind(name, now, participant.id),
     db.prepare('DELETE FROM votes WHERE participant_id = ?').bind(participant.id),
     ...voteStatements(db, participant.id, votes),
   ];
@@ -298,7 +298,7 @@ export async function getVotesForEvent(db: D1Database, eventId: string): Promise
 export async function getCommentsForEvent(db: D1Database, eventId: string): Promise<CommentWithAuthor[]> {
   const { results } = await db
     .prepare(
-      `SELECT c.id, c.event_id, c.participant_id, c.body, c.created_at, p.nickname, p.is_organiser
+      `SELECT c.id, c.event_id, c.participant_id, c.body, c.created_at, p.name, p.is_organiser
        FROM comments c
        JOIN participants p ON p.id = c.participant_id
        WHERE c.event_id = ?

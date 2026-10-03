@@ -18,11 +18,11 @@ comments.post(
   async (c) => {
     const event = await loadEvent(c.env.DB, c.req.param('id'));
 
-    // Only a participant may comment, under their own nickname; the admin token alone is not enough.
+    // Only a participant may comment, under their own name; the admin token alone is not enough.
     const participantId = c.req.header(PARTICIPANT_ID_HEADER);
     const participant = participantId ? await getParticipant(c.env.DB, event.id, participantId) : null;
     if (!participant || !(await isParticipantOwner(bearerToken(c.req.header('Authorization')), participant))) {
-      throw errors.forbidden('Join the poll with a nickname before commenting', 'not_participant');
+      throw errors.forbidden('Join the poll with a name before commenting', 'not_participant');
     }
 
     const body = parseBody(createCommentSchema, await readJson(c));
@@ -48,7 +48,7 @@ comments.post(
       {
         id: comment.id,
         participantId: participant.id,
-        nickname: participant.nickname,
+        name: participant.name,
         isOrganiser: participant.is_organiser === 1,
         body: comment.body,
         createdAt: now,

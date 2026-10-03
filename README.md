@@ -5,7 +5,7 @@
 
 Live app: [pikadai.suomiton.workers.dev](https://pikadai.suomiton.workers.dev)
 
-Anonymous, login-free date polls. Create a poll, share one link, people answer and comment with a nickname.
+Anonymous, login-free date polls. Create a poll, share one link, people answer and comment under a name they pick.
 No accounts, no email, no cookies, no tracking. Polls delete themselves after they expire.
 
 Runs entirely on Cloudflare's free plan: a Worker (TypeScript, Hono) serves both the React app and the

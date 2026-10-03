@@ -58,7 +58,8 @@ pikadai/
 │   ├── 0001_init.sql          D1 schema (see database.md)
 │   ├── 0002_participants_nickname_unique.sql
 │   ├── 0003_comments.sql
-│   └── 0004_participants_is_organiser.sql
+│   ├── 0004_participants_is_organiser.sql
+│   └── 0005_participants_name.sql
 │
 ├── src/                       React application
 │   ├── main.tsx               Mounts the router, imports global CSS
@@ -76,7 +77,7 @@ pikadai/
 │   │   └── useVoteEditor.ts   voteEditorReducer bound to dispatch
 │   ├── pages/
 │   │   ├── CreatePage.tsx     Form, calendar, Turnstile, masked-delay progress dialog
-│   │   ├── EventPage.tsx      Opens the poll in the store (effect keyed on the id), renders the sections: availability, comments, share, organiser
+│   │   ├── EventPage.tsx      Opens the poll in the store (effect keyed on the id); decides which sections show at each step of answering
 │   │   └── NotFoundPage.tsx
 │   ├── components/
 │   │   ├── Layout.tsx         Header, footer, <Outlet/>
@@ -86,7 +87,7 @@ pikadai/
 │   │   ├── ConfirmDialog.tsx  Destructive confirmations, Cancel first, busy status and errors
 │   │   ├── TurnstileField.tsx Widget wrapper; handles a missing site key
 │   │   ├── VoteGrid.tsx       The participants × dates table: joining, mutations, tallies, focus return
-│   │   ├── JoinForm.tsx       The nickname step above the table: nickname, Turnstile, Join; creates the participant row
+│   │   ├── NameCard.tsx       The first tile: name, Turnstile and Join before joining; the name and a rename afterwards
 │   │   ├── OptionHeader.tsx   One date column header
 │   │   ├── VoteRow.tsx        A saved participant row
 │   │   ├── VoteEditRow.tsx    The row being edited

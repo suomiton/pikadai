@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { EventOption, Participant } from '@shared/types';
-import { computeTallies, cycle, topDates } from './votes';
+import { computeTallies, cycle, hasAnswered, topDates } from './votes';
 
 const option = (id: string, date: string): EventOption => ({ id, date, suggestedBy: null });
 const participant = (id: string, votes: Participant['votes']): Participant => ({
   id,
-  nickname: id,
+  name: id,
   votes,
   createdAt: 0,
   isOrganiser: false,
@@ -37,6 +37,14 @@ describe('computeTallies', () => {
       a: { yes: 0, maybe: 0 },
       b: { yes: 0, maybe: 0 },
     });
+  });
+});
+
+describe('hasAnswered', () => {
+  it('is true once any date has an answer, including no', () => {
+    expect(hasAnswered({ votes: {} })).toBe(false);
+    expect(hasAnswered({ votes: { a: 'no' } })).toBe(true);
+    expect(hasAnswered({ votes: { a: 'yes', b: 'maybe' } })).toBe(true);
   });
 });
 

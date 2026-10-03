@@ -6,7 +6,7 @@ export interface AsyncAction {
   busy: boolean;
   /** The user-facing message from the last failure, or a validation message set by the caller. */
   error: string | null;
-  /** For failures that never reach the network, such as a missing nickname; null clears. */
+  /** For failures that never reach the network, such as a missing name; null clears. */
   setError: (message: string | null) => void;
   /**
    * Run one request. Clears the error, holds `busy` until it settles, and keeps the failure

@@ -1,7 +1,7 @@
 # Architecture
 
 Pikadai is an anonymous date-poll service. Someone creates a poll, shares one link, and people answer and
-comment with a nickname. There are no accounts, no email, no cookies, and polls delete themselves after they expire.
+comment under a name they pick. There are no accounts, no email, no cookies, and polls delete themselves after they expire.
 
 This document explains how the system is put together and why. For the pieces it refers to, see:
 
@@ -135,27 +135,41 @@ rejected ticket therefore never costs the user a solved challenge.
 
 ### Joining and answering a poll
 
-The nickname comes before the dates. A nickname is the one identity a person has in a poll, and both the
-availability answers and the comments are posted under it, so it is taken once, in a step of its own.
+The name comes before the dates. A name is the one identity a person has in a poll, and both the
+availability answers and the comments are posted under it, so it is taken once, in a step of its own. The
+page then unfolds in three steps for someone answering (`EventPage` decides which sections render):
+
+| Step              | Condition                                 | On screen                                                                                                   |
+| ----------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Name              | no identity for this poll in this browser | the title and the Name tile: a name, the Turnstile check, Join                                              |
+| Your availability | joined, no date answered yet              | the Name tile (now showing the name, with a rename), the table with only the viewer's own row, the comments |
+| Everyone          | at least one date answered                | everyone's rows, the tallies and the best-date highlight, the comments, the share links                     |
+
+Hiding other people's answers until the viewer has given their own keeps the answer honest. The organiser
+sees everything from the start, with the Name tile above it offering to join on demand (the Turnstile widget
+loads only when they ask), and so does a visitor who can no longer join because the poll is full. "Answered" means at least one date has an answer, including `no`; changing one's
+name or commenting does not count, and the top-dates table counts the same people.
 
 1. `GET /api/events/:id` returns the full view: options, participants, votes, comments, and `viewer.isAdmin`.
-2. A visitor without an identity for this poll sees the nickname form above the table (`JoinForm`). They
-   type a nickname; the Turnstile widget produces a token.
-3. `POST /api/events/:id/participants` with an empty vote set checks the participant cap and nickname
+2. A visitor without an identity for this poll types a name into the Name tile (`NameCard`); the
+   Turnstile widget produces a token.
+3. `POST /api/events/:id/participants` with an empty vote set checks the participant cap and name
    uniqueness (case-insensitive within the poll), then verifies Turnstile and inserts the row. A unique
-   index on `(event_id, nickname COLLATE NOCASE)` backs the nickname check, so two simultaneous joins with
-   the same name cannot both get in. When the request carries the admin token, the row is marked
-   `is_organiser`, and the organiser's nickname is shown with an outlined "organiser" pill on their answer
+   index on `(event_id, name COLLATE NOCASE)` backs the name check, so two simultaneous joins with the
+   same name cannot both get in. When the request carries the admin token, the row is marked
+   `is_organiser`, and the organiser's name is shown with an outlined "organiser" pill on their answer
    row and on their comments. The client sends the token whenever it has one; the server decides.
-4. The response `{ id, editToken }` is stored in `localStorage` under the poll id, and the new row opens
-   for editing with focus on its first date cell.
+4. The response `{ id, editToken }` is stored in `localStorage` under the poll id. The new row opens for
+   editing by itself with focus on its first date cell; so does the row of someone who joined earlier
+   and has not answered yet.
 5. Every save of answers, now and later, sends both as headers to
    `PUT /api/events/:id/participants/:participantId`, which also checks that every vote refers to one of the
-   poll's dates.
+   poll's dates. A rename from the Name tile is the same request with the current votes unchanged. The
+   organiser renames other people from their rows; one's own row shows the name as text.
 
 A vote is one of `yes`, `maybe`, `no`. A missing vote means "no answer" and is shown as `·`. Each save
 replaces the participant's whole vote set, which keeps the client logic simple and avoids partial updates.
-A participant who joined only to comment shows as a row of `·`.
+A participant who joined only to comment shows to others as a row of `·`.
 
 ### Commenting
 
@@ -166,7 +180,7 @@ capped at 512 characters, a poll holds at most 200 comments, and a participant m
 10 seconds. That last rule is decided by the insert statement itself (`INSERT … SELECT … WHERE NOT EXISTS`
 a newer comment by the same participant), so simultaneous posts cannot slip through; a refused post is
 `429 comment_too_soon`. The client additionally hides the comment form after one post until the page is
-reloaded. Comments show the participant's current nickname, cannot be edited or deleted, and go when
+reloaded. Comments show the participant's current name, cannot be edited or deleted, and go when
 their participant goes: leaving the poll or being removed by the organiser takes the comments along.
 
 ### Suggesting a date
@@ -187,16 +201,16 @@ Admins can delete a poll at any time with the same cascade.
 
 The controls are layered so no single one has to be perfect.
 
-| Control                                                                                                                                             | Stops                                                                  | Where                                                                                  |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Turnstile on creation and on joining a poll; the token must have been solved on this hostname for the matching `create` or `answer` action          | bulk scripted creation and vote stuffing, tokens solved elsewhere      | `worker/lib/turnstile.ts`, `src/components/TurnstileField.tsx`                         |
-| Per-client rate limits (5 creates, 40 writes, 120 reads per minute; IPv6 keyed by /64)                                                              | floods from one source                                                 | `worker/lib/ratelimit.ts`, `wrangler.jsonc`                                            |
-| Creation tickets: 5 s minimum age, single use, bound to the requesting client                                                                       | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts`                                                                |
-| Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char nickname, 512-char comment, 40 dates, 100 participants, 200 comments | oversized requests, storage abuse and spam text                        | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
-| Comments need the participant token; one per 10 s per participant, decided by the insert statement                                                  | anonymous or scripted comment floods                                   | `comments` route, `insertComment` in `worker/db/queries.ts`                            |
-| Unique nickname per poll                                                                                                                            | impersonation within a poll                                            | unique index from `migrations/0002`, pre-check in the `participants` route             |
-| Vote set replaced per save, unknown option ids rejected                                                                                             | orphan or forged votes                                                 | `participants` route                                                                   |
-| Expiry plus nightly purge                                                                                                                           | indefinite hosting of junk                                             | `worker/index.ts` `scheduled` handler                                                  |
+| Control                                                                                                                                         | Stops                                                                  | Where                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Turnstile on creation and on joining a poll; the token must have been solved on this hostname for the matching `create` or `answer` action      | bulk scripted creation and vote stuffing, tokens solved elsewhere      | `worker/lib/turnstile.ts`, `src/components/TurnstileField.tsx`                         |
+| Per-client rate limits (5 creates, 40 writes, 120 reads per minute; IPv6 keyed by /64)                                                          | floods from one source                                                 | `worker/lib/ratelimit.ts`, `wrangler.jsonc`                                            |
+| Creation tickets: 5 s minimum age, single use, bound to the requesting client                                                                   | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts`                                                                |
+| Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char name, 512-char comment, 40 dates, 100 participants, 200 comments | oversized requests, storage abuse and spam text                        | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
+| Comments need the participant token; one per 10 s per participant, decided by the insert statement                                              | anonymous or scripted comment floods                                   | `comments` route, `insertComment` in `worker/db/queries.ts`                            |
+| Unique name per poll                                                                                                                            | impersonation within a poll                                            | unique index from `migrations/0002`, pre-check in the `participants` route             |
+| Vote set replaced per save, unknown option ids rejected                                                                                         | orphan or forged votes                                                 | `participants` route                                                                   |
+| Expiry plus nightly purge                                                                                                                       | indefinite hosting of junk                                             | `worker/index.ts` `scheduled` handler                                                  |
 
 Two limits of this layering are accepted on purpose. Tickets do not lower throughput below what the rate
 limiter allows: a patient bot that solves Turnstile, waits five seconds and creates five polls a minute gets
@@ -243,7 +257,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | POST   | `/api/events/:id/options`                     | anyone while suggestions are on; admin always | Add a date                                       |
 | DELETE | `/api/events/:id/options/:optionId`           | admin                                         | Remove a date and its votes                      |
 | POST   | `/api/events/:id/participants`                | Turnstile; admin token marks the organiser    | Join: add a participant → `{ id, editToken }`    |
-| PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Replace nickname and votes                       |
+| PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Replace name and votes                           |
 | DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
 | POST   | `/api/events/:id/comments`                    | participant token + `X-Participant-Id`        | Post a comment → `Comment`                       |
 
@@ -252,7 +266,7 @@ Error codes the client maps to messages (`src/lib/errors.ts`):
 `invalid_json`, `validation_failed`, `payload_too_large`, `captcha_failed`, `verification_unavailable`,
 `ticket_invalid`, `ticket_too_early`,
 `ticket_expired`, `ticket_used`, `rate_limited`, `not_found`, `expired`, `admin_required`,
-`suggestions_disabled`, `too_many_options`, `date_exists`, `event_full`, `nickname_taken`,
+`suggestions_disabled`, `too_many_options`, `date_exists`, `event_full`, `name_taken`,
 `unknown_option`, `not_owner`, `not_participant`, `too_many_comments`, `comment_too_soon`, `internal`.
 
 ## Key decisions and trade-offs
@@ -274,7 +288,7 @@ others; what the scheme does not do is lower the creation rate below the limiter
 **Dates only, no time slots.** Timezones are the main source of bugs in scheduling tools. The schema can
 grow `start_time` and `end_time` columns on `options` later without changing anything else.
 
-**Unique nickname per poll.** Doodle allows duplicates, which is confusing in a small group. Case-insensitive
+**Unique name per poll.** Doodle allows duplicates, which is confusing in a small group. Case-insensitive
 uniqueness within one poll costs one query and prevents accidental impersonation.
 
 **`localStorage` instead of cookies.** Cookies would be sent on every request and would require a consent
@@ -291,6 +305,5 @@ Revisit if a poll view ever grows beyond a few kilobytes.
 ## Non-goals and future work
 
 Not planned: accounts, email notifications, editing or deleting comments, or integrations with calendars. Reasonable next
-steps: time slots per date, a "hide results until I answer" option, and exporting the chosen date as an
-`.ics` file. The test suite is described in [project-structure.md](project-structure.md#conventions) and
+steps: time slots per date and exporting the chosen date as an `.ics` file. The test suite is described in [project-structure.md](project-structure.md#conventions) and
 [deployment.md](deployment.md#tests-to-run-before-a-deploy).

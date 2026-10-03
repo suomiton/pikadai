@@ -16,7 +16,7 @@ import {
 } from './helpers';
 
 describe('POST /api/events/:id/comments', () => {
-  it('posts a comment under the participant nickname and lists it in the view, oldest first', async () => {
+  it('posts a comment under the participant name and lists it in the view, oldest first', async () => {
     const poll = await createPoll();
     const ada = await addParticipant(poll.client, poll.id, 'Ada');
     const grace = await addParticipant(client(), poll.id, 'Grace');
@@ -29,7 +29,7 @@ describe('POST /api/events/:id/comments', () => {
     expect(first.status).toBe(201);
     expect(first.body).toMatchObject({
       participantId: ada.id,
-      nickname: 'Ada',
+      name: 'Ada',
       isOrganiser: false,
       body: 'I can host if Saturday wins.',
     });
@@ -44,7 +44,7 @@ describe('POST /api/events/:id/comments', () => {
     expect(second.status).toBe(201);
 
     const view = await getView(poll.client, poll.id);
-    expect(view.comments.map((c) => [c.nickname, c.body])).toEqual([
+    expect(view.comments.map((c) => [c.name, c.body])).toEqual([
       ['Ada', 'I can host if Saturday wins.'],
       ['Grace', 'Saturday works, I will bring dice.'],
     ]);
@@ -157,10 +157,10 @@ describe('POST /api/events/:id/comments', () => {
 
     await poll.client.put(
       `/api/events/${poll.id}/participants/${ada.id}`,
-      { nickname: 'Ada L.', votes: {} },
+      { name: 'Ada L.', votes: {} },
       asParticipant(ada),
     );
-    expect((await getView(poll.client, poll.id)).comments.map((c) => c.nickname)).toEqual(['Ada L.', 'Grace']);
+    expect((await getView(poll.client, poll.id)).comments.map((c) => c.name)).toEqual(['Ada L.', 'Grace']);
 
     await poll.client.delete(`/api/events/${poll.id}/participants/${grace.id}`, bearer(poll.adminToken));
     expect((await getView(poll.client, poll.id)).comments.map((c) => c.body)).toEqual(['From Ada']);
@@ -172,7 +172,7 @@ describe('POST /api/events/:id/comments', () => {
     stubSiteverify(siteverifyOk('answer'));
     const host = await poll.client.post<CreateParticipantResponse>(
       `/api/events/${poll.id}/participants`,
-      { nickname: 'Host', votes: {}, turnstileToken: DUMMY_TOKEN },
+      { name: 'Host', votes: {}, turnstileToken: DUMMY_TOKEN },
       bearer(poll.adminToken),
     );
     const posted = await poll.client.post<Comment>(
@@ -182,7 +182,7 @@ describe('POST /api/events/:id/comments', () => {
     );
     expect(posted.status).toBe(201);
     expect(posted.body.isOrganiser).toBe(true);
-    expect((await getView(poll.client, poll.id)).comments[0]).toMatchObject({ nickname: 'Host', isOrganiser: true });
+    expect((await getView(poll.client, poll.id)).comments[0]).toMatchObject({ name: 'Host', isOrganiser: true });
   });
 
   it('is gone with the poll', async () => {

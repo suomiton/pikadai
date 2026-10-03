@@ -23,7 +23,7 @@ const rows: EventRows = {
     {
       id: 'p1',
       event_id: 'ev1',
-      nickname: 'Ada',
+      name: 'Ada',
       edit_token_hash: 'h1',
       is_organiser: 0,
       created_at: 1_100,
@@ -32,7 +32,7 @@ const rows: EventRows = {
     {
       id: 'p2',
       event_id: 'ev1',
-      nickname: 'Grace',
+      name: 'Grace',
       edit_token_hash: 'h2',
       is_organiser: 1,
       created_at: 1_200,
@@ -50,7 +50,7 @@ const rows: EventRows = {
       participant_id: 'p2',
       body: 'I can host.',
       created_at: 1_300,
-      nickname: 'Grace',
+      name: 'Grace',
       is_organiser: 1,
     },
   ],
@@ -81,7 +81,7 @@ describe('toEventView', () => {
     const [ada, grace] = toEventView(event, rows, false).participants;
     expect(ada).toEqual({
       id: 'p1',
-      nickname: 'Ada',
+      name: 'Ada',
       votes: { o1: 'yes', o2: 'maybe' },
       createdAt: 1_100,
       isOrganiser: false,
@@ -90,9 +90,9 @@ describe('toEventView', () => {
     expect(grace.isOrganiser).toBe(true);
   });
 
-  it('maps comments with the nickname the join supplied', () => {
+  it('maps comments with the name the join supplied', () => {
     expect(toEventView(event, rows, false).comments).toEqual([
-      { id: 'c1', participantId: 'p2', nickname: 'Grace', isOrganiser: true, body: 'I can host.', createdAt: 1_300 },
+      { id: 'c1', participantId: 'p2', name: 'Grace', isOrganiser: true, body: 'I can host.', createdAt: 1_300 },
     ]);
     expect(toEventView(event, { ...rows, comments: [] }, false).comments).toEqual([]);
   });

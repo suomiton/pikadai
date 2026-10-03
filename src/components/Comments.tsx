@@ -74,7 +74,7 @@ export function Comments() {
           {event.comments.map((c) => (
             <li key={c.id} className={me?.id === c.participantId ? 'comment is-me' : 'comment'}>
               <p className="comment-head">
-                <span className="comment-author">{c.nickname}</span>
+                <span className="comment-author">{c.name}</span>
                 {me?.id === c.participantId && <span className="tag">you</span>}
                 {c.isOrganiser && <span className="tag tag-accent">organiser</span>}
                 <time className="comment-time" dateTime={new Date(c.createdAt).toISOString()}>
@@ -123,7 +123,7 @@ export function Comments() {
           Your comment was posted. Reload the page to write another.
         </p>
       )}
-      {me === null && !posted && <p className="hint">Join the poll with your nickname above to comment.</p>}
+      {me === null && !posted && <p className="hint">Join the poll with your name above to comment.</p>}
     </section>
   );
 }

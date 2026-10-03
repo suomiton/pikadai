@@ -4,12 +4,12 @@ import { initialVoteEditor, voteEditorReducer, type VoteEditorState } from './vo
 
 const ada: Participant = {
   id: 'p1',
-  nickname: 'Ada',
+  name: 'Ada',
   votes: { o1: 'yes', o2: 'no' },
   createdAt: 0,
   isOrganiser: false,
 };
-const fresh: Participant = { id: 'p2', nickname: 'Grace', votes: {}, createdAt: 0, isOrganiser: false };
+const fresh: Participant = { id: 'p2', name: 'Grace', votes: {}, createdAt: 0, isOrganiser: false };
 
 const toggle = (state: VoteEditorState, optionId: string): VoteEditorState =>
   voteEditorReducer(state, { type: 'toggle', optionId });
@@ -19,14 +19,14 @@ describe('voteEditorReducer', () => {
     const state = voteEditorReducer(initialVoteEditor, { type: 'startEdit', participant: ada });
     expect(state.editingId).toBe('p1');
     expect(state.returnTo).toBe('p1');
-    expect(state.nickname).toBe('Ada');
+    expect(state.name).toBe('Ada');
     expect(state.draftVotes).toEqual(ada.votes);
     expect(state.draftVotes).not.toBe(ada.votes);
   });
 
   it('opens a row that has no answers yet, as right after joining', () => {
     const state = voteEditorReducer(initialVoteEditor, { type: 'startEdit', participant: fresh });
-    expect(state).toEqual({ editingId: 'p2', returnTo: 'p2', nickname: 'Grace', draftVotes: {} });
+    expect(state).toEqual({ editingId: 'p2', returnTo: 'p2', name: 'Grace', draftVotes: {} });
   });
 
   it('cycles a cell through yes, if need be, no and back to no answer', () => {
@@ -41,17 +41,17 @@ describe('voteEditorReducer', () => {
     expect(none.draftVotes).toEqual({});
   });
 
-  it('edits the nickname', () => {
+  it('edits the name', () => {
     const editing = voteEditorReducer(initialVoteEditor, { type: 'startEdit', participant: ada });
-    expect(voteEditorReducer(editing, { type: 'nickname', value: 'Ada L.' }).nickname).toBe('Ada L.');
+    expect(voteEditorReducer(editing, { type: 'name', value: 'Ada L.' }).name).toBe('Ada L.');
   });
 
   it('drops draft votes for dates that are no longer in the poll and keeps the rest', () => {
     const editing = voteEditorReducer(initialVoteEditor, { type: 'startEdit', participant: ada });
-    const named = voteEditorReducer(editing, { type: 'nickname', value: 'Ada B.' });
+    const named = voteEditorReducer(editing, { type: 'name', value: 'Ada B.' });
     const pruned = voteEditorReducer(named, { type: 'options', optionIds: ['o2', 'o3'] });
     expect(pruned.draftVotes).toEqual({ o2: 'no' });
-    expect(pruned.nickname).toBe('Ada B.');
+    expect(pruned.name).toBe('Ada B.');
     expect(pruned.editingId).toBe('p1');
   });
 

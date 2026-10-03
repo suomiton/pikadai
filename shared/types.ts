@@ -14,18 +14,18 @@ export interface EventOption {
 
 export interface Participant {
   id: string;
-  nickname: string;
+  name: string;
   votes: Record<string, Answer>;
   createdAt: number;
-  /** Joined with the admin token: the organiser's own row. Shown with a pill after the nickname. */
+  /** Joined with the admin token: the organiser's own row. Shown with a pill after the name. */
   isOrganiser: boolean;
 }
 
-/** A comment, posted under a participant's nickname; the nickname follows the participant's current one. */
+/** A comment, posted under a participant's name; the name follows the participant's current one. */
 export interface Comment {
   id: string;
   participantId: string;
-  nickname: string;
+  name: string;
   /** The author is the organiser's row; see `Participant.isOrganiser`. */
   isOrganiser: boolean;
   body: string;
