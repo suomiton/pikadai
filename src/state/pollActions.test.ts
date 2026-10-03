@@ -64,24 +64,28 @@ function deferred<T>() {
 
 /**
  * The actions under test with every dependency faked. Dispatched actions are run through the real
- * reducer so `getState` returns what the provider would hold after each one.
+ * reducer so `getState` returns what the provider would hold after each one. With `deferred`, they
+ * queue until `flush()`, the way React commits a dispatch only after the current effects have run.
  */
-function harness(hash = '', storage: Storage = fakeStorage()) {
+function harness(hash = '', storage: Storage = fakeStorage(), { deferred = false } = {}) {
   let state: AppState = initialAppState;
   const getEvent = vi.fn<PollActionDeps['api']['getEvent']>();
   const dispatched: AppAction[] = [];
+  const queue: AppAction[] = [];
+  const apply = (action: AppAction) => {
+    dispatched.push(action);
+    state = appReducer(state, action);
+  };
   const location = { readHash: vi.fn(() => hash), clearHash: vi.fn(() => void (hash = '')) };
   const actions: PollActions = createPollActions({
     api: { getEvent },
     storage,
-    dispatch: (action) => {
-      dispatched.push(action);
-      state = appReducer(state, action);
-    },
+    dispatch: (action) => (deferred ? queue.push(action) : apply(action)),
     getState: () => state,
     location,
   });
-  return { actions, storage, getEvent, dispatched, location, state: () => state };
+  const flush = () => queue.splice(0).forEach(apply);
+  return { actions, storage, getEvent, dispatched, location, flush, state: () => state };
 }
 
 describe('openPoll', () => {
@@ -309,18 +313,24 @@ describe('openPoll under real-world timing', () => {
     expect(h.state().poll?.adminToken).toBe('tok-from-hash');
   });
 
-  it('keeps the credentials of the open session when storage is blocked and the effect runs twice', async () => {
-    const h = harness('#admin=tok-from-hash', blockedStorage());
+  it('keeps the credentials it handed over when storage is blocked and the effect runs twice', async () => {
+    // React commits the first run's dispatch only after both runs of the effect have executed.
+    const h = harness('#admin=tok-from-hash', blockedStorage(), { deferred: true });
     h.getEvent.mockResolvedValue(event({ viewer: { isAdmin: true } }));
-    // The first run strips the hash and the write to storage is lost; the second finds neither.
+    // The first run strips the hash and its write to storage is lost; the second finds neither.
     const first = h.actions.openPoll('ev1');
     const second = h.actions.openPoll('ev1');
+    h.flush();
     await Promise.all([first, second]);
+    h.flush();
+    expect(h.getEvent).toHaveBeenNthCalledWith(2, 'ev1', 'tok-from-hash', expect.any(AbortSignal));
     expect(h.state().poll?.adminToken).toBe('tok-from-hash');
     expect(h.state().poll?.event?.viewer.isAdmin).toBe(true);
 
     h.actions.setIdentity('ev1', me);
+    h.flush();
     await h.actions.openPoll('ev1');
+    h.flush();
     expect(h.state().poll?.me).toEqual(me);
   });
 

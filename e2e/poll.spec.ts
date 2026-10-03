@@ -171,6 +171,28 @@ test.describe('organising a poll', () => {
     await expect(page.getByText('organiser view')).toBeVisible();
   });
 
+  test('the organiser keeps access when the browser blocks storage', async ({ page }) => {
+    // Firefox with site data blocked and some private modes throw on every localStorage access.
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        get() {
+          throw new DOMException('Storage is blocked', 'SecurityError');
+        },
+      });
+    });
+    await page.goto('/');
+    await page.getByLabel('What are you planning?').fill('No storage');
+    await pickDate(page, futureIso(20));
+    const create = page.getByRole('button', { name: 'Create poll' });
+    await waitForTurnstile(create);
+    await create.click();
+
+    await expect(page).toHaveURL(/\/e\/[A-Za-z0-9_-]{22}$/, { timeout: 20_000 });
+    await expect(page.getByText('organiser view')).toBeVisible();
+    await expect(page.getByLabel('Admin link')).toHaveValue(/#admin=[A-Za-z0-9_-]{43}$/);
+    await expect(page.getByRole('note').filter({ hasText: 'not saving site data' })).toBeVisible();
+  });
+
   test('a visitor without the admin link gets no organiser controls', async ({ page, request, clientIp }) => {
     const poll = await createPollViaApi(request, clientIp);
     await page.goto(poll.participantUrl);

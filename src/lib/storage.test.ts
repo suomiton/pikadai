@@ -28,6 +28,11 @@ describe('storage', () => {
     expect(storage.getAdminToken('poll2')).toBe('tok2');
   });
 
+  it('reports that writes stick and leaves no probe behind', () => {
+    expect(storage.available()).toBe(true);
+    expect(ls.store.size).toBe(0);
+  });
+
   it('round-trips a participant identity', () => {
     storage.setParticipant('poll1', { id: 'p1', token: 't1' });
     expect(storage.getParticipant('poll1')).toEqual({ id: 'p1', token: 't1' });
@@ -57,5 +62,6 @@ describe('storage', () => {
     expect(() => storage.setAdminToken('poll1', 'tok')).not.toThrow();
     expect(storage.getAdminToken('poll1')).toBeNull();
     expect(storage.getParticipant('poll1')).toBeNull();
+    expect(storage.available()).toBe(false);
   });
 });

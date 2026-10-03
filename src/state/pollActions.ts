@@ -49,6 +49,14 @@ export function createPollActions({ api, storage, dispatch, getState, location }
   let applied = 0;
   let inFlight: AbortController | null = null;
 
+  /*
+   * The credentials handed to the poll opened last. Storage can be blocked (private mode, site data
+   * disabled), and when the opening effect runs twice (StrictMode in development) the store has not
+   * re-rendered with the first run's dispatch before the second run reads it. This copy survives
+   * both, so the second run still fetches as the organiser or the participant.
+   */
+  let held: { id: string; adminToken: string | null; me: ParticipantIdentity | null } | null = null;
+
   async function load(id: string, adminToken: string | null): Promise<boolean> {
     inFlight?.abort();
     const controller = new AbortController();
@@ -85,15 +93,10 @@ export function createPollActions({ api, storage, dispatch, getState, location }
         storage.setAdminToken(id, fromHash);
         location.clearHash();
       }
-      /*
-       * Storage can be blocked (private mode, site data disabled), so a session already open for
-       * this poll may hold the only copy of the credentials: when the opening effect runs twice
-       * (StrictMode in development) the second run finds the fragment gone and storage empty.
-       */
-      const current = getState().poll;
-      const held = current?.id === id ? current : null;
-      const adminToken = fromHash ?? storage.getAdminToken(id) ?? held?.adminToken ?? null;
-      const me = storage.getParticipant(id) ?? held?.me ?? null;
+      const kept = held?.id === id ? held : null;
+      const adminToken = fromHash ?? storage.getAdminToken(id) ?? kept?.adminToken ?? null;
+      const me = storage.getParticipant(id) ?? kept?.me ?? null;
+      held = { id, adminToken, me };
       dispatch({ type: 'poll/open', id, adminToken, me });
       await load(id, adminToken);
     },
@@ -106,12 +109,14 @@ export function createPollActions({ api, storage, dispatch, getState, location }
 
     setIdentity(id, me) {
       storage.setParticipant(id, me);
+      if (held?.id === id) held = { ...held, me };
       if (getState().poll?.id === id) dispatch({ type: 'poll/identity', id, me });
     },
 
     forgetPoll(id) {
       storage.setAdminToken(id, null);
       storage.setParticipant(id, null);
+      if (held?.id === id) held = null;
       if (getState().poll?.id === id) dispatch({ type: 'poll/close', id });
     },
   };

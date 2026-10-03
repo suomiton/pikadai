@@ -1,6 +1,7 @@
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import type { Ref } from 'react';
 import { FormError } from './FormError';
+import { StorageNotice } from './StorageNotice';
 import { TurnstileField } from './TurnstileField';
 
 interface Props {
@@ -38,6 +39,7 @@ export function EditPanel({
         Tap a cell to cycle through <span aria-hidden="true">✓ </span>yes, <span aria-hidden="true">~ </span>
         if need be, <span aria-hidden="true">✕ </span>no, and <span aria-hidden="true">· </span>no answer.
       </p>
+      {isNew && <StorageNotice consequence="you will not be able to change this answer later from this browser." />}
       {isNew && <TurnstileField action="answer" ref={turnstileRef} onToken={onToken} />}
       <FormError id={errorId} message={error} />
       <div className="btn-row">

@@ -12,7 +12,6 @@ import { TurnstileField } from '../components/TurnstileField';
 import { api } from '../lib/api';
 import { formatDate, todayIso } from '../lib/dates';
 import { describeError } from '../lib/errors';
-import { storage } from '../lib/storage';
 import { sleep, waitUntil } from '../lib/timing';
 import { createFormReducer, firstInvalidField, initialCreateForm, type FieldKey } from '../state/createForm';
 
@@ -85,10 +84,11 @@ export function CreatePage() {
       await waitUntil(sendAt);
 
       const created = await api.createEvent({ ...parsed.data, ticket, turnstileToken });
-      storage.setAdminToken(created.id, created.adminToken);
       dispatch({ type: 'progress', step: 3 });
       await sleep(700);
-      navigate(`/e/${created.id}`);
+      // The token travels in the fragment, exactly as in the admin link: the poll page moves it into
+      // storage and strips it from the URL, and still opens as the organiser when storage is blocked.
+      navigate(`/e/${created.id}#admin=${created.adminToken}`);
     } catch (err) {
       dispatch({ type: 'progressFailed', message: describeError(err) });
       turnstileRef.current?.reset();
