@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '@shared/limits';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import { api } from '../lib/api';
 import { formatDate, formatDateLong, todayIso } from '../lib/dates';
-import { describeError } from '../lib/errors';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { Calendar } from './Calendar';
+import { FormError } from './FormError';
+import { StatusAnnouncer } from './StatusAnnouncer';
 
 export function SuggestDate() {
   const { event, me, adminToken } = usePoll();
   const { refresh } = usePollActions();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  const { busy, error, setError, run } = useAsyncAction();
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
 
@@ -40,18 +41,13 @@ export function SuggestDate() {
 
   async function add() {
     if (!picked) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api.addOption(event.id, { date: picked }, { adminToken, participant: me });
+    const date = picked;
+    const added = await run(async () => {
+      await api.addOption(event.id, { date }, { adminToken, participant: me });
       close();
       await refresh();
-      setStatus(`${formatDateLong(picked)} was added to the poll.`);
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setBusy(false);
-    }
+    });
+    if (added) setStatus(`${formatDateLong(date)} was added to the poll.`);
   }
 
   return (
@@ -70,9 +66,7 @@ export function SuggestDate() {
           </button>
         )}
       </div>
-      <p className="visually-hidden" role="status">
-        {status}
-      </p>
+      <StatusAnnouncer message={status} />
 
       {open && (
         <>
@@ -82,11 +76,7 @@ export function SuggestDate() {
             minDate={todayIso()}
             onToggle={(iso) => setPicked((p) => (p === iso ? null : iso))}
           />
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
+          <FormError message={error} />
           <div className="btn-row">
             <button type="button" className="btn btn-primary" onClick={add} disabled={!picked || busy}>
               {picked ? `Add ${formatDate(picked)}` : 'Select a date'}

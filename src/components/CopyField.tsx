@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { StatusAnnouncer } from './StatusAnnouncer';
 
 interface Props {
   label: string;
@@ -43,9 +44,7 @@ export function CopyField({ label, value, hint }: Props) {
         </button>
       </div>
       {/* Button text alone is not announced when it changes; this is. */}
-      <span className="visually-hidden" role="status">
-        {status}
-      </span>
+      <StatusAnnouncer message={status} />
       {hint && <p className="hint">{hint}</p>}
     </div>
   );

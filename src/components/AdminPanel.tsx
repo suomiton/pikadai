@@ -1,13 +1,16 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useReducer, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { LIMITS } from '@shared/limits';
 import { updateEventSchema } from '@shared/schemas';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import { api } from '../lib/api';
-import { describeError } from '../lib/errors';
 import { useAdminToken, usePoll, usePollActions } from '../state/AppStateProvider';
+import { adminFormFromEvent, adminFormReducer, type AdminFieldKey } from '../state/adminForm';
+import { FormError } from './FormError';
+import { StatusAnnouncer } from './StatusAnnouncer';
+import { TextField } from './TextField';
 
-type FieldKey = 'title' | 'description';
-type FocusTarget = FieldKey | 'opener';
+type FocusTarget = AdminFieldKey | 'opener';
 
 export function AdminPanel() {
   const { event } = usePoll();
@@ -15,13 +18,9 @@ export function AdminPanel() {
   const { refresh, forgetPoll } = usePollActions();
   const navigate = useNavigate();
   const id = useId();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState(event.title);
-  const [description, setDescription] = useState(event.description);
-  const [allowSuggestions, setAllowSuggestions] = useState(event.allowSuggestions);
-  const [busy, setBusy] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
-  const [error, setError] = useState<string | null>(null);
+  const [form, dispatch] = useReducer(adminFormReducer, event, adminFormFromEvent);
+  const { open, title, description, allowSuggestions, fieldErrors } = form;
+  const { busy, error, setError, run } = useAsyncAction();
   const [status, setStatus] = useState('');
 
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -31,11 +30,9 @@ export function AdminPanel() {
   };
   const pendingFocus = useRef<FocusTarget | null>(null);
 
+  // While the form is closed it mirrors the saved values, so reopening never shows an old draft.
   useEffect(() => {
-    if (open) return;
-    setTitle(event.title);
-    setDescription(event.description);
-    setAllowSuggestions(event.allowSuggestions);
+    dispatch({ type: 'sync', event });
   }, [event, open]);
 
   // The form unmounts when it closes, so focus goes back to the button that opened it; on a
@@ -51,8 +48,7 @@ export function AdminPanel() {
 
   function close() {
     pendingFocus.current = 'opener';
-    setOpen(false);
-    setFieldErrors({});
+    dispatch({ type: 'close' });
     setError(null);
   }
 
@@ -60,7 +56,7 @@ export function AdminPanel() {
     e.preventDefault();
     const parsed = updateEventSchema.safeParse({ title, description, allowSuggestions });
     if (!parsed.success) {
-      const errors: Partial<Record<FieldKey, string>> = {};
+      const errors: Partial<Record<AdminFieldKey, string>> = {};
       let formError: string | null = null;
       for (const issue of parsed.error.issues) {
         const key = issue.path[0];
@@ -68,42 +64,28 @@ export function AdminPanel() {
         else formError ??= issue.message;
       }
       pendingFocus.current = errors.title ? 'title' : errors.description ? 'description' : null;
-      setFieldErrors(errors);
+      dispatch({ type: 'errors', errors });
       setError(formError);
       return;
     }
-    setBusy(true);
-    setFieldErrors({});
-    setError(null);
-    try {
+    dispatch({ type: 'errors', errors: {} });
+    const saved = await run(async () => {
       await api.updateEvent(event.id, parsed.data, adminToken);
       pendingFocus.current = 'opener';
-      setOpen(false);
+      dispatch({ type: 'close' });
       await refresh();
-      setStatus('Details saved.');
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setBusy(false);
-    }
+    });
+    if (saved) setStatus('Details saved.');
   }
 
   async function destroy() {
     if (!window.confirm('Delete this poll and every answer in it? This cannot be undone.')) return;
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api.deleteEvent(event.id, adminToken);
       forgetPoll();
       navigate('/');
-    } catch (err) {
-      setError(describeError(err));
-      setBusy(false);
-    }
+    });
   }
-
-  const describedBy = (key: FieldKey) => (fieldErrors[key] ? `${id}-${key}-error` : undefined);
-  const invalid = (key: FieldKey) => (fieldErrors[key] ? true : undefined);
 
   return (
     <section className="card stack">
@@ -115,7 +97,7 @@ export function AdminPanel() {
               ref={editButtonRef}
               type="button"
               className="btn btn-secondary"
-              onClick={() => setOpen(true)}
+              onClick={() => dispatch({ type: 'open' })}
               disabled={busy}
             >
               Edit details
@@ -126,63 +108,39 @@ export function AdminPanel() {
           </button>
         </div>
       </div>
-      <p className="visually-hidden" role="status">
-        {status}
-      </p>
+      <StatusAnnouncer message={status} />
 
       {open && (
         <form className="stack" onSubmit={save} noValidate>
-          <div className="field">
-            <label className="field-label" htmlFor={`${id}-title`}>
-              Title
-            </label>
-            <input
-              id={`${id}-title`}
-              ref={fieldRefs.title}
-              className="input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={LIMITS.titleMax}
-              required
-              aria-invalid={invalid('title')}
-              aria-describedby={describedBy('title')}
-            />
-            {fieldErrors.title && (
-              <span id={`${id}-title-error`} className="field-error">
-                {fieldErrors.title}
-              </span>
-            )}
-          </div>
-          <div className="field">
-            <label className="field-label" htmlFor={`${id}-description`}>
-              Details
-            </label>
-            <textarea
-              id={`${id}-description`}
-              ref={fieldRefs.description}
-              className="input"
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={LIMITS.descriptionMax}
-              aria-invalid={invalid('description')}
-              aria-describedby={describedBy('description')}
-            />
-            {fieldErrors.description && (
-              <span id={`${id}-description-error`} className="field-error">
-                {fieldErrors.description}
-              </span>
-            )}
-          </div>
+          <TextField
+            id={`${id}-title`}
+            ref={fieldRefs.title}
+            label="Title"
+            value={title}
+            onChange={(value) => dispatch({ type: 'field', key: 'title', value })}
+            error={fieldErrors.title}
+            maxLength={LIMITS.titleMax}
+            required
+          />
+          <TextField
+            id={`${id}-description`}
+            ref={fieldRefs.description}
+            label="Details"
+            value={description}
+            onChange={(value) => dispatch({ type: 'field', key: 'description', value })}
+            error={fieldErrors.description}
+            multiline
+            maxLength={LIMITS.descriptionMax}
+          />
           <label className="check">
-            <input type="checkbox" checked={allowSuggestions} onChange={(e) => setAllowSuggestions(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={allowSuggestions}
+              onChange={(e) => dispatch({ type: 'allowSuggestions', value: e.target.checked })}
+            />
             <span>Participants may suggest other dates</span>
           </label>
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
+          <FormError message={error} />
           <div className="btn-row">
             <button type="submit" className="btn btn-primary" disabled={busy}>
               {busy ? 'Saving' : 'Save'}
@@ -193,11 +151,7 @@ export function AdminPanel() {
           </div>
         </form>
       )}
-      {!open && error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      {!open && <FormError message={error} />}
     </section>
   );
 }
