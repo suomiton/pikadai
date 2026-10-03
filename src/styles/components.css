@@ -232,10 +232,13 @@ textarea.input {
   margin-top: 0;
 }
 .field-hint {
-  margin-left: auto;
   color: var(--text-faint);
   font-size: 0.8rem;
   font-weight: 300;
+}
+/* A character count sits on the right, under the field's far edge; a sentence reads from the left. */
+.field-hint:has(> .field-counter) {
+  margin-left: auto;
   text-align: right;
 }
 .field-counter {
