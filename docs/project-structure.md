@@ -36,7 +36,8 @@ pikadai/
 │   │   ├── tickets.ts         POST /api/tickets → { ticket, minAgeMs }
 │   │   ├── events.ts          POST/GET/PATCH/DELETE /api/events[/:id]
 │   │   ├── options.ts         /api/events/:id/options
-│   │   └── participants.ts    /api/events/:id/participants
+│   │   ├── participants.ts    /api/events/:id/participants
+│   │   └── comments.ts        POST /api/events/:id/comments
 │   ├── lib/                   Each module has a *.test.ts beside it
 │   │   ├── http.ts            HttpError, error constructors, readJson, parseBody
 │   │   ├── crypto.ts          randomId, randomToken, sha256Hex, hmacSign, safeEqual
@@ -51,11 +52,14 @@ pikadai/
 │   └── test/                  Integration tests: the whole Worker in workerd with a local D1
 │       ├── setup.ts           Applies migrations/ before each file
 │       ├── helpers.ts         API client per address, aged tickets, siteverify stub, D1 helpers
-│       └── *.test.ts          events, participants, options, ratelimit, app (tickets, headers, purge)
+│       └── *.test.ts          events, participants, options, comments, ratelimit, app (tickets, headers, purge)
 │
 ├── migrations/
 │   ├── 0001_init.sql          D1 schema (see database.md)
-│   └── 0002_participants_nickname_unique.sql
+│   ├── 0002_participants_nickname_unique.sql
+│   ├── 0003_comments.sql
+│   ├── 0004_participants_is_organiser.sql
+│   └── 0005_participants_name.sql
 │
 ├── src/                       React application
 │   ├── main.tsx               Mounts the router, imports global CSS
@@ -73,7 +77,7 @@ pikadai/
 │   │   └── useVoteEditor.ts   voteEditorReducer bound to dispatch
 │   ├── pages/
 │   │   ├── CreatePage.tsx     Form, calendar, Turnstile, masked-delay progress dialog
-│   │   ├── EventPage.tsx      Opens the poll in the store (effect keyed on the id), renders the sections
+│   │   ├── EventPage.tsx      Opens the poll in the store (effect keyed on the id); decides which sections show at each step of answering
 │   │   └── NotFoundPage.tsx
 │   ├── components/
 │   │   ├── Layout.tsx         Header, footer, <Outlet/>
@@ -82,16 +86,18 @@ pikadai/
 │   │   ├── Modal.tsx          Shared modal with keyboard containment, labelling and focus return
 │   │   ├── ConfirmDialog.tsx  Destructive confirmations, Cancel first, busy status and errors
 │   │   ├── TurnstileField.tsx Widget wrapper; handles a missing site key
-│   │   ├── VoteGrid.tsx       The participants × dates table: mutations, tallies, focus return
+│   │   ├── VoteGrid.tsx       The participants × dates table: joining, mutations, tallies, focus return
+│   │   ├── NameCard.tsx       The first tile: name, Turnstile and Join before joining; the name and a rename afterwards
 │   │   ├── OptionHeader.tsx   One date column header
 │   │   ├── VoteRow.tsx        A saved participant row
 │   │   ├── VoteEditRow.tsx    The row being edited
 │   │   ├── VoteCells.tsx      The answer cells both rows share
-│   │   ├── EditPanel.tsx      Save / Cancel / Remove and Turnstile under the table
-│   │   ├── TextField.tsx      Label, input or textarea, error, with the aria wiring
+│   │   ├── EditPanel.tsx      Save / Cancel / Remove under the table
+│   │   ├── Comments.tsx       The comments tile: list, and the once-per-page-load form with its counter and growing textarea
+│   │   ├── TextField.tsx      Label, input or textarea, error and hint, with the aria wiring
 │   │   ├── FormError.tsx      The role="alert" paragraph
 │   │   ├── StatusAnnouncer.tsx  The visually hidden role="status" paragraph
-│   │   ├── SuggestDate.tsx    Add / suggest a date: the button beside "Add your availability" and its picker
+│   │   ├── SuggestDate.tsx    Add / suggest a date: the button under the table and its picker
 │   │   ├── ShareBox.tsx       Participant and admin links
 │   │   ├── CopyField.tsx      Read-only input with Copy button
 │   │   ├── TopDates.tsx       The organiser's scoreboard: the three dates most people can make

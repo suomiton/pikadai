@@ -9,8 +9,8 @@ import {
   getOptions,
   getParticipant,
   insertParticipantWithVotes,
-  nicknameTaken,
-  updateParticipantWithVotes,
+  nameTaken,
+  updateParticipant,
   type EventRow,
   type ParticipantRow,
 } from '../db/queries';
@@ -23,7 +23,7 @@ import { requireHuman, turnstileExpectations } from '../lib/turnstile';
 /** Mounted at /api/events/:id/participants */
 export const participants = new Hono<AppEnv>();
 
-const nicknameTakenError = () => errors.conflict('That nickname is already taken in this poll', 'nickname_taken');
+const nameTakenError = () => errors.conflict('That name is already taken in this poll', 'name_taken');
 
 /** Reject a vote set that refers to a date outside this poll; the input comes back unchanged. */
 async function assertVotesBelongToEvent(
@@ -53,12 +53,14 @@ participants.post(
   async (c) => {
     const event = await loadEvent(c.env.DB, c.req.param('id'));
     const body = parseBody(createParticipantSchema, await readJson(c));
+    // The organiser joins like anyone else; the admin token on the request marks their row.
+    const organiser = await isAdmin(bearerToken(c.req.header('Authorization')), event);
 
-    // Database checks before Turnstile: a full poll or a taken nickname must not spend the token.
+    // Database checks before Turnstile: a full poll or a taken name must not spend the token.
     if ((await countParticipants(c.env.DB, event.id)) >= LIMITS.participantsMax) {
       throw errors.conflict('This poll is full', 'event_full');
     }
-    if (await nicknameTaken(c.env.DB, event.id, body.nickname, null)) throw nicknameTakenError();
+    if (await nameTaken(c.env.DB, event.id, body.name, null)) throw nameTakenError();
     const votes = await assertVotesBelongToEvent(c.env.DB, event.id, body.votes);
 
     await requireHuman(
@@ -78,8 +80,9 @@ participants.post(
         {
           id,
           event_id: event.id,
-          nickname: body.nickname,
+          name: body.name,
           edit_token_hash: await sha256Hex(editToken),
+          is_organiser: organiser ? 1 : 0,
           created_at: now,
           updated_at: now,
         },
@@ -87,7 +90,7 @@ participants.post(
       );
     } catch (err) {
       // The unique index catches the race the pre-check above cannot.
-      if (isUniqueViolation(err)) throw nicknameTakenError();
+      if (isUniqueViolation(err)) throw nameTakenError();
       throw err;
     }
 
@@ -108,17 +111,16 @@ participants.put(
       throw errors.forbidden('You can only edit your own answers', 'not_owner');
     }
 
+    // A rename carries only the name and an answer only the votes; a field left out stays as it is.
     const body = parseBody(updateParticipantSchema, await readJson(c));
-    const nickname = body.nickname ?? participant.nickname;
-    if (nickname !== participant.nickname && (await nicknameTaken(c.env.DB, event.id, nickname, participant.id))) {
-      throw nicknameTakenError();
+    if (body.name !== undefined && body.name !== participant.name) {
+      if (await nameTaken(c.env.DB, event.id, body.name, participant.id)) throw nameTakenError();
     }
-
-    const votes = await assertVotesBelongToEvent(c.env.DB, event.id, body.votes);
+    const votes = body.votes === undefined ? undefined : await assertVotesBelongToEvent(c.env.DB, event.id, body.votes);
     try {
-      await updateParticipantWithVotes(c.env.DB, participant, nickname, votes, Date.now());
+      await updateParticipant(c.env.DB, participant, { name: body.name, votes }, Date.now());
     } catch (err) {
-      if (isUniqueViolation(err)) throw nicknameTakenError();
+      if (isUniqueViolation(err)) throw nameTakenError();
       throw err;
     }
     return c.body(null, 204);

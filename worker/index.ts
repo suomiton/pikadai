@@ -4,6 +4,7 @@ import { LIMITS } from '@shared/limits';
 import type { AppEnv } from './env';
 import { deleteExpiredEvents } from './db/queries';
 import { errors, HttpError } from './lib/http';
+import { comments } from './routes/comments';
 import { events } from './routes/events';
 import { options } from './routes/options';
 import { participants } from './routes/participants';
@@ -36,6 +37,7 @@ app.route('/api/tickets', tickets);
 app.route('/api/events', events);
 app.route('/api/events/:id/options', options);
 app.route('/api/events/:id/participants', participants);
+app.route('/api/events/:id/comments', comments);
 
 app.notFound((c) => {
   if (c.req.path.startsWith('/api/')) {

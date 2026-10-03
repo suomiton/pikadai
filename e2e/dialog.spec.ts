@@ -1,9 +1,10 @@
 import type { Page } from '@playwright/test';
 import type { EventView } from '../shared/types';
 import { expect, futureIso, test } from './fixtures';
+import { answerDate } from './helpers';
 
 /** Dialog tests use deterministic API responses, including failures and requests held in flight. */
-async function openPoll(page: Page, { mine = false, nickname = 'Ada' } = {}) {
+async function openPoll(page: Page, { mine = false, name = 'Ada' } = {}) {
   const poll: EventView = {
     id: 'd'.repeat(22),
     title: 'Board game night',
@@ -12,7 +13,11 @@ async function openPoll(page: Page, { mine = false, nickname = 'Ada' } = {}) {
     createdAt: Date.now(),
     expiresAt: Date.now() + 86_400_000,
     options: [14, 15, 16].map((days, i) => ({ id: String(i).repeat(22), date: futureIso(days), suggestedBy: null })),
-    participants: [{ id: 'p'.repeat(22), nickname, votes: {}, createdAt: Date.now() }],
+    // Ada has answered a date, so her own browser sees the whole table rather than her row alone.
+    participants: [
+      { id: 'p'.repeat(22), name, votes: { ['0'.repeat(22)]: 'yes' }, createdAt: Date.now(), isOrganiser: false },
+    ],
+    comments: [],
     viewer: { isAdmin: !mine },
   };
   let deletions = 0;
@@ -115,7 +120,11 @@ for (const mine of [true, false]) {
   }) => {
     const { poll, deletions } = await openPoll(page, { mine });
     await page.getByRole('button', { name: mine ? 'Edit your answers' : 'Edit Ada' }).click();
-    await page.getByLabel('Nickname').fill('Unsaved draft');
+    // The draft: a participant changes a date; the organiser renames the row (one's own name is
+    // changed in the Name tile, so that row has no name input).
+    const nameInput = page.locator('tr.is-editing').getByLabel('Name');
+    if (mine) await answerDate(page, 1, 1);
+    else await nameInput.fill('Unsaved draft');
     const opener = page.getByRole('button', { name: 'Remove', exact: true });
     await opener.click();
 
@@ -123,23 +132,28 @@ for (const mine of [true, false]) {
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
     await expect(dialog).toHaveAccessibleDescription(
       mine
-        ? 'Your answers will be removed from this poll. This cannot be undone.'
-        : 'Ada and all their answers will be removed from this poll. This cannot be undone.',
+        ? 'Your answers and comments will be removed from this poll. This cannot be undone.'
+        : 'Ada and all their answers and comments will be removed from this poll. This cannot be undone.',
     );
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(opener).toBeFocused();
-    await expect(page.getByLabel('Nickname')).toHaveValue('Unsaved draft');
+    if (mine) await expect(page.locator('tr.is-editing .vote-cell.is-yes')).toHaveCount(2);
+    else await expect(nameInput).toHaveValue('Unsaved draft');
     expect(deletions()).toBe(0);
 
     await opener.click();
     await dialog.getByRole('button', { name: 'Remove answers' }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByText('No answers yet. Be the first.')).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Availability table, scrolls sideways' })).toBeFocused();
-    expect(deletions()).toBe(1);
     if (mine) {
+      // Without an identity the page is back at the first step: the Name tile alone.
+      await expect(page.getByRole('button', { name: 'Join' })).toBeVisible();
+      await expect(page.getByRole('table')).toHaveCount(0);
       expect(await page.evaluate((id) => localStorage.getItem(`pikadai:participant:${id}`), poll.id)).toBeNull();
+    } else {
+      await expect(page.getByText('No answers yet. Be the first.')).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Availability table, scrolls sideways' })).toBeFocused();
     }
+    expect(deletions()).toBe(1);
   });
 }
 
@@ -190,7 +204,7 @@ test('a pending deletion keeps focus, prevents repeats and displays a retryable 
 test('long confirmation text reflows in a small viewport with light theme and reduced motion', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 256 });
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
-  await openPoll(page, { nickname: 'A'.repeat(40) });
+  await openPoll(page, { name: 'A'.repeat(40) });
   await page.getByRole('button', { name: `Edit ${'A'.repeat(40)}` }).click();
   await page.getByRole('button', { name: 'Remove', exact: true }).click();
   const dialog = page.getByRole('alertdialog');

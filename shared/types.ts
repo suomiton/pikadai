@@ -14,8 +14,23 @@ export interface EventOption {
 
 export interface Participant {
   id: string;
-  nickname: string;
+  name: string;
+  /** @deprecated The same value as `name`, for pages loaded before the rename shipped. Remove after 2026-11-04. */
+  nickname?: string;
   votes: Record<string, Answer>;
+  createdAt: number;
+  /** Joined with the admin token: the organiser's own row. Shown with a pill after the name. */
+  isOrganiser: boolean;
+}
+
+/** A comment, posted under a participant's name; the name follows the participant's current one. */
+export interface Comment {
+  id: string;
+  participantId: string;
+  name: string;
+  /** The author is the organiser's row; see `Participant.isOrganiser`. */
+  isOrganiser: boolean;
+  body: string;
   createdAt: number;
 }
 
@@ -28,6 +43,8 @@ export interface EventView {
   expiresAt: number;
   options: EventOption[];
   participants: Participant[];
+  /** Oldest first. */
+  comments: Comment[];
   viewer: { isAdmin: boolean };
 }
 

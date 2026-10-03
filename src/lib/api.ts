@@ -1,5 +1,6 @@
 import type {
   AddOptionInput,
+  CreateCommentInput,
   CreateEventInput,
   CreateParticipantInput,
   UpdateEventInput,
@@ -7,6 +8,7 @@ import type {
 } from '@shared/schemas';
 import type {
   ApiError,
+  Comment,
   CreateEventResponse,
   CreateParticipantResponse,
   EventOption,
@@ -112,8 +114,13 @@ export const api = {
       headers: authHeaders({ adminToken }),
     }),
 
-  addParticipant: (id: string, input: CreateParticipantInput) =>
-    request<CreateParticipantResponse>(`${eventPath(id)}/participants`, { method: 'POST', body: input }),
+  /** The admin token, when this browser has one, marks the new row as the organiser's. */
+  addParticipant: (id: string, input: CreateParticipantInput, adminToken: string | null) =>
+    request<CreateParticipantResponse>(`${eventPath(id)}/participants`, {
+      method: 'POST',
+      body: input,
+      headers: authHeaders({ adminToken }),
+    }),
 
   updateParticipant: (id: string, participantId: string, input: UpdateParticipantInput, auth: Auth) =>
     request<void>(`${eventPath(id)}/participants/${encodeURIComponent(participantId)}`, {
@@ -126,5 +133,13 @@ export const api = {
     request<void>(`${eventPath(id)}/participants/${encodeURIComponent(participantId)}`, {
       method: 'DELETE',
       headers: authHeaders(auth),
+    }),
+
+  /** Always as the participant: a comment is posted under a name, which the admin token does not have. */
+  addComment: (id: string, input: CreateCommentInput, participant: ParticipantIdentity) =>
+    request<Comment>(`${eventPath(id)}/comments`, {
+      method: 'POST',
+      body: input,
+      headers: authHeaders({ participant }),
     }),
 };

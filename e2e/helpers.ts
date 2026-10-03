@@ -17,6 +17,11 @@ export async function answerDate(page: Page, columnIndex: number, clicks: number
   for (let i = 0; i < clicks; i++) await button.click();
 }
 
+/** The field in the Name tile: "Your name" before joining, "New name" while renaming. The tile itself is also named "Name". */
+export function nameField(page: Page): Locator {
+  return page.getByRole('region', { name: 'Name', exact: true }).getByRole('textbox', { name: /name/i });
+}
+
 /** Wait for the Turnstile test widget to hand over its token, which enables the primary button. */
 export async function waitForTurnstile(button: Locator): Promise<void> {
   await expect(button).toBeEnabled({ timeout: 30_000 });

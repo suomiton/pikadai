@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { EventOption, Participant } from '@shared/types';
-import { computeTallies, cycle, topDates } from './votes';
+import { computeTallies, cycle, hasAnswered, topDates } from './votes';
 
 const option = (id: string, date: string): EventOption => ({ id, date, suggestedBy: null });
 const participant = (id: string, votes: Participant['votes']): Participant => ({
   id,
-  nickname: id,
+  name: id,
   votes,
   createdAt: 0,
+  isOrganiser: false,
 });
 
 describe('cycle', () => {
@@ -36,6 +37,14 @@ describe('computeTallies', () => {
       a: { yes: 0, maybe: 0 },
       b: { yes: 0, maybe: 0 },
     });
+  });
+});
+
+describe('hasAnswered', () => {
+  it('is true once any date has an answer, including no', () => {
+    expect(hasAnswered({ votes: {} })).toBe(false);
+    expect(hasAnswered({ votes: { a: 'no' } })).toBe(true);
+    expect(hasAnswered({ votes: { a: 'yes', b: 'maybe' } })).toBe(true);
   });
 });
 
@@ -79,7 +88,7 @@ describe('topDates', () => {
     const scores = topDates([...options].reverse(), [
       participant('p1', { a: 'yes', b: 'yes', c: 'yes' }),
       participant('p2', { c: 'maybe' }),
-      participant('p3', {}),
+      participant('p3', { d: 'no' }),
     ]);
     expect(scores?.map((s) => s.option.id)).toEqual(['c', 'a', 'b']);
   });
@@ -97,8 +106,15 @@ describe('topDates', () => {
     const scores = topDates(options, [
       participant('p1', { a: 'no' }),
       participant('p2', { a: 'maybe' }),
-      participant('p3', {}),
+      participant('p3', { b: 'no' }),
     ]);
     expect(scores).toEqual([]);
+  });
+
+  it('ignores someone who joined but has not answered any date', () => {
+    const answered = [participant('p1', { a: 'yes' }), participant('p2', { a: 'yes' })];
+    expect(topDates(options, [...answered, participant('p3', {})])).toBeNull();
+    const scores = topDates(options, [...answered, participant('p3', { a: 'no' }), participant('p4', {})]);
+    expect(scores).toEqual([{ option: options[0], yes: 2, total: 3, percent: 67 }]);
   });
 });

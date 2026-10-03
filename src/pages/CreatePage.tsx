@@ -101,8 +101,8 @@ export function CreatePage() {
       <section className="hero">
         <h1>Find a date that works for everyone.</h1>
         <p>
-          Pick some dates, share one link, and let people answer with just a nickname. No login, no email, no tracking.
-          The poll deletes itself after it expires.
+          Pick some dates, share one link, and let people answer with just a name. No login, no email, no tracking. The
+          poll deletes itself after it expires.
         </p>
       </section>
 

@@ -29,7 +29,7 @@ describe('parseBody', () => {
 
 describe('isUniqueViolation', () => {
   it('recognises the D1 message', () => {
-    expect(isUniqueViolation(new Error('D1_ERROR: UNIQUE constraint failed: participants.nickname'))).toBe(true);
+    expect(isUniqueViolation(new Error('D1_ERROR: UNIQUE constraint failed: participants.name'))).toBe(true);
   });
 
   it('ignores other errors and non-errors', () => {

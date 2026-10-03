@@ -169,12 +169,12 @@ export async function getView(c: Client, id: string, headers?: Record<string, st
 export async function addParticipant(
   c: Client,
   eventId: string,
-  nickname: string,
+  name: string,
   votes: Record<string, 'yes' | 'no' | 'maybe'> = {},
 ): Promise<CreateParticipantResponse> {
   stubSiteverify(siteverifyOk('answer'));
   const res = await c.post<CreateParticipantResponse>(`/api/events/${eventId}/participants`, {
-    nickname,
+    name,
     votes,
     turnstileToken: DUMMY_TOKEN,
   });
@@ -194,7 +194,7 @@ export async function insertEventRow(row: { id: string; expires_at: number; crea
 }
 
 export async function countRows(
-  table: 'events' | 'participants' | 'options' | 'votes',
+  table: 'events' | 'participants' | 'options' | 'votes' | 'comments',
   eventId?: string,
 ): Promise<number> {
   const sql =

@@ -26,8 +26,10 @@ export interface OptionRow {
 export interface ParticipantRow {
   id: string;
   event_id: string;
-  nickname: string;
+  name: string;
   edit_token_hash: string;
+  /** 1 when the join request carried the admin token. */
+  is_organiser: number;
   created_at: number;
   updated_at: number;
 }
@@ -36,6 +38,20 @@ export interface VoteRow {
   participant_id: string;
   option_id: string;
   answer: Answer;
+}
+
+export interface CommentRow {
+  id: string;
+  event_id: string;
+  participant_id: string;
+  body: string;
+  created_at: number;
+}
+
+/** A comment as the view reads it: joined to its participant for the current name and role. */
+export interface CommentWithAuthor extends CommentRow {
+  name: string;
+  is_organiser: number;
 }
 
 export async function getEventRow(db: D1Database, id: string): Promise<EventRow | null> {
@@ -193,19 +209,19 @@ export async function countParticipants(db: D1Database, eventId: string): Promis
   return row?.n ?? 0;
 }
 
-export async function nicknameTaken(
+export async function nameTaken(
   db: D1Database,
   eventId: string,
-  nickname: string,
+  name: string,
   excludeParticipantId: string | null,
 ): Promise<boolean> {
   const row = await db
     .prepare(
       `SELECT 1 AS hit FROM participants
-       WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)
+       WHERE event_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)
        LIMIT 1`,
     )
-    .bind(eventId, nickname, excludeParticipantId, excludeParticipantId)
+    .bind(eventId, name, excludeParticipantId, excludeParticipantId)
     .first<{ hit: number }>();
   return row !== null;
 }
@@ -218,14 +234,15 @@ export async function insertParticipantWithVotes(
   const statements = [
     db
       .prepare(
-        `INSERT INTO participants (id, event_id, nickname, edit_token_hash, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO participants (id, event_id, name, edit_token_hash, is_organiser, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         participant.id,
         participant.event_id,
-        participant.nickname,
+        participant.name,
         participant.edit_token_hash,
+        participant.is_organiser,
         participant.created_at,
         participant.updated_at,
       ),
@@ -234,18 +251,30 @@ export async function insertParticipantWithVotes(
   await db.batch(statements);
 }
 
-export async function updateParticipantWithVotes(
+/** What a save may change: the name, the whole vote set, or both. An absent field is left as it is. */
+export interface ParticipantPatch {
+  name?: string;
+  votes?: Record<string, Answer>;
+}
+
+/** Apply a patch in one transaction; the vote set, when given, replaces the old one wholesale. */
+export async function updateParticipant(
   db: D1Database,
   participant: ParticipantRow,
-  nickname: string,
-  votes: Record<string, Answer>,
+  patch: ParticipantPatch,
   now: number,
 ): Promise<void> {
   const statements = [
-    db.prepare('UPDATE participants SET nickname = ?, updated_at = ? WHERE id = ?').bind(nickname, now, participant.id),
-    db.prepare('DELETE FROM votes WHERE participant_id = ?').bind(participant.id),
-    ...voteStatements(db, participant.id, votes),
+    db
+      .prepare('UPDATE participants SET name = ?, updated_at = ? WHERE id = ?')
+      .bind(patch.name ?? participant.name, now, participant.id),
   ];
+  if (patch.votes !== undefined) {
+    statements.push(
+      db.prepare('DELETE FROM votes WHERE participant_id = ?').bind(participant.id),
+      ...voteStatements(db, participant.id, patch.votes),
+    );
+  }
   await db.batch(statements);
 }
 
@@ -278,20 +307,78 @@ export async function getVotesForEvent(db: D1Database, eventId: string): Promise
   return results;
 }
 
+export async function getCommentsForEvent(db: D1Database, eventId: string): Promise<CommentWithAuthor[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.id, c.event_id, c.participant_id, c.body, c.created_at, p.name, p.is_organiser
+       FROM comments c
+       JOIN participants p ON p.id = c.participant_id
+       WHERE c.event_id = ?
+       ORDER BY c.created_at ASC, c.id ASC`,
+    )
+    .bind(eventId)
+    .all<CommentWithAuthor>();
+  return results;
+}
+
+export async function countComments(db: D1Database, eventId: string): Promise<number> {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM comments WHERE event_id = ?')
+    .bind(eventId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/**
+ * Insert a comment unless the participant has one newer than `quietSince` or the poll already holds
+ * `maxPerEvent` comments. Both checks sit in the insert statement itself, so simultaneous posts, by
+ * one participant or by many, cannot slip past them together. False when refused; the caller asks
+ * `countComments` to tell the two reasons apart.
+ */
+export async function insertComment(
+  db: D1Database,
+  comment: CommentRow,
+  quietSince: number,
+  maxPerEvent: number,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `INSERT INTO comments (id, event_id, participant_id, body, created_at)
+       SELECT ?, ?, ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM comments WHERE participant_id = ? AND created_at > ?)
+         AND (SELECT COUNT(*) FROM comments WHERE event_id = ?) < ?`,
+    )
+    .bind(
+      comment.id,
+      comment.event_id,
+      comment.participant_id,
+      comment.body,
+      comment.created_at,
+      comment.participant_id,
+      quietSince,
+      comment.event_id,
+      maxPerEvent,
+    )
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
 /** Everything under one event, read in parallel; `toEventView` in worker/lib/eventView.ts shapes it for the client. */
 export interface EventRows {
   options: OptionRow[];
   participants: ParticipantRow[];
   votes: VoteRow[];
+  comments: CommentWithAuthor[];
 }
 
 export async function fetchEventRows(db: D1Database, eventId: string): Promise<EventRows> {
-  const [options, participants, votes] = await Promise.all([
+  const [options, participants, votes, comments] = await Promise.all([
     getOptions(db, eventId),
     getParticipants(db, eventId),
     getVotesForEvent(db, eventId),
+    getCommentsForEvent(db, eventId),
   ]);
-  return { options, participants, votes };
+  return { options, participants, votes, comments };
 }
 
 export async function deleteExpiredEvents(db: D1Database, now: number): Promise<number> {

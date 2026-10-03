@@ -6,8 +6,8 @@ Platform behaviour such as limits and backups is in [cloudflare.md](cloudflare.m
 
 ## Overview
 
-Four tables. A poll is an `event`; it has date `options`; `participants` answer with `votes`, one per
-option they responded to.
+Five tables. A poll is an `event`; it has date `options`; `participants` answer with `votes`, one per
+option they responded to, and post `comments`.
 
 ```mermaid
 erDiagram
@@ -16,6 +16,8 @@ erDiagram
     participants ||--o{ votes : "casts"
     options ||--o{ votes : "receives"
     participants |o--o{ options : "suggested"
+    events ||--o{ comments : "has"
+    participants ||--o{ comments : "writes"
 
     events {
         text id PK
@@ -38,7 +40,7 @@ erDiagram
     participants {
         text id PK
         text event_id FK
-        text nickname
+        text name
         text edit_token_hash
         int  created_at
         int  updated_at
@@ -48,10 +50,17 @@ erDiagram
         text option_id PK,FK
         text answer
     }
+    comments {
+        text id PK
+        text event_id FK
+        text participant_id FK
+        text body
+        int  created_at
+    }
 ```
 
 Nothing in the database identifies a person. There are no IP addresses, user agents, emails, or
-fingerprints. Nicknames are free text chosen by the participant.
+fingerprints. Names and comments are free text chosen by the participant.
 
 ## Conventions
 
@@ -101,19 +110,20 @@ Constraints: `UNIQUE (event_id, date)`, so a date appears at most once per poll.
 
 One row per answer in a poll.
 
-| Column            | Type                                  | Notes                                                                                        |
-| ----------------- | ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                        |
-| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                              |
-| `nickname`        | TEXT                                  | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`) |
-| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                      |
-| `created_at`      | INTEGER                               |                                                                                              |
-| `updated_at`      | INTEGER                               |                                                                                              |
+| Column            | Type                                  | Notes                                                                                                                         |
+| ----------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                                                         |
+| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                                                               |
+| `name`            | TEXT                                  | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`); `nickname` until migration 0005 |
+| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                                                       |
+| `is_organiser`    | INTEGER                               | 1 when the join request carried the admin token (migration 0004); shown as an "organiser" pill                                |
+| `created_at`      | INTEGER                               |                                                                                                                               |
+| `updated_at`      | INTEGER                               |                                                                                                                               |
 
-Indexes: `idx_participants_event_id (event_id)` and the unique `idx_participants_event_nickname (event_id,
-nickname COLLATE NOCASE)` from migration 0002. SQLite accepts a collation per indexed column, so the index
+Indexes: `idx_participants_event_id (event_id)` and the unique `idx_participants_event_name (event_id,
+name COLLATE NOCASE)`, from migration 0002 and renamed with the column in 0005. SQLite accepts a collation per indexed column, so the index
 enforces case-insensitive uniqueness without changing the column. The Worker still runs a pre-check so the
-normal path returns a friendly `nickname_taken` before any write; the index catches the race where two
+normal path returns a friendly `name_taken` before any write; the index catches the race where two
 requests pass the pre-check together, and the Worker maps that UNIQUE violation to the same error.
 
 ### `votes`
@@ -130,12 +140,29 @@ Primary key `(participant_id, option_id)`. Index on `option_id`. A missing row m
 the UI renders as `·`. Saving an answer deletes all of a participant's votes and inserts the new set in
 one batch, so partial updates cannot occur.
 
+### `comments`
+
+One row per comment, from migration 0003.
+
+| Column           | Type                                        | Notes                                                                             |
+| ---------------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
+| `id`             | TEXT PK                                     |                                                                                   |
+| `event_id`       | TEXT FK → events, `ON DELETE CASCADE`       |                                                                                   |
+| `participant_id` | TEXT FK → participants, `ON DELETE CASCADE` | the author; the name is read from that row, so a rename shows on old comments too |
+| `body`           | TEXT                                        | 1–512 characters, trimmed                                                         |
+| `created_at`     | INTEGER                                     |                                                                                   |
+
+Indexes: `idx_comments_event_created (event_id, created_at)` for the poll view, which lists comments
+oldest first, and `idx_comments_participant_created (participant_id, created_at)` for the one-per-interval
+check. Comments are never updated or deleted on their own; they go with their participant (leaving, or
+removal by the organiser) or with the poll.
+
 ## Integrity rules
 
 **Enforced by SQLite**
 
 - Foreign keys with cascades, as listed above. D1 enables foreign-key enforcement by default.
-- One date per poll; one nickname per poll ignoring case; one vote per participant per option; valid
+- One date per poll; one name per poll ignoring case; one vote per participant per option; valid
   `answer` values; unique ticket nonce.
 
 **Enforced by the Worker** (`worker/routes/*.ts`, `shared/schemas.ts`)
@@ -144,10 +171,13 @@ one batch, so partial updates cannot occur.
   two caps are checked before the insert, not inside the transaction, so simultaneous requests can overshoot
   by a few rows; accepted at this scale.
 - Votes may only reference options belonging to the same event; others are rejected with `unknown_option`.
-- A nickname pre-check for the friendly error; the unique index above is the guarantee.
+- A name pre-check for the friendly error; the unique index above is the guarantee.
+- At most 200 comments per poll and one comment per 10 seconds per participant. Unlike the other caps,
+  both are decided by the insert statement itself (`INSERT … SELECT … WHERE NOT EXISTS` a newer comment by
+  that participant `AND` the poll's count is under the cap), so simultaneous posts cannot overshoot.
 - Expired events (`expires_at <= now`) are treated as gone even before the purge deletes them.
 - Writes that need to be all-or-nothing use `db.batch()`, which D1 runs as one transaction: event plus
-  options on creation; participant plus votes on insert; nickname update plus vote replacement on edit.
+  options on creation; participant plus votes on insert; name update plus vote replacement on edit.
 
 ## Expiry
 
@@ -177,31 +207,34 @@ A cron trigger runs daily at 03:17 UTC and executes:
 DELETE FROM events WHERE expires_at <= ?;
 ```
 
-Cascades remove the poll's options, participants, and votes. The handler logs the number of events removed.
+Cascades remove the poll's options, participants, votes, and comments. The handler logs the number of
+events removed.
 
 ## Access patterns
 
 All SQL lives in `worker/db/queries.ts`. The main ones:
 
-| Function                         | Used by                       | Query shape                                                                                                           |
-| -------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `getEventRow`                    | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                                                   |
-| `fetchEventRows` + `toEventView` | GET                           | three selects (options, participants, votes joined to participants), then a pure mapping in `worker/lib/eventView.ts` |
-| `insertEventWithOptions`         | POST events                   | batch: 1 event insert + N option inserts                                                                              |
-| `insertParticipantWithVotes`     | POST participants             | batch: 1 insert + N vote inserts                                                                                      |
-| `updateParticipantWithVotes`     | PUT participant               | batch: update, delete votes, insert votes                                                                             |
-| `nicknameTaken`                  | POST/PUT participant          | `… WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                     |
-| `insertOption` / `deleteOption`  | options routes                | batch: insert or delete, plus the `expires_at` recalculation from the rows in the same transaction                    |
-| `deleteExpiredEvents`            | cron                          | the purge above                                                                                                       |
+| Function                         | Used by                       | Query shape                                                                                                                                  |
+| -------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getEventRow`                    | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                                                                          |
+| `fetchEventRows` + `toEventView` | GET                           | four selects (options, participants, votes and comments joined to participants), then a pure mapping in `worker/lib/eventView.ts`            |
+| `insertEventWithOptions`         | POST events                   | batch: 1 event insert + N option inserts                                                                                                     |
+| `insertParticipantWithVotes`     | POST participants             | batch: 1 insert + N vote inserts                                                                                                             |
+| `updateParticipant`              | PUT participant               | batch: name update, and when votes are sent, delete votes and insert the new set                                                             |
+| `nameTaken`                      | POST/PUT participant          | `… WHERE event_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                                                |
+| `insertOption` / `deleteOption`  | options routes                | batch: insert or delete, plus the `expires_at` recalculation from the rows in the same transaction                                           |
+| `insertComment`                  | POST comments                 | one `INSERT … SELECT … WHERE …` carrying the one-per-interval rule and the per-poll cap; `countComments` names a refusal's reason afterwards |
+| `deleteExpiredEvents`            | cron                          | the purge above                                                                                                                              |
 
-A poll view costs roughly 3 + participants + options row reads, and creating a poll costs 1 + options row
-writes. See the D1 free-plan limits in [cloudflare.md](cloudflare.md#d1) for why this is comfortable.
+A poll view costs roughly 4 + participants + options + comments row reads, and creating a poll costs
+1 + options row writes. See the D1 free-plan limits in [cloudflare.md](cloudflare.md#d1) for why this is comfortable.
 
 ## Sizing
 
 Rough per-row footprint including indexes: an event about 400 bytes, an option about 120, a participant
-about 200, a vote about 90. A typical poll with 6 dates and 10 participants who each answer every date is
-around 8 KB. The 5 GB free-plan allowance therefore holds on the order of half a million such polls, and
+about 200, a vote about 90, a comment about 150 plus its text. A typical poll with 6 dates and 10
+participants who each answer every date is around 8 KB; a lively one with 50 short comments adds about
+10 KB more. The 5 GB free-plan allowance therefore holds on the order of half a million such polls, and
 the nightly purge keeps the live set bounded.
 
 ## Migrations
@@ -230,6 +263,9 @@ npm run db:migrate:remote     # production, after review
 - SQLite's `ALTER TABLE` supports adding columns and renaming, but not dropping constraints or changing
   types. For those, create a new table, copy data, drop the old one, rename.
 - Never edit a migration that has been applied remotely. Add a new one.
+- Migration 0005 is the one exception to "additive" so far: it renames `participants.nickname` to `name`.
+  The Worker before it would fail against the renamed table, so that migration and the Worker using it
+  go out together, and a rollback of the Worker alone would need the column renamed back.
 - Local and remote migration state are independent. After pulling a branch with new migrations, run the
   local apply again.
 - There is no "down" migration. For an emergency revert of production data use D1 Time Travel.
@@ -255,7 +291,7 @@ Any SQLite client can open the `.sqlite` file directly for read-only inspection.
 
 ## Privacy and retention summary
 
-- Stored: poll text, chosen dates, nicknames, votes, hashed tokens, timestamps.
+- Stored: poll text, chosen dates, names, votes, comments, hashed tokens, timestamps.
 - Not stored: IP addresses, user agents, emails, device identifiers, Turnstile tokens, creation tickets
   (only their nonce, which is random).
 - Retention: until 30 days after the last date, or 90 days without dates, or earlier if the organiser

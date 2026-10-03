@@ -1,8 +1,12 @@
-import type { Answer, EventOption, EventView, Participant } from '@shared/types';
+import type { Answer, Comment, EventOption, EventView, Participant } from '@shared/types';
 import type { EventRow, EventRows } from '../db/queries';
 
 /** Assemble the JSON the client reads from the rows `fetchEventRows` returns. Pure, so it is unit-tested. */
-export function toEventView(event: EventRow, { options, participants, votes }: EventRows, isAdmin: boolean): EventView {
+export function toEventView(
+  event: EventRow,
+  { options, participants, votes, comments }: EventRows,
+  isAdmin: boolean,
+): EventView {
   const votesByParticipant = new Map<string, Record<string, Answer>>();
   for (const v of votes) {
     let bucket = votesByParticipant.get(v.participant_id);
@@ -23,9 +27,19 @@ export function toEventView(event: EventRow, { options, participants, votes }: E
     options: options.map((o): EventOption => ({ id: o.id, date: o.date, suggestedBy: o.suggested_by })),
     participants: participants.map((p): Participant => ({
       id: p.id,
-      nickname: p.nickname,
+      name: p.name,
+      nickname: p.name,
       votes: votesByParticipant.get(p.id) ?? {},
       createdAt: p.created_at,
+      isOrganiser: p.is_organiser === 1,
+    })),
+    comments: comments.map((c): Comment => ({
+      id: c.id,
+      participantId: c.participant_id,
+      name: c.name,
+      isOrganiser: c.is_organiser === 1,
+      body: c.body,
+      createdAt: c.created_at,
     })),
     viewer: { isAdmin },
   };

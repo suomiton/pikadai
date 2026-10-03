@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { LIMITS } from './limits';
 import {
+  createCommentSchema,
   createEventSchema,
   createParticipantSchema,
   eventDraftSchema,
   isoDateSchema,
-  nicknameSchema,
+  nameSchema,
   updateEventSchema,
   updateParticipantSchema,
   votesSchema,
@@ -95,11 +96,11 @@ describe('updateEventSchema', () => {
   });
 });
 
-describe('nicknameSchema', () => {
+describe('nameSchema', () => {
   it('trims and bounds the length', () => {
-    expect(nicknameSchema.parse('  Ada ')).toBe('Ada');
-    expect(firstMessage(nicknameSchema.safeParse('   '))).toBe('Nickname is required');
-    expect(nicknameSchema.safeParse('x'.repeat(LIMITS.nicknameMax + 1)).success).toBe(false);
+    expect(nameSchema.parse('  Ada ')).toBe('Ada');
+    expect(firstMessage(nameSchema.safeParse('   '))).toBe('Name is required');
+    expect(nameSchema.safeParse('x'.repeat(LIMITS.nameMax + 1)).success).toBe(false);
   });
 });
 
@@ -116,8 +117,47 @@ describe('votesSchema', () => {
 
 describe('participant schemas', () => {
   it('requires a Turnstile token only when creating', () => {
-    expect(createParticipantSchema.safeParse({ nickname: 'Ada', votes: {} }).success).toBe(false);
-    expect(createParticipantSchema.safeParse({ nickname: 'Ada', votes: {}, turnstileToken: 'x' }).success).toBe(true);
+    expect(createParticipantSchema.safeParse({ name: 'Ada', votes: {} }).success).toBe(false);
+    expect(createParticipantSchema.safeParse({ name: 'Ada', votes: {}, turnstileToken: 'x' }).success).toBe(true);
     expect(updateParticipantSchema.safeParse({ votes: {} }).success).toBe(true);
+  });
+});
+
+describe('participant schemas', () => {
+  it('still accepts the old field name and answers with the new one', () => {
+    expect(createParticipantSchema.parse({ nickname: ' Ada ', votes: {}, turnstileToken: 't' })).toEqual({
+      name: 'Ada',
+      votes: {},
+      turnstileToken: 't',
+    });
+    expect(createParticipantSchema.parse({ name: 'Ada', votes: {}, turnstileToken: 't' }).name).toBe('Ada');
+    expect(firstMessage(createParticipantSchema.safeParse({ votes: {}, turnstileToken: 't' }))).toBe(
+      'Name is required',
+    );
+    expect(updateParticipantSchema.parse({ nickname: 'Ada L.' })).toEqual({ name: 'Ada L.' });
+  });
+
+  it('lets a save carry the name, the votes or both, but not nothing', () => {
+    expect(updateParticipantSchema.parse({ name: 'Ada' })).toEqual({ name: 'Ada' });
+    expect(updateParticipantSchema.parse({ votes: { o1: 'yes' } })).toEqual({ name: undefined, votes: { o1: 'yes' } });
+    expect(firstMessage(updateParticipantSchema.safeParse({}))).toBe('Nothing to update');
+  });
+});
+
+describe('createCommentSchema', () => {
+  it('trims the text and requires something to be left', () => {
+    expect(createCommentSchema.parse({ body: '  Saturday works for me  ' })).toEqual({ body: 'Saturday works for me' });
+    expect(firstMessage(createCommentSchema.safeParse({ body: '   ' }))).toBe('Comment is required');
+  });
+
+  it('caps the length at the shared limit', () => {
+    expect(createCommentSchema.safeParse({ body: 'x'.repeat(LIMITS.commentMax) }).success).toBe(true);
+    expect(firstMessage(createCommentSchema.safeParse({ body: 'x'.repeat(LIMITS.commentMax + 1) }))).toBe(
+      `At most ${LIMITS.commentMax} characters`,
+    );
+  });
+
+  it('rejects a missing body', () => {
+    expect(createCommentSchema.safeParse({}).success).toBe(false);
   });
 });

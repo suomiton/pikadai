@@ -15,7 +15,7 @@ export const isoDateSchema = z
 
 export const answerSchema = z.enum(['yes', 'no', 'maybe']);
 
-export const nicknameSchema = z.string().trim().min(1, 'Nickname is required').max(LIMITS.nicknameMax);
+export const nameSchema = z.string().trim().min(1, 'Name is required').max(LIMITS.nameMax);
 
 /** The part of event creation the user fills in; validated client-side before the wait starts. */
 export const eventDraftSchema = z.object({
@@ -48,15 +48,33 @@ export const addOptionSchema = z.object({
 
 export const votesSchema = z.record(z.string().min(1).max(64), answerSchema);
 
-export const createParticipantSchema = z.object({
-  nickname: nicknameSchema,
-  votes: votesSchema,
-  turnstileToken: z.string().min(1),
-});
+/**
+ * `nickname` is the field's old name. A tab loaded before the rename shipped keeps sending it until
+ * the page is reloaded, so both spellings are accepted; the output always says `name`. Remove the
+ * alias after 2026-11-04, when every such tab is long gone.
+ */
+const nameOrNickname = { name: nameSchema.optional(), nickname: nameSchema.optional() };
 
-export const updateParticipantSchema = z.object({
-  nickname: nicknameSchema.optional(),
-  votes: votesSchema,
+export const createParticipantSchema = z
+  .object({ ...nameOrNickname, votes: votesSchema, turnstileToken: z.string().min(1) })
+  .refine((v) => v.name !== undefined || v.nickname !== undefined, { message: 'Name is required', path: ['name'] })
+  .transform(({ name, nickname, ...rest }) => ({ ...rest, name: (name ?? nickname) as string }));
+
+/**
+ * Either the name or the votes or both. A rename sends only the name and an answer only the votes, so
+ * the two never overwrite each other when they cross in flight.
+ */
+export const updateParticipantSchema = z
+  .object({ ...nameOrNickname, votes: votesSchema.optional() })
+  .transform(({ name, nickname, ...rest }) => ({ ...rest, name: name ?? nickname }))
+  .refine((v) => v.name !== undefined || v.votes !== undefined, 'Nothing to update');
+
+export const createCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Comment is required')
+    .max(LIMITS.commentMax, `At most ${LIMITS.commentMax} characters`),
 });
 
 export type EventDraft = z.infer<typeof eventDraftSchema>;
@@ -65,3 +83,4 @@ export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type AddOptionInput = z.infer<typeof addOptionSchema>;
 export type CreateParticipantInput = z.infer<typeof createParticipantSchema>;
 export type UpdateParticipantInput = z.infer<typeof updateParticipantSchema>;
+export type CreateCommentInput = z.infer<typeof createCommentSchema>;

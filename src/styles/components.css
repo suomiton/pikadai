@@ -220,6 +220,30 @@ textarea.input {
   color: var(--danger);
   font-size: 0.85rem;
 }
+/* Under a field: the error on the left, the hint (a character count, a note) on the right. */
+.field-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+.field-foot .field-error {
+  margin-top: 0;
+}
+.field-hint {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  font-weight: 300;
+}
+/* A character count sits on the right, under the field's far edge; a sentence reads from the left. */
+.field-hint:has(> .field-counter) {
+  margin-left: auto;
+  text-align: right;
+}
+.field-counter {
+  font-variant-numeric: tabular-nums;
+}
 .form-error::before {
   content: '! ';
   content: '! ' / '';
@@ -377,8 +401,8 @@ textarea.input {
   position: relative;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  /* Room for focus rings on the top, right and bottom. None on the left: the sticky nickname column
-     anchors inside the padding, so a left strip would let scrolled cells show beside it. The nickname
+  /* Room for focus rings on the top, right and bottom. None on the left: the sticky name column
+     anchors inside the padding, so a left strip would let scrolled cells show beside it. The name
      cells' own padding keeps their focus rings clear of that edge. */
   margin: -0.25rem -0.25rem -0.25rem 0;
   padding: 0.25rem 0.25rem 0.25rem 0;
@@ -572,6 +596,58 @@ thead th.is-best .opt-day {
 
 .edit-panel {
   padding-top: 0.25rem;
+}
+
+/* The Name tile: the join form before joining, the current name and a rename afterwards. */
+.name-card form {
+  max-width: 28rem;
+}
+.name-card .section-head p {
+  margin: 0;
+}
+
+/* Comments */
+.comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.comment + .comment {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+.comment-head .tag {
+  margin-left: 0;
+}
+.comment-author {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.comment.is-me .comment-author {
+  color: var(--accent);
+}
+.comment-time {
+  color: var(--text-faint);
+  font-weight: 300;
+}
+.comment-body {
+  margin-top: 0.25rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 70ch;
+}
+/* The textarea is sized from its content by Comments.tsx, so it never scrolls or needs a handle. */
+.comment-form textarea.input {
+  resize: none;
+  overflow: hidden;
 }
 
 .turnstile {
