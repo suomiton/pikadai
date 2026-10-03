@@ -25,8 +25,15 @@
 }
 
 /* Event header */
-.event-head h1 {
+.event-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
   margin-bottom: 0.5rem;
+}
+.event-title-row .tag {
+  margin-left: 0;
 }
 .event-description {
   white-space: pre-wrap;

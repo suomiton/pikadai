@@ -57,11 +57,13 @@ export function EventPage() {
   return (
     <div className="stack-lg">
       <header className="event-head">
-        <h1>{event.title}</h1>
+        <div className="event-title-row">
+          <h1>{event.title}</h1>
+          {isAdmin && <span className="tag tag-accent">organiser view</span>}
+        </div>
         {event.description && <p className="event-description">{event.description}</p>}
         <p className="meta">
           Created {formatTimestamp(event.createdAt)} · auto-deletes {formatTimestamp(event.expiresAt)}
-          {isAdmin && <span className="tag tag-accent">organiser view</span>}
         </p>
       </header>
 
