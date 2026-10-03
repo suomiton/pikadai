@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pikadai",
+  "account_id": "26c56350dc87dfc69dce147a7df3b168",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-09-01",
   // Keep the Worker's own console output queryable, but do not persist per-request
@@ -16,12 +17,12 @@
     "run_worker_first": ["/api/*"],
   },
 
-  // Create the real database with `npm run db:create` and paste its id here.
+  // Production database in the Cloudflare account above.
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "pikadai",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "771c52d2-f012-4ba0-ac4a-df5754b99438",
       "migrations_dir": "migrations",
     },
   ],

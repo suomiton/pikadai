@@ -188,38 +188,32 @@ database. If a migration must be undone, restore with D1 Time Travel to a timest
 The `workers.dev` hostname keeps working unless you disable it in the Worker's settings. If you do, remove
 it from the Turnstile widget too.
 
-## Continuous deployment (optional)
+## Continuous deployment
 
-A minimal GitHub Actions job:
+[The deployment workflow](../.github/workflows/deploy.yml) runs automatically after
+[CI](../.github/workflows/ci.yml) succeeds on a push to `main` in this repository. Pull requests only run
+the checks. Deployment checks out the exact commit that passed CI, installs dependencies, builds and
+typechecks the app, applies pending production D1 migrations, uploads the fresh Worker and assets, and
+checks that [the live app](https://pikadai.suomiton.workers.dev/) responds successfully. Deployments run
+one at a time and an in-progress deployment is allowed to finish. The README has separate CI and Deploy
+status badges for `main`.
 
-```yaml
-name: deploy
-on: { push: { branches: [main] } }
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: npm ci
-      - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: cp .dev.vars.example .dev.vars # test keys for the local Worker the browser tests use
-      - run: npm run test:e2e
-      - run: npm run db:migrate:remote
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - run: npm run deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-```
+One-time credential setup:
 
-Create the API token in the dashboard with the "Edit Cloudflare Workers" template plus D1 edit
-permission. Worker secrets set with `wrangler secret put` persist across deploys and do not need to be in
-CI.
+1. In [Cloudflare API tokens](https://dash.cloudflare.com/profile/api-tokens), create a token using the
+   **Edit Cloudflare Workers** template. Add **Account → D1 → Edit** permission and restrict the token
+   to the account configured in `wrangler.jsonc`.
+2. Add it to this repository's **Settings → Secrets and variables → Actions** as a repository secret
+   named `CLOUDFLARE_API_TOKEN`. You can also use the CLI, which prompts for the token:
+
+   ```sh
+   gh secret set CLOUDFLARE_API_TOKEN --repo suomiton/pikadai
+   ```
+
+The account and database IDs are already in `wrangler.jsonc`, and the public Turnstile site key is in
+`.env.production`. Worker secrets set with `wrangler secret put` persist across deploys; keep
+`TICKET_SECRET` and `TURNSTILE_SECRET_KEY` in Cloudflare. The deployment job fails with a setup message
+if the API token repository secret is missing.
 
 ## Troubleshooting
 

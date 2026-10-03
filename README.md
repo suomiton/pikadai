@@ -1,6 +1,9 @@
 # pikadai
 
 [![CI](https://github.com/suomiton/pikadai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/suomiton/pikadai/actions/workflows/ci.yml?query=branch%3Amain)
+[![Deploy](https://github.com/suomiton/pikadai/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/suomiton/pikadai/actions/workflows/deploy.yml?query=branch%3Amain)
+
+Live app: [pikadai.suomiton.workers.dev](https://pikadai.suomiton.workers.dev)
 
 Anonymous, login-free date polls. Create a poll, share one link, people answer with a nickname.
 No accounts, no email, no cookies, no tracking. Polls delete themselves after they expire.
@@ -40,8 +43,11 @@ npx playwright install chromium     # once per machine
 npm run test:e2e                    # browser journeys against the dev server (started if needed)
 ```
 
-GitHub Actions runs `npm test` on every push to `main` and every pull request into it
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); the badge at the top shows `main`.
+GitHub Actions runs lint, formatting checks, and `npm test` on every push to `main` and every pull
+request into it ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); the badge at the top shows
+`main`. After those checks pass on a push to `main`, [the deployment workflow](.github/workflows/deploy.yml)
+builds the tested commit, applies production database migrations, and publishes to Cloudflare. The
+Deploy badge shows its status. See [the CI token setup](docs/deployment.md#continuous-deployment).
 
 ## Deploy
 
