@@ -62,13 +62,16 @@ export interface Auth {
   participant: ParticipantIdentity | null;
 }
 
+/**
+ * At most one token per request, in the standard `Authorization` header so that
+ * Cloudflare's log pipeline redacts it. The admin token wins when both exist,
+ * because everything a participant may do the admin may do too.
+ */
 function authHeaders({ adminToken, participant }: Partial<Auth>): Record<string, string> {
   const headers: Record<string, string> = {};
-  if (adminToken) headers['X-Admin-Token'] = adminToken;
-  if (participant) {
-    headers['X-Participant-Token'] = participant.token;
-    headers['X-Participant-Id'] = participant.id;
-  }
+  const token = adminToken ?? participant?.token;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (participant) headers['X-Participant-Id'] = participant.id;
   return headers;
 }
 

@@ -105,14 +105,16 @@ One row per answer in a poll.
 | --- | --- | --- |
 | `id` | TEXT PK | sent back to the browser together with the edit token |
 | `event_id` | TEXT FK → events, `ON DELETE CASCADE` | |
-| `nickname` | TEXT | 1–32 characters, trimmed; unique per poll ignoring case, enforced in code with `COLLATE NOCASE` |
+| `nickname` | TEXT | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`) |
 | `edit_token_hash` | TEXT | SHA-256 of the participant's edit token |
 | `created_at` | INTEGER | |
 | `updated_at` | INTEGER | |
 
-Index on `event_id`. Nickname uniqueness is checked by the Worker before insert and update rather than by a
-unique index, because SQLite's `UNIQUE` would need a `COLLATE NOCASE` column definition, and the explicit
-check lets the API return a specific `nickname_taken` error.
+Indexes: `idx_participants_event_id (event_id)` and the unique `idx_participants_event_nickname (event_id,
+nickname COLLATE NOCASE)` from migration 0002. SQLite accepts a collation per indexed column, so the index
+enforces case-insensitive uniqueness without changing the column. The Worker still runs a pre-check so the
+normal path returns a friendly `nickname_taken` before any write; the index catches the race where two
+requests pass the pre-check together, and the Worker maps that UNIQUE violation to the same error.
 
 ### `votes`
 
@@ -133,13 +135,16 @@ one batch, so partial updates cannot occur.
 **Enforced by SQLite**
 
 - Foreign keys with cascades, as listed above. D1 enables foreign-key enforcement by default.
-- One date per poll; one vote per participant per option; valid `answer` values; unique ticket nonce.
+- One date per poll; one nickname per poll ignoring case; one vote per participant per option; valid
+  `answer` values; unique ticket nonce.
 
 **Enforced by the Worker** (`worker/routes/*.ts`, `shared/schemas.ts`)
 
-- Field lengths and trimming, real calendar dates, at most 40 options and 100 participants per poll.
+- Field lengths and trimming, real calendar dates, at most 40 options and 100 participants per poll. The
+  two caps are checked before the insert, not inside the transaction, so simultaneous requests can overshoot
+  by a few rows; accepted at this scale.
 - Votes may only reference options belonging to the same event; others are rejected with `unknown_option`.
-- Nickname uniqueness per poll, case-insensitive.
+- A nickname pre-check for the friendly error; the unique index above is the guarantee.
 - Expired events (`expires_at <= now`) are treated as gone even before the purge deletes them.
 - Writes that need to be all-or-nothing use `db.batch()`, which D1 runs as one transaction: event plus
   options on creation; participant plus votes on insert; nickname update plus vote replacement on edit.

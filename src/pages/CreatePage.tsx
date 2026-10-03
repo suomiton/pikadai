@@ -15,11 +15,12 @@ import { sleep, waitUntil } from '../lib/timing';
 const STEPS = ['Validating', 'Setting up', 'Creating links', 'Done'] as const;
 
 /**
- * Wall-clock offsets (ms after submit) at which each step hands over to the next.
- * The last offset is when the create request is actually sent; it must exceed the
- * Worker's MIN_CREATE_DELAY_MS or the creation ticket is rejected as too early.
+ * The progress steps pace themselves on the wait the ticket response asks for:
+ * steps 1 and 2 begin at these shares of the total, and the create request goes
+ * out once the ticket is old enough plus a little headroom for clock drift.
  */
-const STEP_ENDS = [1600, 3600, LIMITS.minCreateDelayMs + 800] as const;
+const STEP_STARTS = [0.28, 0.62] as const;
+const TICKET_HEADROOM_MS = 800;
 
 /** Fields that can carry a validation error, in the order focus should visit them. */
 type FieldKey = 'title' | 'description' | 'dates';
@@ -101,12 +102,16 @@ export function CreatePage() {
     const startedAt = Date.now();
     setProgress({ step: 0, failed: false, message: null });
     try {
-      const { ticket } = await api.createTicket();
-      await waitUntil(startedAt + STEP_ENDS[0]);
+      const { ticket, minAgeMs } = await api.createTicket();
+      // Counted from when the response arrived, so the Worker sees the ticket as old enough
+      // whatever the two clocks say.
+      const sendAt = Date.now() + minAgeMs + TICKET_HEADROOM_MS;
+      const total = sendAt - startedAt;
+      await waitUntil(startedAt + total * STEP_STARTS[0]);
       setProgress({ step: 1, failed: false, message: null });
-      await waitUntil(startedAt + STEP_ENDS[1]);
+      await waitUntil(startedAt + total * STEP_STARTS[1]);
       setProgress({ step: 2, failed: false, message: null });
-      await waitUntil(startedAt + STEP_ENDS[2]);
+      await waitUntil(sendAt);
 
       const created = await api.createEvent({ ...parsed.data, ticket, turnstileToken });
       storage.setAdminToken(created.id, created.adminToken);
@@ -220,7 +225,7 @@ export function CreatePage() {
           <span>Let participants suggest other dates</span>
         </label>
 
-        <TurnstileField ref={turnstileRef} onToken={setTurnstileToken} />
+        <TurnstileField action="create" ref={turnstileRef} onToken={setTurnstileToken} />
 
         {fieldErrors.form && (
           <p className="form-error" role="alert">

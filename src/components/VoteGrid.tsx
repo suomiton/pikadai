@@ -416,7 +416,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
             Tap a cell to cycle through <span aria-hidden="true">✓ </span>yes, <span aria-hidden="true">~ </span>
             if need be, <span aria-hidden="true">✕ </span>no, and <span aria-hidden="true">· </span>no answer.
           </p>
-          {editing.kind === 'new' && <TurnstileField ref={turnstileRef} onToken={setTurnstileToken} />}
+          {editing.kind === 'new' && <TurnstileField action="answer" ref={turnstileRef} onToken={setTurnstileToken} />}
           {error && (
             <p id={errorId} className="form-error" role="alert">
               {error}

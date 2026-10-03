@@ -24,6 +24,8 @@ export const errors = {
     new HttpError(410, code, message),
   tooMany: (message = 'Too many requests. Please slow down.', code = 'rate_limited') =>
     new HttpError(429, code, message),
+  payloadTooLarge: (message = 'Request body too large', code = 'payload_too_large') =>
+    new HttpError(413, code, message),
 };
 
 export async function readJson(c: Context): Promise<unknown> {

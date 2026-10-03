@@ -39,7 +39,7 @@ The output includes a `database_id`. Open `wrangler.jsonc` and replace the place
 npm run db:migrate:remote
 ```
 
-Expected: a table listing `0001_init.sql` with a tick.
+Expected: a table listing every file in `migrations/` with a tick.
 
 ### 2. Set the Worker secrets
 
@@ -169,7 +169,7 @@ database. If a migration must be undone, restore with D1 Time Travel to a timest
 | --- | --- | --- |
 | Rate limits | `ratelimits` in `wrangler.jsonc` | `npm run cf-typegen && npm run deploy` |
 | Cron schedule | `triggers.crons` in `wrangler.jsonc` | `npm run deploy` |
-| Minimum creation delay | `MIN_CREATE_DELAY_MS` in `wrangler.jsonc`; keep the client's `STEP_ENDS` in `src/pages/CreatePage.tsx` above it | `npm run deploy` |
+| Minimum creation delay | `minCreateDelayMs` in `shared/limits.ts`; the client reads it from the ticket response, so nothing else moves | `npm run deploy` |
 | Size and count limits | `shared/limits.ts` | `npm run deploy` (client and Worker update together) |
 | Expiry periods | `shared/limits.ts` | `npm run deploy`; existing rows keep their stored `expires_at` |
 
@@ -194,7 +194,7 @@ A minimal GitHub Actions job:
 
 ```yaml
 name: deploy
-on: { push: { branches: [master] } }
+on: { push: { branches: [main] } }
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -226,7 +226,7 @@ CI.
 | `no such table: events` in production | migrations not applied remotely | `npm run db:migrate:remote` |
 | Every poll creation fails with `captcha_failed` | widget hostname list does not include this host, or secret does not match site key | fix widget hostnames; re-put the secret |
 | Turnstile widget shows a configuration error | `VITE_TURNSTILE_SITE_KEY` empty in `.env.production` at build time | set it and redeploy |
-| Creation fails with `ticket_too_early` | client step timings shorter than `MIN_CREATE_DELAY_MS` | keep `STEP_ENDS` last value above the var |
+| A creation fails with `ticket_invalid` once in a while | the client's address changed between asking for the ticket and creating, say a phone moving from Wi-Fi to mobile data | expected: tickets are bound to the client address, and trying again works |
 | `429` while testing | you hit the per-IP limits | wait a minute, or raise limits in `wrangler.jsonc` |
 | `/e/:id` returns 404 HTML in production | `not_found_handling` missing from assets config | restore it and redeploy |
 | Styles or fonts blocked in the browser console | CSP changed without updating `vite.config.ts` | add the origin to the policy |

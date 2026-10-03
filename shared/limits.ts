@@ -5,7 +5,7 @@ export const LIMITS = {
   nicknameMax: 32,
   optionsMax: 40,
   participantsMax: 100,
-  /** Minimum age of a creation ticket before the Worker accepts it. */
+  /** Minimum age of a creation ticket before the Worker accepts it; the client learns it from POST /api/tickets. */
   minCreateDelayMs: 5000,
   /** Tickets older than this are rejected. */
   ticketMaxAgeMs: 15 * 60 * 1000,
@@ -13,4 +13,6 @@ export const LIMITS = {
   ttlAfterLastDateDays: 30,
   /** A poll with no dates (all removed) is deleted this many days after creation. */
   ttlWithoutDatesDays: 90,
+  /** Largest JSON body the API reads; legitimate requests stay under 2 KB. */
+  requestBodyMaxBytes: 16 * 1024,
 } as const;
