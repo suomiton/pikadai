@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { LIMITS } from '@shared/limits';
@@ -21,6 +21,10 @@ const STEPS = ['Validating', 'Setting up', 'Creating links', 'Done'] as const;
  */
 const STEP_ENDS = [1600, 3600, LIMITS.minCreateDelayMs + 800] as const;
 
+/** Fields that can carry a validation error, in the order focus should visit them. */
+type FieldKey = 'title' | 'description' | 'dates';
+const FIELD_ORDER: readonly FieldKey[] = ['title', 'description', 'dates'];
+
 interface Progress {
   step: number;
   failed: boolean;
@@ -29,6 +33,7 @@ interface Progress {
 
 export function CreatePage() {
   const navigate = useNavigate();
+  const id = useId();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
@@ -38,7 +43,31 @@ export function CreatePage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [progress, setProgress] = useState<Progress | null>(null);
 
+  const fieldRefs = {
+    title: useRef<HTMLInputElement>(null),
+    description: useRef<HTMLTextAreaElement>(null),
+    dates: useRef<HTMLDivElement>(null),
+  };
+  const focusAfterErrors = useRef<FieldKey | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
   const dates = useMemo(() => [...selected].sort(), [selected]);
+
+  // Focus the first invalid field once its error is in the DOM, so it is read together with the field.
+  useEffect(() => {
+    const key = focusAfterErrors.current;
+    if (!key) return;
+    focusAfterErrors.current = null;
+    fieldRefs[key].current?.focus();
+  }, [fieldErrors]);
+
+  // A native <dialog> opened with showModal() moves and traps focus and makes the form behind inert.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (progress && !dialog.open) dialog.showModal();
+    else if (!progress && dialog.open) dialog.close();
+  }, [progress]);
 
   function toggleDate(iso: string) {
     setSelected((prev) => {
@@ -59,6 +88,7 @@ export function CreatePage() {
         const key = String(issue.path[0] ?? 'form');
         errors[key] ??= issue.message;
       }
+      focusAfterErrors.current = FIELD_ORDER.find((key) => key in errors) ?? null;
       setFieldErrors(errors);
       return;
     }
@@ -90,6 +120,9 @@ export function CreatePage() {
     }
   }
 
+  const describedBy = (key: FieldKey) => (fieldErrors[key] ? `${id}-${key}-error` : undefined);
+  const invalid = (key: FieldKey) => (fieldErrors[key] ? true : undefined);
+
   return (
     <>
       <section className="hero">
@@ -101,36 +134,63 @@ export function CreatePage() {
       </section>
 
       <form className="card stack create-form" onSubmit={handleSubmit} noValidate>
-        <label className="field">
-          <span className="field-label">What are you planning?</span>
+        <div className="field">
+          <label className="field-label" htmlFor={`${id}-title`}>
+            What are you planning?
+          </label>
           <input
+            id={`${id}-title`}
+            ref={fieldRefs.title}
             className="input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={LIMITS.titleMax}
             placeholder="Team dinner, board game night, …"
-            autoFocus
+            aria-invalid={invalid('title')}
+            aria-describedby={describedBy('title')}
           />
-          {fieldErrors.title && <span className="field-error">{fieldErrors.title}</span>}
-        </label>
+          {fieldErrors.title && (
+            <span id={`${id}-title-error`} className="field-error">
+              {fieldErrors.title}
+            </span>
+          )}
+        </div>
 
-        <label className="field">
-          <span className="field-label">
+        <div className="field">
+          <label className="field-label" htmlFor={`${id}-description`}>
             Details <em className="muted">optional</em>
-          </span>
+          </label>
           <textarea
+            id={`${id}-description`}
+            ref={fieldRefs.description}
             className="input"
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             maxLength={LIMITS.descriptionMax}
             placeholder="Where, what time, what to bring…"
+            aria-invalid={invalid('description')}
+            aria-describedby={describedBy('description')}
           />
-          {fieldErrors.description && <span className="field-error">{fieldErrors.description}</span>}
-        </label>
+          {fieldErrors.description && (
+            <span id={`${id}-description-error`} className="field-error">
+              {fieldErrors.description}
+            </span>
+          )}
+        </div>
 
-        <div className="field">
-          <span className="field-label">Which dates could work?</span>
+        <div
+          ref={fieldRefs.dates}
+          className="field"
+          role="group"
+          tabIndex={-1}
+          aria-labelledby={`${id}-dates-label`}
+          aria-invalid={invalid('dates')}
+          aria-describedby={describedBy('dates')}
+        >
+          <span id={`${id}-dates-label`} className="field-label">
+            Which dates could work?
+          </span>
           <Calendar selected={selected} onToggle={toggleDate} minDate={todayIso()} />
           {dates.length > 0 && (
             <ul className="chips" aria-label="Selected dates">
@@ -144,7 +204,11 @@ export function CreatePage() {
               ))}
             </ul>
           )}
-          {fieldErrors.dates && <span className="field-error">{fieldErrors.dates}</span>}
+          {fieldErrors.dates && (
+            <span id={`${id}-dates-error`} className="field-error">
+              {fieldErrors.dates}
+            </span>
+          )}
         </div>
 
         <label className="check">
@@ -171,10 +235,21 @@ export function CreatePage() {
         </div>
       </form>
 
-      {progress && (
-        <div className="overlay" role="dialog" aria-modal="true" aria-label="Creating your poll">
+      <dialog
+        ref={dialogRef}
+        className="progress-dialog"
+        aria-labelledby={`${id}-progress-title`}
+        onCancel={(e) => {
+          // Escape must not dismiss a creation that is still running.
+          if (!progress?.failed) e.preventDefault();
+        }}
+        onClose={() => setProgress(null)}
+      >
+        {progress && (
           <div className="card progress-card stack">
-            <h2>{progress.failed ? 'Could not create the poll' : 'Creating your poll'}</h2>
+            <h2 id={`${id}-progress-title`}>
+              {progress.failed ? 'Could not create the poll' : 'Creating your poll'}
+            </h2>
             <ProgressSteps steps={STEPS} current={progress.step} failed={progress.failed} />
             {progress.failed && (
               <>
@@ -182,15 +257,20 @@ export function CreatePage() {
                   {progress.message}
                 </p>
                 <div className="btn-row">
-                  <button type="button" className="btn btn-secondary" onClick={() => setProgress(null)}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    autoFocus
+                    onClick={() => dialogRef.current?.close()}
+                  >
                     Back to the form
                   </button>
                 </div>
               </>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </dialog>
     </>
   );
 }

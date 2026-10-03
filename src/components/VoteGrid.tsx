@@ -1,18 +1,21 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { LIMITS } from '@shared/limits';
-import type { Answer, EventView, Participant } from '@shared/types';
+import type { Answer, EventOption, EventView, Participant } from '@shared/types';
 import { api } from '../lib/api';
-import { formatDate } from '../lib/dates';
+import { formatDate, formatDateLong } from '../lib/dates';
 import { describeError } from '../lib/errors';
 import { storage, type ParticipantIdentity } from '../lib/storage';
 import { TurnstileField } from './TurnstileField';
 
 type Cell = Answer | 'none';
 type Editing = { kind: 'new' } | { kind: 'existing'; participantId: string } | null;
+/** Which control opened the editor, so focus can go back to it when the editor closes. */
+type Opener = { kind: 'add' } | { kind: 'edit'; participantId: string };
 
 const GLYPH: Record<Cell, string> = { yes: '✓', maybe: '~', no: '✕', none: '·' };
 const LABEL: Record<Cell, string> = { yes: 'Yes', maybe: 'If need be', no: 'No', none: 'No answer' };
+const NICKNAME_REQUIRED = 'Please enter a nickname.';
 
 function cycle(answer: Answer | undefined): Answer | undefined {
   switch (answer) {
@@ -37,6 +40,7 @@ interface Props {
 
 export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }: Props) {
   const isAdmin = event.viewer.isAdmin;
+  const id = useId();
   const [editing, setEditing] = useState<Editing>(null);
   const [nickname, setNickname] = useState('');
   const [draftVotes, setDraftVotes] = useState<Record<string, Answer>>({});
@@ -44,6 +48,15 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
   const turnstileRef = useRef<TurnstileInstance>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Read out by the live region: vote changes, saves and removals that are otherwise silent. */
+  const [status, setStatus] = useState('');
+
+  const sectionRef = useRef<HTMLElement>(null);
+  const tableRegionRef = useRef<HTMLDivElement>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const nicknameRef = useRef<HTMLInputElement>(null);
+  const openerRef = useRef<Opener | null>(null);
+  const [focusRequest, setFocusRequest] = useState(0);
 
   const hasAnswered = me !== null && event.participants.some((p) => p.id === me.id);
   const isFull = event.participants.length >= LIMITS.participantsMax;
@@ -66,7 +79,31 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
   const bestYes = Math.max(0, ...event.options.map((o) => tallies[o.id]?.yes ?? 0));
   const isBest = (optionId: string) => bestYes > 0 && tallies[optionId]?.yes === bestYes;
 
+  /*
+   * When the editor closes, the row or panel that had focus unmounts and focus would fall to
+   * <body>. Put it back on the control that opened the editor, or on the nearest thing still on
+   * screen: the Add button disappears once you have answered, and an Edit button goes with its row.
+   */
+  useEffect(() => {
+    if (focusRequest === 0) return;
+    const section = sectionRef.current;
+    if (!section) return;
+    const editButton = (participantId: string) =>
+      section.querySelector<HTMLElement>(`[data-edit-for="${participantId}"]`);
+    const opener = openerRef.current;
+    const candidates = [
+      opener?.kind === 'edit' ? editButton(opener.participantId) : null,
+      me ? editButton(me.id) : null,
+      addButtonRef.current,
+      tableRegionRef.current,
+    ];
+    candidates.find((el): el is HTMLElement => el !== null)?.focus();
+  }, [focusRequest]);
+
+  const returnFocus = () => setFocusRequest((n) => n + 1);
+
   function startNew() {
+    openerRef.current = { kind: 'add' };
     setNickname('');
     setDraftVotes({});
     setError(null);
@@ -74,6 +111,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
   }
 
   function startEdit(p: Participant) {
+    openerRef.current = { kind: 'edit', participantId: p.id };
     setNickname(p.nickname);
     setDraftVotes({ ...p.votes });
     setError(null);
@@ -84,23 +122,26 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
     setEditing(null);
     setError(null);
     setTurnstileToken(null);
+    returnFocus();
   }
 
-  function toggle(optionId: string) {
+  function toggle(option: EventOption) {
+    const next = cycle(draftVotes[option.id]);
     setDraftVotes((votes) => {
-      const next = cycle(votes[optionId]);
       const copy = { ...votes };
-      if (next === undefined) delete copy[optionId];
-      else copy[optionId] = next;
+      if (next === undefined) delete copy[option.id];
+      else copy[option.id] = next;
       return copy;
     });
+    setStatus(`${formatDateLong(option.date)}: ${LABEL[next ?? 'none']}`);
   }
 
   async function save() {
     if (!editing) return;
     const name = nickname.trim();
     if (!name) {
-      setError('Please enter a nickname.');
+      setError(NICKNAME_REQUIRED);
+      nicknameRef.current?.focus();
       return;
     }
     if (editing.kind === 'new' && !turnstileToken) {
@@ -110,6 +151,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
 
     setBusy(true);
     setError(null);
+    setStatus('Saving your answers.');
     try {
       if (editing.kind === 'new') {
         const res = await api.addParticipant(event.id, {
@@ -131,8 +173,11 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
       setEditing(null);
       setTurnstileToken(null);
       await onChanged();
+      setStatus('Your answers were saved.');
+      returnFocus();
     } catch (err) {
       setError(describeError(err));
+      setStatus('');
       turnstileRef.current?.reset();
       setTurnstileToken(null);
     } finally {
@@ -155,6 +200,8 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
       }
       setEditing(null);
       await onChanged();
+      setStatus(mine ? 'Your answers were removed.' : `${p.nickname} was removed from the poll.`);
+      returnFocus();
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -162,15 +209,17 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
     }
   }
 
-  async function removeOption(optionId: string) {
+  async function removeOption(option: EventOption) {
     if (!adminToken) return;
     if (!window.confirm('Remove this date and every answer for it?')) return;
 
     setBusy(true);
     setError(null);
     try {
-      await api.deleteOption(event.id, optionId, adminToken);
+      await api.deleteOption(event.id, option.id, adminToken);
       await onChanged();
+      setStatus(`${formatDateLong(option.date)} was removed from the poll.`);
+      tableRegionRef.current?.focus(); // the button that had focus went with its column
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -188,8 +237,8 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
             <button
               type="button"
               className="vote-btn"
-              onClick={() => toggle(o.id)}
-              aria-label={`${formatDate(o.date)}: ${LABEL[cell]}`}
+              onClick={() => toggle(o)}
+              aria-label={`${formatDateLong(o.date)}: ${LABEL[cell]}`}
               title={LABEL[cell]}
             >
               {GLYPH[cell]}
@@ -204,13 +253,46 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
     });
   }
 
+  const errorId = `${id}-error`;
+  const nicknameInvalid = error === NICKNAME_REQUIRED;
+
+  function renderNicknameInput(extra: { autoFocus?: boolean; placeholder?: string } = {}) {
+    return (
+      <input
+        ref={nicknameRef}
+        className="input input-sm"
+        value={nickname}
+        onChange={(e) => setNickname(e.target.value)}
+        maxLength={LIMITS.nicknameMax}
+        aria-label="Nickname"
+        aria-invalid={nicknameInvalid || undefined}
+        aria-describedby={nicknameInvalid ? errorId : undefined}
+        {...extra}
+      />
+    );
+  }
+
   const editingParticipant =
     editing?.kind === 'existing' ? event.participants.find((p) => p.id === editing.participantId) : undefined;
 
   return (
-    <section className="card stack vote-section">
-      <div className="table-scroll">
+    <section ref={sectionRef} className="card stack vote-section" aria-labelledby={`${id}-heading`}>
+      <h2 id={`${id}-heading`}>Availability</h2>
+      <p className="visually-hidden" role="status">
+        {status}
+      </p>
+      <div
+        ref={tableRegionRef}
+        className="table-scroll"
+        tabIndex={0}
+        role="region"
+        aria-label="Availability table, scrolls sideways"
+      >
         <table className="vote-table">
+          <caption className="visually-hidden">
+            One row per participant and one column per date. The last row counts the yes and if-need-be
+            answers for each date.
+          </caption>
           <thead>
             <tr>
               <th scope="col" className="name-col">
@@ -230,9 +312,9 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
                     <button
                       type="button"
                       className="icon-btn danger"
-                      onClick={() => removeOption(o.id)}
+                      onClick={() => removeOption(o)}
                       disabled={busy}
-                      aria-label={`Remove ${formatDate(o.date)}`}
+                      aria-label={`Remove ${formatDateLong(o.date)}`}
                       title="Remove this date"
                     >
                       ×
@@ -255,13 +337,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
                 <tr key={p.id} className={rowClass}>
                   <th scope="row" className="name-col">
                     {isEditingRow ? (
-                      <input
-                        className="input input-sm"
-                        value={nickname}
-                        onChange={(e) => setNickname(e.target.value)}
-                        maxLength={LIMITS.nicknameMax}
-                        aria-label="Nickname"
-                      />
+                      renderNicknameInput()
                     ) : (
                       <>
                         <span className="participant-name">{p.nickname}</span>
@@ -272,7 +348,14 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
                   {renderCells(isEditingRow ? draftVotes : p.votes, isEditingRow)}
                   <td className="actions-col">
                     {(isAdmin || isMine) && editing === null && (
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => startEdit(p)} disabled={busy}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        data-edit-for={p.id}
+                        onClick={() => startEdit(p)}
+                        disabled={busy}
+                        aria-label={isMine ? 'Edit your answers' : `Edit ${p.nickname}`}
+                      >
                         Edit
                       </button>
                     )}
@@ -284,15 +367,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
             {editing?.kind === 'new' && (
               <tr className="is-me is-editing">
                 <th scope="row" className="name-col">
-                  <input
-                    className="input input-sm"
-                    autoFocus
-                    placeholder="Your nickname"
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    maxLength={LIMITS.nicknameMax}
-                    aria-label="Nickname"
-                  />
+                  {renderNicknameInput({ autoFocus: true, placeholder: 'Your nickname' })}
                 </th>
                 {renderCells(draftVotes, true)}
                 <td className="actions-col" />
@@ -328,7 +403,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
           <p className="hint">This poll is full.</p>
         ) : (
           <div>
-            <button type="button" className="btn btn-primary" onClick={startNew} disabled={busy}>
+            <button ref={addButtonRef} type="button" className="btn btn-primary" onClick={startNew} disabled={busy}>
               Add your availability
             </button>
           </div>
@@ -337,10 +412,13 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
 
       {editing !== null && (
         <div className="edit-panel stack">
-          <p className="hint">Tap a cell to cycle through ✓ yes, ~ if need be, ✕ no, and · no answer.</p>
+          <p className="hint">
+            Tap a cell to cycle through <span aria-hidden="true">✓ </span>yes, <span aria-hidden="true">~ </span>
+            if need be, <span aria-hidden="true">✕ </span>no, and <span aria-hidden="true">· </span>no answer.
+          </p>
           {editing.kind === 'new' && <TurnstileField ref={turnstileRef} onToken={setTurnstileToken} />}
           {error && (
-            <p className="form-error" role="alert">
+            <p id={errorId} className="form-error" role="alert">
               {error}
             </p>
           )}

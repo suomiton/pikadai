@@ -1,6 +1,11 @@
 /*
  * Design tokens.
  * Palette: "Golden Twilight" (six colours). Swap the --gt-* values to re-theme everything.
+ *
+ * Contrast: text tokens reach 4.5:1 and component boundaries 3:1 against the surfaces they sit on,
+ * in both themes. `node scripts/contrast.mjs` checks every pair; run it after changing a token.
+ * Bright golds are fills (--accent-fill*) with dark text on top; golds used as text or glyphs
+ * (--accent, --accent-strong, --yes, --maybe) are darkened in the light theme to pass on cream.
  */
 :root {
   color-scheme: dark;
@@ -19,14 +24,18 @@
   --bg-inset: #171433;
   --border: #463d73;
   --border-strong: var(--gt-violet);
+  --border-input: #8a7ca3;
   --text: #f5ead4;
   --text-muted: #bfb0cf;
-  --text-faint: #8d7fa6;
+  --text-faint: #a294bb;
 
+  /* Accent as text or glyph */
   --accent: var(--gt-gold-1);
   --accent-strong: var(--gt-gold-2);
-  --accent-hover: var(--gt-gold-3);
-  --accent-active: var(--gt-gold-4);
+  /* Accent as a fill, with --on-accent text on top */
+  --accent-fill: var(--gt-gold-1);
+  --accent-fill-hover: var(--gt-gold-2);
+  --accent-fill-active: var(--gt-gold-3);
   --on-accent: var(--gt-indigo);
 
   --secondary: var(--gt-violet);
@@ -35,9 +44,9 @@
 
   --yes: var(--gt-gold-1);
   --maybe: var(--gt-gold-3);
-  --no: var(--gt-violet);
+  --no: #b8a1d9;
   --best-bg: rgba(240, 192, 91, 0.12);
-  --danger: #d8716c;
+  --danger: #e8847f;
   --focus: var(--gt-gold-2);
 
   --radius: 10px;
@@ -56,22 +65,24 @@
     --bg-inset: #f4ecdc;
     --border: #e3d4b9;
     --border-strong: #cdb48c;
+    --border-input: #857a9f;
     --text: var(--gt-indigo);
     --text-muted: #5f5582;
-    --text-faint: #9a8fb3;
+    --text-faint: #6f6590;
 
-    --accent: var(--gt-gold-4);
-    --accent-strong: var(--gt-gold-3);
-    --accent-hover: var(--gt-gold-2);
-    --accent-active: var(--gt-gold-1);
-    --on-accent: #fffaf1;
+    --accent: #864a10;
+    --accent-strong: #9a5a0e;
+    --accent-fill: var(--gt-gold-3);
+    --accent-fill-hover: var(--gt-gold-2);
+    --accent-fill-active: var(--gt-gold-1);
+    --on-accent: var(--gt-indigo);
 
     --secondary: var(--gt-violet);
     --secondary-hover: #5a3f76;
     --on-secondary: #fffaf1;
 
-    --yes: var(--gt-gold-3);
-    --maybe: var(--gt-gold-2);
+    --yes: #864a10;
+    --maybe: #9a5a0e;
     --no: var(--gt-violet);
     --best-bg: rgba(210, 138, 43, 0.14);
     --danger: #b7433d;

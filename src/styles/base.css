@@ -39,6 +39,7 @@ h2 {
 }
 h2::before {
   content: '## ';
+  content: '## ' / ''; /* decorative; the empty alternative text keeps it out of screen readers */
   color: var(--accent);
 }
 

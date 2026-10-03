@@ -1,5 +1,3 @@
-export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /** Local calendar date as YYYY-MM-DD. */
@@ -17,6 +15,30 @@ export function parseIso(iso: string): Date {
   return new Date(y, m - 1, d);
 }
 
+/** The ISO date `days` days after `iso` (negative moves back). */
+export function addDays(iso: string, days: number): string {
+  const d = parseIso(iso);
+  d.setDate(d.getDate() + days);
+  return toIso(d);
+}
+
+/** The same day of the month `months` months away, clamped to the length of that month. */
+export function addMonths(iso: string, months: number): string {
+  const d = parseIso(iso);
+  const first = new Date(d.getFullYear(), d.getMonth() + months, 1);
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return toIso(new Date(first.getFullYear(), first.getMonth(), Math.min(d.getDate(), last)));
+}
+
+/** Weekday names, Monday first, in the user's locale. 2024-01-01 was a Monday. */
+function weekdayNames(weekday: 'short' | 'long'): readonly string[] {
+  const fmt = new Intl.DateTimeFormat(undefined, { weekday });
+  return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2024, 0, 1 + i)));
+}
+
+export const WEEKDAYS = weekdayNames('short');
+export const WEEKDAYS_LONG = weekdayNames('long');
+
 export interface MonthCursor {
   year: number;
   month: number; // 0-11
@@ -24,6 +46,12 @@ export interface MonthCursor {
 
 export function shiftMonth({ year, month }: MonthCursor, delta: number): MonthCursor {
   const d = new Date(year, month + delta, 1);
+  return { year: d.getFullYear(), month: d.getMonth() };
+}
+
+/** The month an ISO date belongs to. */
+export function monthOf(iso: string): MonthCursor {
+  const d = parseIso(iso);
   return { year: d.getFullYear(), month: d.getMonth() };
 }
 
@@ -47,6 +75,11 @@ export function formatDate(
   options: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short' },
 ): string {
   return new Intl.DateTimeFormat(undefined, options).format(parseIso(iso));
+}
+
+/** Unabbreviated date for screen-reader labels and announcements, e.g. "Thursday 15 October 2026". */
+export function formatDateLong(iso: string): string {
+  return formatDate(iso, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export function formatMonth({ year, month }: MonthCursor): string {
