@@ -30,3 +30,9 @@ export function computeTallies(options: readonly EventOption[], participants: re
   }
   return tallies;
 }
+
+/** What a table cell shows: an answer, or `none` for a participant who left the date blank. */
+export type Cell = Answer | 'none';
+
+export const GLYPH: Record<Cell, string> = { yes: '✓', maybe: '~', no: '✕', none: '·' };
+export const LABEL: Record<Cell, string> = { yes: 'Yes', maybe: 'If need be', no: 'No', none: 'No answer' };
