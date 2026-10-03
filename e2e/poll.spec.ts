@@ -394,6 +394,36 @@ test.describe('layout', () => {
       expect(strayCells, `scrolled to ${scrollLeft}`).toEqual([]);
     }
   });
+
+  test('the footer link text and icon line up with the copyright text', async ({ page }) => {
+    await page.goto('/');
+    const footer = page.locator('footer.site-footer');
+    await expect(footer).toBeVisible();
+
+    const { copyrightTop, linkTextTop, linkTextMiddle, iconMiddle } = await footer.evaluate((el) => {
+      const link = el.querySelector('a')!;
+      const textNode = (parent: Element, match: (text: string) => boolean) =>
+        Array.from(parent.childNodes).find((n) => n.nodeType === Node.TEXT_NODE && match(n.textContent ?? ''))!;
+      const box = (node: Node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        return range.getBoundingClientRect();
+      };
+      const copyright = box(textNode(el, (text) => text.includes('Copyright')));
+      const linkText = box(textNode(link, (text) => text.trim() !== ''));
+      const icon = link.querySelector('svg')!.getBoundingClientRect();
+      return {
+        copyrightTop: copyright.top,
+        linkTextTop: linkText.top,
+        linkTextMiddle: (linkText.top + linkText.bottom) / 2,
+        iconMiddle: (icon.top + icon.bottom) / 2,
+      };
+    });
+
+    // Both texts are in the same font, so their boxes share a top only if they share a baseline.
+    expect(Math.abs(linkTextTop - copyrightTop)).toBeLessThan(0.5);
+    expect(Math.abs(iconMiddle - linkTextMiddle)).toBeLessThan(1.5);
+  });
 });
 
 test.describe('dead ends', () => {

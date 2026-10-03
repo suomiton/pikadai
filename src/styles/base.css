@@ -128,15 +128,14 @@ button:disabled {
   font-weight: 300;
   text-align: center;
 }
-.site-footer a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-}
+/* The link stays inline so its text shares the line's baseline (an inline-flex link takes the icon's
+   bottom edge as its baseline and rides above the text beside it). The icon is centred on the text. */
 .site-footer a svg {
-  flex: none;
+  display: inline-block;
   width: 1em;
   height: 1em;
+  margin-right: 0.3em;
+  vertical-align: -0.15em;
 }
 
 /* Vertical rhythm */
