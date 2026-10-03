@@ -237,6 +237,40 @@ test.describe('organising a poll', () => {
     await expect(page.getByText('This poll does not exist or was deleted.')).toBeVisible();
   });
 
+  test('the top dates appear once three people have answered', async ({ page, request, clientIp }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    const headers = { 'CF-Connecting-IP': clientIp };
+    const view = (await (await request.get(`/api/events/${poll.id}`, { headers })).json()) as EventView;
+    const [first, second, third] = view.options;
+    const answer = async (nickname: string, votes: Record<string, string>) => {
+      const res = await request.post(`/api/events/${poll.id}/participants`, {
+        headers,
+        data: { nickname, votes, turnstileToken: DUMMY_TURNSTILE_TOKEN },
+      });
+      expect(res.status()).toBe(201);
+    };
+    await answer('Ada', { [first.id]: 'yes', [second.id]: 'yes', [third.id]: 'no' });
+    await answer('Grace', { [first.id]: 'yes', [second.id]: 'maybe' });
+
+    await page.goto(poll.adminUrl);
+    const organiser = page.getByRole('region', { name: 'Organiser' });
+    await expect(organiser.getByText('once three people have answered')).toBeVisible();
+    await expect(organiser.getByRole('table')).toHaveCount(0);
+
+    await answer('Linus', { [first.id]: 'yes', [second.id]: 'no', [third.id]: 'yes' });
+    await page.reload();
+    const rows = organiser.getByRole('table', { name: 'Top dates' }).locator('tbody tr');
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toContainText(/3\s*\/\s*3/);
+    await expect(rows.nth(0)).toContainText('100%');
+    // Both remaining dates have one yes; the one with an if-need-be answer ranks first.
+    await expect(rows.nth(1)).toContainText(/1\s*\/\s*3/);
+    await expect(rows.nth(1)).toContainText('33%');
+    await expect(rows.nth(1)).toContainText(String(Number(second.date.slice(-2))));
+    await expect(rows.nth(2)).toContainText(/1\s*\/\s*3/);
+    await expect(rows.nth(2)).toContainText(String(Number(third.date.slice(-2))));
+  });
+
   test('turning suggestions off hides the picker from participants', async ({
     page,
     otherPerson,

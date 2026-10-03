@@ -94,13 +94,14 @@ pikadai/
 │   │   ├── SuggestDate.tsx    Add / suggest a date: the button beside "Add your availability" and its picker
 │   │   ├── ShareBox.tsx       Participant and admin links
 │   │   ├── CopyField.tsx      Read-only input with Copy button
-│   │   └── AdminPanel.tsx     Edit details, delete poll
+│   │   ├── TopDates.tsx       The organiser's scoreboard: the three dates most people can make
+│   │   └── AdminPanel.tsx     Edit details, delete poll, top dates
 │   ├── lib/                   Each module has a *.test.ts beside it
 │   │   ├── api.ts             Typed fetch wrapper; one function per endpoint; Authorization header
 │   │   ├── storage.ts         localStorage access for admin and participant tokens
 │   │   ├── dates.ts           ISO date helpers, month grid, Intl formatting
 │   │   ├── errors.ts          Error code → user-facing message
-│   │   ├── votes.ts           cycle (tap order) and computeTallies
+│   │   ├── votes.ts           cycle (tap order), computeTallies and topDates (the organiser's scoreboard)
 │   │   └── timing.ts          sleep, waitUntil
 │   └── styles/
 │       ├── tokens.css         Palette and semantic design tokens; dark default, light via media query

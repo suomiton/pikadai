@@ -36,3 +36,43 @@ export type Cell = Answer | 'none';
 
 export const GLYPH: Record<Cell, string> = { yes: '✓', maybe: '~', no: '✕', none: '·' };
 export const LABEL: Record<Cell, string> = { yes: 'Yes', maybe: 'If need be', no: 'No', none: 'No answer' };
+
+/** How many people must have answered before the top dates say anything about the group. */
+export const TOP_DATES_MIN_ANSWERS = 3;
+/** How many dates the organiser's top-dates table shows at most. */
+export const TOP_DATES_COUNT = 3;
+
+export interface DateScore {
+  option: EventOption;
+  /** People who answered yes to this date. */
+  yes: number;
+  /** Everyone who has answered the poll, whatever they said about this date. */
+  total: number;
+  /** `yes` as a whole-number percentage of `total`. */
+  percent: number;
+}
+
+/**
+ * The dates most people can make, best first: by yes answers, then if-need-be answers, then the
+ * earlier date. Dates nobody said yes to are left out, so a 0-of-3 row never reads as a top date.
+ * Null until TOP_DATES_MIN_ANSWERS people have answered; before that a single yes would top the table.
+ */
+export function topDates(options: readonly EventOption[], participants: readonly Participant[]): DateScore[] | null {
+  const total = participants.length;
+  if (total < TOP_DATES_MIN_ANSWERS) return null;
+  // computeTallies has an entry for every option, so the lookups below never miss.
+  const tallies = computeTallies(options, participants);
+  return options
+    .filter((o) => tallies[o.id].yes > 0)
+    .sort(
+      (a, b) =>
+        tallies[b.id].yes - tallies[a.id].yes ||
+        tallies[b.id].maybe - tallies[a.id].maybe ||
+        a.date.localeCompare(b.date),
+    )
+    .slice(0, TOP_DATES_COUNT)
+    .map((option) => {
+      const { yes } = tallies[option.id];
+      return { option, yes, total, percent: Math.round((yes / total) * 100) };
+    });
+}

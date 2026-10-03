@@ -10,6 +10,7 @@ import { FormError } from './FormError';
 import { ConfirmDialog } from './ConfirmDialog';
 import { StatusAnnouncer } from './StatusAnnouncer';
 import { TextField } from './TextField';
+import { TopDates } from './TopDates';
 
 type FocusTarget = AdminFieldKey | 'opener';
 
@@ -88,9 +89,9 @@ export function AdminPanel() {
   }
 
   return (
-    <section className="card stack">
+    <section className="card stack" aria-labelledby={`${id}-heading`}>
       <div className="section-head">
-        <h2>Organiser</h2>
+        <h2 id={`${id}-heading`}>Organiser</h2>
         <div className="btn-row">
           {!open && (
             <button
@@ -160,6 +161,7 @@ export function AdminPanel() {
         </form>
       )}
       {!open && !confirmDelete && <FormError message={error} />}
+      <TopDates />
       {confirmDelete && (
         <ConfirmDialog
           title="Delete this poll?"

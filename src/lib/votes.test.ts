@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { EventOption, Participant } from '@shared/types';
-import { computeTallies, cycle } from './votes';
+import { computeTallies, cycle, topDates } from './votes';
+
+const option = (id: string, date: string): EventOption => ({ id, date, suggestedBy: null });
+const participant = (id: string, votes: Participant['votes']): Participant => ({
+  id,
+  nickname: id,
+  votes,
+  createdAt: 0,
+});
 
 describe('cycle', () => {
   it('walks no answer → yes → if need be → no → no answer', () => {
@@ -12,16 +20,7 @@ describe('cycle', () => {
 });
 
 describe('computeTallies', () => {
-  const options: EventOption[] = [
-    { id: 'a', date: '2026-10-15', suggestedBy: null },
-    { id: 'b', date: '2026-10-16', suggestedBy: null },
-  ];
-  const participant = (id: string, votes: Participant['votes']): Participant => ({
-    id,
-    nickname: id,
-    votes,
-    createdAt: 0,
-  });
+  const options = [option('a', '2026-10-15'), option('b', '2026-10-16')];
 
   it('counts yes and if-need-be answers per date', () => {
     const tallies = computeTallies(options, [
@@ -37,5 +36,69 @@ describe('computeTallies', () => {
       a: { yes: 0, maybe: 0 },
       b: { yes: 0, maybe: 0 },
     });
+  });
+});
+
+describe('topDates', () => {
+  const options = [
+    option('a', '2026-10-15'),
+    option('b', '2026-10-16'),
+    option('c', '2026-10-17'),
+    option('d', '2026-10-18'),
+  ];
+
+  it('is null until three people have answered', () => {
+    expect(topDates(options, [])).toBeNull();
+    expect(topDates(options, [participant('p1', { a: 'yes' }), participant('p2', { a: 'yes' })])).toBeNull();
+  });
+
+  it('ranks dates by yes answers and keeps the top three', () => {
+    const scores = topDates(options, [
+      participant('p1', { a: 'yes', b: 'yes', c: 'yes', d: 'yes' }),
+      participant('p2', { a: 'no', b: 'yes', c: 'yes', d: 'yes' }),
+      participant('p3', { a: 'no', b: 'no', c: 'yes', d: 'yes' }),
+      participant('p4', { d: 'yes' }),
+    ]);
+    expect(scores?.map((s) => s.option.id)).toEqual(['d', 'c', 'b']);
+  });
+
+  it('counts everyone who answered as the total and rounds the share to a whole percent', () => {
+    const scores = topDates(options, [
+      participant('p1', { a: 'yes', b: 'yes' }),
+      participant('p2', { a: 'yes', b: 'no' }),
+      participant('p3', { b: 'maybe' }),
+    ]);
+    expect(scores).toEqual([
+      { option: options[0], yes: 2, total: 3, percent: 67 },
+      { option: options[1], yes: 1, total: 3, percent: 33 },
+    ]);
+  });
+
+  it('breaks a tie on yes answers by if-need-be answers, then by the earlier date', () => {
+    // The dates arrive latest first, so the order below has to come from the ranking, not the input.
+    const scores = topDates([...options].reverse(), [
+      participant('p1', { a: 'yes', b: 'yes', c: 'yes' }),
+      participant('p2', { c: 'maybe' }),
+      participant('p3', {}),
+    ]);
+    expect(scores?.map((s) => s.option.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('leaves out dates nobody said yes to', () => {
+    const scores = topDates(options, [
+      participant('p1', { a: 'yes', b: 'no' }),
+      participant('p2', { b: 'maybe' }),
+      participant('p3', { b: 'no' }),
+    ]);
+    expect(scores?.map((s) => s.option.id)).toEqual(['a']);
+  });
+
+  it('is empty when three people have answered and no date has a yes', () => {
+    const scores = topDates(options, [
+      participant('p1', { a: 'no' }),
+      participant('p2', { a: 'maybe' }),
+      participant('p3', {}),
+    ]);
+    expect(scores).toEqual([]);
   });
 });

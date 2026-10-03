@@ -532,6 +532,44 @@ thead th.is-best .opt-day {
   color: var(--accent);
 }
 
+/* Top dates: the organiser's scoreboard */
+.top-dates h3 {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+.score-table {
+  width: 100%;
+  max-width: 30rem;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.score-table th,
+.score-table td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.score-table thead th {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.score-table tbody th {
+  font-weight: 700;
+}
+.score-table tbody tr:last-child th,
+.score-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.score-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.score-table tbody .num strong {
+  color: var(--accent);
+}
+
 .edit-panel {
   padding-top: 0.25rem;
 }
