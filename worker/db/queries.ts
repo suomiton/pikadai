@@ -1,7 +1,5 @@
-import { LIMITS } from '@shared/limits';
-import type { Answer, EventOption, EventView, Participant } from '@shared/types';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import type { Answer } from '@shared/types';
+import { computeExpiresAt } from '../lib/expiry';
 
 export interface EventRow {
   id: string;
@@ -32,19 +30,10 @@ export interface ParticipantRow {
   updated_at: number;
 }
 
-interface VoteRow {
+export interface VoteRow {
   participant_id: string;
   option_id: string;
   answer: Answer;
-}
-
-/** End of the last date option plus a grace period, or a fixed TTL when there are no dates. */
-export function computeExpiresAt(dates: readonly string[], createdAt: number): number {
-  if (dates.length === 0) return createdAt + LIMITS.ttlWithoutDatesDays * DAY_MS;
-  const last = [...dates].sort().at(-1)!;
-  const [y, m, d] = last.split('-').map(Number);
-  const endOfLastDay = Date.UTC(y, m - 1, d + 1); // midnight after the last date, UTC
-  return endOfLastDay + LIMITS.ttlAfterLastDateDays * DAY_MS;
 }
 
 export async function getEventRow(db: D1Database, id: string): Promise<EventRow | null> {
@@ -74,9 +63,13 @@ export async function insertEventWithOptions(
         event.expires_at,
       ),
     ...options.map((o) =>
-      db
-        .prepare('INSERT INTO options (id, event_id, date, suggested_by, created_at) VALUES (?, ?, ?, NULL, ?)')
-        .bind(o.id, event.id, o.date, event.created_at),
+      optionInsert(db, {
+        id: o.id,
+        event_id: event.id,
+        date: o.date,
+        suggested_by: null,
+        created_at: event.created_at,
+      }),
     ),
   ];
   await db.batch(statements);
@@ -104,7 +97,10 @@ export async function updateEvent(
   }
   sets.push('updated_at = ?');
   values.push(now, id);
-  await db.prepare(`UPDATE events SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
+  await db
+    .prepare(`UPDATE events SET ${sets.join(', ')} WHERE id = ?`)
+    .bind(...values)
+    .run();
 }
 
 export async function deleteEvent(db: D1Database, id: string): Promise<void> {
@@ -127,18 +123,19 @@ export async function countOptions(db: D1Database, eventId: string): Promise<num
   return row?.n ?? 0;
 }
 
-export async function insertOption(db: D1Database, option: OptionRow): Promise<void> {
-  await db
+/** The one INSERT for an option row, shared by poll creation and later additions. */
+function optionInsert(db: D1Database, option: OptionRow): D1PreparedStatement {
+  return db
     .prepare('INSERT INTO options (id, event_id, date, suggested_by, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(option.id, option.event_id, option.date, option.suggested_by, option.created_at)
-    .run();
+    .bind(option.id, option.event_id, option.date, option.suggested_by, option.created_at);
+}
+
+export async function insertOption(db: D1Database, option: OptionRow): Promise<void> {
+  await optionInsert(db, option).run();
 }
 
 export async function deleteOption(db: D1Database, eventId: string, optionId: string): Promise<boolean> {
-  const result = await db
-    .prepare('DELETE FROM options WHERE id = ? AND event_id = ?')
-    .bind(optionId, eventId)
-    .run();
+  const result = await db.prepare('DELETE FROM options WHERE id = ? AND event_id = ?').bind(optionId, eventId).run();
   return (result.meta.changes ?? 0) > 0;
 }
 
@@ -231,9 +228,7 @@ export async function updateParticipantWithVotes(
   now: number,
 ): Promise<void> {
   const statements = [
-    db
-      .prepare('UPDATE participants SET nickname = ?, updated_at = ? WHERE id = ?')
-      .bind(nickname, now, participant.id),
+    db.prepare('UPDATE participants SET nickname = ?, updated_at = ? WHERE id = ?').bind(nickname, now, participant.id),
     db.prepare('DELETE FROM votes WHERE participant_id = ?').bind(participant.id),
     ...voteStatements(db, participant.id, votes),
   ];
@@ -248,11 +243,7 @@ function voteStatements(db: D1Database, participantId: string, votes: Record<str
   );
 }
 
-export async function deleteParticipant(
-  db: D1Database,
-  eventId: string,
-  participantId: string,
-): Promise<boolean> {
+export async function deleteParticipant(db: D1Database, eventId: string, participantId: string): Promise<boolean> {
   const result = await db
     .prepare('DELETE FROM participants WHERE id = ? AND event_id = ?')
     .bind(participantId, eventId)
@@ -273,47 +264,20 @@ export async function getVotesForEvent(db: D1Database, eventId: string): Promise
   return results;
 }
 
-export async function buildEventView(
-  db: D1Database,
-  event: EventRow,
-  isAdmin: boolean,
-): Promise<EventView> {
+/** Everything under one event, read in parallel; `toEventView` in worker/lib/eventView.ts shapes it for the client. */
+export interface EventRows {
+  options: OptionRow[];
+  participants: ParticipantRow[];
+  votes: VoteRow[];
+}
+
+export async function fetchEventRows(db: D1Database, eventId: string): Promise<EventRows> {
   const [options, participants, votes] = await Promise.all([
-    getOptions(db, event.id),
-    getParticipants(db, event.id),
-    getVotesForEvent(db, event.id),
+    getOptions(db, eventId),
+    getParticipants(db, eventId),
+    getVotesForEvent(db, eventId),
   ]);
-
-  const votesByParticipant = new Map<string, Record<string, Answer>>();
-  for (const v of votes) {
-    let bucket = votesByParticipant.get(v.participant_id);
-    if (!bucket) {
-      bucket = {};
-      votesByParticipant.set(v.participant_id, bucket);
-    }
-    bucket[v.option_id] = v.answer;
-  }
-
-  return {
-    id: event.id,
-    title: event.title,
-    description: event.description,
-    allowSuggestions: event.allow_suggestions === 1,
-    createdAt: event.created_at,
-    expiresAt: event.expires_at,
-    options: options.map(
-      (o): EventOption => ({ id: o.id, date: o.date, suggestedBy: o.suggested_by }),
-    ),
-    participants: participants.map(
-      (p): Participant => ({
-        id: p.id,
-        nickname: p.nickname,
-        votes: votesByParticipant.get(p.id) ?? {},
-        createdAt: p.created_at,
-      }),
-    ),
-    viewer: { isAdmin },
-  };
+  return { options, participants, votes };
 }
 
 export async function deleteExpiredEvents(db: D1Database, now: number): Promise<number> {

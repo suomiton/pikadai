@@ -44,9 +44,15 @@ describe('storage', () => {
 
   it('survives a blocked localStorage', () => {
     vi.stubGlobal('localStorage', {
-      getItem: () => { throw new Error('blocked'); },
-      setItem: () => { throw new Error('blocked'); },
-      removeItem: () => { throw new Error('blocked'); },
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+      removeItem: () => {
+        throw new Error('blocked');
+      },
     });
     expect(() => storage.setAdminToken('poll1', 'tok')).not.toThrow();
     expect(storage.getAdminToken('poll1')).toBeNull();

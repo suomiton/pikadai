@@ -1,0 +1,9 @@
+node_modules
+dist
+.wrangler
+.superpowers
+worker-configuration.d.ts
+package-lock.json
+test-results
+playwright-report
+blob-report

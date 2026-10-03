@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    name: Unit and Worker tests
+    name: Lint, format and tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -25,6 +25,10 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # ESLint (TypeScript, rules of hooks, jsx-a11y) and Prettier, both read-only.
+      - run: npm run lint
+      - run: npm run format:check
 
       # Unit tests under Node, then the Worker inside workerd with a local D1.
       # Playwright browser tests (npm run test:e2e) are not run here.

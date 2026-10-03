@@ -15,13 +15,11 @@ export class HttpError extends Error {
 }
 
 export const errors = {
-  badRequest: (message: string, code = 'bad_request', details?: unknown) =>
-    new HttpError(400, code, message, details),
+  badRequest: (message: string, code = 'bad_request', details?: unknown) => new HttpError(400, code, message, details),
   forbidden: (message = 'Forbidden', code = 'forbidden') => new HttpError(403, code, message),
   notFound: (message = 'Not found', code = 'not_found') => new HttpError(404, code, message),
   conflict: (message: string, code = 'conflict') => new HttpError(409, code, message),
-  gone: (message = 'This poll has expired and been removed', code = 'expired') =>
-    new HttpError(410, code, message),
+  gone: (message = 'This poll has expired and been removed', code = 'expired') => new HttpError(410, code, message),
   tooMany: (message = 'Too many requests. Please slow down.', code = 'rate_limited') =>
     new HttpError(429, code, message),
   payloadTooLarge: (message = 'Request body too large', code = 'payload_too_large') =>

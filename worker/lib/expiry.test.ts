@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LIMITS } from '@shared/limits';
-import { computeExpiresAt } from './queries';
+import { computeExpiresAt } from './expiry';
 
 const DAY = 24 * 60 * 60 * 1000;
 const createdAt = Date.UTC(2026, 9, 3, 12, 0, 0);

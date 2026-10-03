@@ -21,7 +21,9 @@ test.describe('creating a poll', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Team dinner' })).toBeVisible();
     await expect(page.getByText('organiser view')).toBeVisible();
     await expect(page.getByLabel('Admin link')).toHaveValue(/#admin=[A-Za-z0-9_-]{43}$/);
-    await expect(page.getByLabel('Participant link')).toHaveValue(new RegExp(`${page.url().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}$`));
+    await expect(page.getByLabel('Participant link')).toHaveValue(
+      new RegExp(`${page.url().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}$`),
+    );
   });
 
   test('refuses to proceed without a title or dates and focuses the first problem', async ({ page }) => {
@@ -152,7 +154,10 @@ test.describe('organising a poll', () => {
     await expect(page.getByRole('button', { name: 'Edit details' })).toBeFocused();
 
     page.once('dialog', (d) => d.accept());
-    await page.getByRole('button', { name: /^Remove .*/ }).first().click();
+    await page
+      .getByRole('button', { name: /^Remove .*/ })
+      .first()
+      .click();
     await expect(page.locator('thead th.option-col')).toHaveCount(2);
 
     page.once('dialog', (d) => d.accept());
@@ -164,7 +169,12 @@ test.describe('organising a poll', () => {
     await expect(page.getByText('This poll does not exist or was deleted.')).toBeVisible();
   });
 
-  test('turning suggestions off hides the picker from participants', async ({ page, otherPerson, request, clientIp }) => {
+  test('turning suggestions off hides the picker from participants', async ({
+    page,
+    otherPerson,
+    request,
+    clientIp,
+  }) => {
     const poll = await createPollViaApi(request, clientIp, { allowSuggestions: false });
     const other = await otherPerson.newPage();
     await other.goto(poll.participantUrl);

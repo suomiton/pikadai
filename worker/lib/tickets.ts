@@ -20,9 +20,7 @@ export async function issueTicket(secret: string, bind: string, now = Date.now()
   return `${issuedAt}.${nonce}.${signature}`;
 }
 
-export type TicketCheck =
-  | { ok: true; nonce: string }
-  | { ok: false; reason: 'invalid' | 'too_early' | 'expired' };
+export type TicketCheck = { ok: true; nonce: string } | { ok: false; reason: 'invalid' | 'too_early' | 'expired' };
 
 export interface TicketRules {
   /** Rate-limit key of the client presenting the ticket; must match the one it was issued to. */

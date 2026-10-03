@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LIMITS } from '@shared/limits';
 import type { EventOption } from '@shared/types';
-import { computeExpiresAt } from '../db/queries';
+import { computeExpiresAt } from '../lib/expiry';
 import { addParticipant, asParticipant, bearer, client, createPoll, futureIso, getView } from './helpers';
 
 describe('POST /api/events/:id/options', () => {
@@ -21,10 +21,18 @@ describe('POST /api/events/:id/options', () => {
   it('attributes a suggestion to a participant who proves who they are', async () => {
     const poll = await createPoll();
     const me = await addParticipant(poll.client, poll.id, 'Ada');
-    const attributed = await poll.client.post<EventOption>(`/api/events/${poll.id}/options`, { date: futureIso(20) }, asParticipant(me));
+    const attributed = await poll.client.post<EventOption>(
+      `/api/events/${poll.id}/options`,
+      { date: futureIso(20) },
+      asParticipant(me),
+    );
     expect(attributed.body.suggestedBy).toBe(me.id);
     // An id without the matching token proves nothing.
-    const unproven = await poll.client.post<EventOption>(`/api/events/${poll.id}/options`, { date: futureIso(21) }, { 'X-Participant-Id': me.id });
+    const unproven = await poll.client.post<EventOption>(
+      `/api/events/${poll.id}/options`,
+      { date: futureIso(21) },
+      { 'X-Participant-Id': me.id },
+    );
     expect(unproven.body.suggestedBy).toBeNull();
   });
 
@@ -33,7 +41,11 @@ describe('POST /api/events/:id/options', () => {
     const anon = await client().post(`/api/events/${poll.id}/options`, { date: futureIso(20) });
     expect(anon.status).toBe(403);
     expect(anon.body).toMatchObject({ code: 'suggestions_disabled' });
-    const admin = await poll.client.post<EventOption>(`/api/events/${poll.id}/options`, { date: futureIso(20) }, bearer(poll.adminToken));
+    const admin = await poll.client.post<EventOption>(
+      `/api/events/${poll.id}/options`,
+      { date: futureIso(20) },
+      bearer(poll.adminToken),
+    );
     expect(admin.status).toBe(201);
     expect(admin.body.suggestedBy).toBeNull();
   });
@@ -77,7 +89,10 @@ describe('DELETE /api/events/:id/options/:optionId', () => {
   it('404s for an option that is not in this poll', async () => {
     const poll = await createPoll();
     const other = await createPoll();
-    const res = await poll.client.delete(`/api/events/${poll.id}/options/${other.view.options[0].id}`, bearer(poll.adminToken));
+    const res = await poll.client.delete(
+      `/api/events/${poll.id}/options/${other.view.options[0].id}`,
+      bearer(poll.adminToken),
+    );
     expect(res.status).toBe(404);
   });
 });

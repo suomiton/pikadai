@@ -1,16 +1,19 @@
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useReducer, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { LIMITS } from '@shared/limits';
 import { eventDraftSchema } from '@shared/schemas';
 import { Calendar } from '../components/Calendar';
+import { FormError } from '../components/FormError';
 import { ProgressSteps } from '../components/ProgressSteps';
+import { TextField } from '../components/TextField';
 import { TurnstileField } from '../components/TurnstileField';
 import { api } from '../lib/api';
 import { formatDate, todayIso } from '../lib/dates';
 import { describeError } from '../lib/errors';
 import { storage } from '../lib/storage';
 import { sleep, waitUntil } from '../lib/timing';
+import { createFormReducer, firstInvalidField, initialCreateForm, type FieldKey } from '../state/createForm';
 
 const STEPS = ['Validating', 'Setting up', 'Creating links', 'Done'] as const;
 
@@ -22,44 +25,27 @@ const STEPS = ['Validating', 'Setting up', 'Creating links', 'Done'] as const;
 const STEP_STARTS = [0.28, 0.62] as const;
 const TICKET_HEADROOM_MS = 800;
 
-/** Fields that can carry a validation error, in the order focus should visit them. */
-type FieldKey = 'title' | 'description' | 'dates';
-const FIELD_ORDER: readonly FieldKey[] = ['title', 'description', 'dates'];
-
-interface Progress {
-  step: number;
-  failed: boolean;
-  message: string | null;
-}
-
 export function CreatePage() {
   const navigate = useNavigate();
   const id = useId();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  const [allowSuggestions, setAllowSuggestions] = useState(true);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [form, dispatch] = useReducer(createFormReducer, initialCreateForm);
+  const { title, description, allowSuggestions, turnstileToken, fieldErrors, progress } = form;
   const turnstileRef = useRef<TurnstileInstance>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [progress, setProgress] = useState<Progress | null>(null);
 
-  const fieldRefs = {
-    title: useRef<HTMLInputElement>(null),
-    description: useRef<HTMLTextAreaElement>(null),
-    dates: useRef<HTMLDivElement>(null),
-  };
+  const titleRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const datesRef = useRef<HTMLDivElement>(null);
   const focusAfterErrors = useRef<FieldKey | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
-  const dates = useMemo(() => [...selected].sort(), [selected]);
+  const dates = useMemo(() => [...form.dates].sort(), [form.dates]);
 
   // Focus the first invalid field once its error is in the DOM, so it is read together with the field.
   useEffect(() => {
     const key = focusAfterErrors.current;
     if (!key) return;
     focusAfterErrors.current = null;
-    fieldRefs[key].current?.focus();
+    (key === 'title' ? titleRef : key === 'description' ? descriptionRef : datesRef).current?.focus();
   }, [fieldErrors]);
 
   // A native <dialog> opened with showModal() moves and traps focus and makes the form behind inert.
@@ -70,14 +56,7 @@ export function CreatePage() {
     else if (!progress && dialog.open) dialog.close();
   }, [progress]);
 
-  function toggleDate(iso: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(iso)) next.delete(iso);
-      else next.add(iso);
-      return next;
-    });
-  }
+  const toggleDate = (iso: string) => dispatch({ type: 'toggleDate', iso });
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -89,18 +68,18 @@ export function CreatePage() {
         const key = String(issue.path[0] ?? 'form');
         errors[key] ??= issue.message;
       }
-      focusAfterErrors.current = FIELD_ORDER.find((key) => key in errors) ?? null;
-      setFieldErrors(errors);
+      focusAfterErrors.current = firstInvalidField(errors);
+      dispatch({ type: 'errors', errors });
       return;
     }
     if (!turnstileToken) {
-      setFieldErrors({ form: 'Please complete the verification first.' });
+      dispatch({ type: 'errors', errors: { form: 'Please complete the verification first.' } });
       return;
     }
-    setFieldErrors({});
+    dispatch({ type: 'errors', errors: {} });
 
     const startedAt = Date.now();
-    setProgress({ step: 0, failed: false, message: null });
+    dispatch({ type: 'progress', step: 0 });
     try {
       const { ticket, minAgeMs } = await api.createTicket();
       // Counted from when the response arrived, so the Worker sees the ticket as old enough
@@ -108,95 +87,73 @@ export function CreatePage() {
       const sendAt = Date.now() + minAgeMs + TICKET_HEADROOM_MS;
       const total = sendAt - startedAt;
       await waitUntil(startedAt + total * STEP_STARTS[0]);
-      setProgress({ step: 1, failed: false, message: null });
+      dispatch({ type: 'progress', step: 1 });
       await waitUntil(startedAt + total * STEP_STARTS[1]);
-      setProgress({ step: 2, failed: false, message: null });
+      dispatch({ type: 'progress', step: 2 });
       await waitUntil(sendAt);
 
       const created = await api.createEvent({ ...parsed.data, ticket, turnstileToken });
       storage.setAdminToken(created.id, created.adminToken);
-      setProgress({ step: 3, failed: false, message: null });
+      dispatch({ type: 'progress', step: 3 });
       await sleep(700);
       navigate(`/e/${created.id}`);
     } catch (err) {
-      setProgress((p) => ({ step: p?.step ?? 0, failed: true, message: describeError(err) }));
+      dispatch({ type: 'progressFailed', message: describeError(err) });
       turnstileRef.current?.reset();
-      setTurnstileToken(null);
+      dispatch({ type: 'turnstile', token: null });
     }
   }
-
-  const describedBy = (key: FieldKey) => (fieldErrors[key] ? `${id}-${key}-error` : undefined);
-  const invalid = (key: FieldKey) => (fieldErrors[key] ? true : undefined);
 
   return (
     <>
       <section className="hero">
         <h1>Find a date that works for everyone.</h1>
         <p>
-          Pick some dates, share one link, and let people answer with just a nickname. No login, no email,
-          no tracking. The poll deletes itself after it expires.
+          Pick some dates, share one link, and let people answer with just a nickname. No login, no email, no tracking.
+          The poll deletes itself after it expires.
         </p>
       </section>
 
       <form className="card stack create-form" onSubmit={handleSubmit} noValidate>
-        <div className="field">
-          <label className="field-label" htmlFor={`${id}-title`}>
-            What are you planning?
-          </label>
-          <input
-            id={`${id}-title`}
-            ref={fieldRefs.title}
-            className="input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={LIMITS.titleMax}
-            placeholder="Team dinner, board game night, …"
-            aria-invalid={invalid('title')}
-            aria-describedby={describedBy('title')}
-          />
-          {fieldErrors.title && (
-            <span id={`${id}-title-error`} className="field-error">
-              {fieldErrors.title}
-            </span>
-          )}
-        </div>
+        <TextField
+          id={`${id}-title`}
+          ref={titleRef}
+          label="What are you planning?"
+          value={title}
+          onChange={(value) => dispatch({ type: 'field', key: 'title', value })}
+          error={fieldErrors.title}
+          maxLength={LIMITS.titleMax}
+          placeholder="Team dinner, board game night, …"
+        />
 
-        <div className="field">
-          <label className="field-label" htmlFor={`${id}-description`}>
-            Details <em className="muted">optional</em>
-          </label>
-          <textarea
-            id={`${id}-description`}
-            ref={fieldRefs.description}
-            className="input"
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            maxLength={LIMITS.descriptionMax}
-            placeholder="Where, what time, what to bring…"
-            aria-invalid={invalid('description')}
-            aria-describedby={describedBy('description')}
-          />
-          {fieldErrors.description && (
-            <span id={`${id}-description-error`} className="field-error">
-              {fieldErrors.description}
-            </span>
-          )}
-        </div>
+        <TextField
+          id={`${id}-description`}
+          ref={descriptionRef}
+          label={
+            <>
+              Details <em className="muted">optional</em>
+            </>
+          }
+          value={description}
+          onChange={(value) => dispatch({ type: 'field', key: 'description', value })}
+          error={fieldErrors.description}
+          multiline
+          maxLength={LIMITS.descriptionMax}
+          placeholder="Where, what time, what to bring…"
+        />
 
         <div
-          ref={fieldRefs.dates}
+          ref={datesRef}
           className="field"
           role="group"
           tabIndex={-1}
           aria-labelledby={`${id}-dates-label`}
-          aria-invalid={invalid('dates')}
-          aria-describedby={describedBy('dates')}
+          aria-describedby={fieldErrors.dates ? `${id}-dates-error` : undefined}
         >
           <span id={`${id}-dates-label`} className="field-label">
             Which dates could work?
           </span>
-          <Calendar selected={selected} onToggle={toggleDate} minDate={todayIso()} />
+          <Calendar selected={form.dates} onToggle={toggleDate} minDate={todayIso()} />
           {dates.length > 0 && (
             <ul className="chips" aria-label="Selected dates">
               {dates.map((d) => (
@@ -220,18 +177,18 @@ export function CreatePage() {
           <input
             type="checkbox"
             checked={allowSuggestions}
-            onChange={(e) => setAllowSuggestions(e.target.checked)}
+            onChange={(e) => dispatch({ type: 'allowSuggestions', value: e.target.checked })}
           />
           <span>Let participants suggest other dates</span>
         </label>
 
-        <TurnstileField action="create" ref={turnstileRef} onToken={setTurnstileToken} />
+        <TurnstileField
+          action="create"
+          ref={turnstileRef}
+          onToken={(token) => dispatch({ type: 'turnstile', token })}
+        />
 
-        {fieldErrors.form && (
-          <p className="form-error" role="alert">
-            {fieldErrors.form}
-          </p>
-        )}
+        <FormError message={fieldErrors.form} />
 
         <div className="btn-row">
           <button type="submit" className="btn btn-primary btn-lg" disabled={!turnstileToken}>
@@ -248,23 +205,21 @@ export function CreatePage() {
           // Escape must not dismiss a creation that is still running.
           if (!progress?.failed) e.preventDefault();
         }}
-        onClose={() => setProgress(null)}
+        onClose={() => dispatch({ type: 'progressCleared' })}
       >
         {progress && (
           <div className="card progress-card stack">
-            <h2 id={`${id}-progress-title`}>
-              {progress.failed ? 'Could not create the poll' : 'Creating your poll'}
-            </h2>
+            <h2 id={`${id}-progress-title`}>{progress.failed ? 'Could not create the poll' : 'Creating your poll'}</h2>
             <ProgressSteps steps={STEPS} current={progress.step} failed={progress.failed} />
             {progress.failed && (
               <>
-                <p className="form-error" role="alert">
-                  {progress.message}
-                </p>
+                <FormError message={progress.message} />
                 <div className="btn-row">
                   <button
                     type="button"
                     className="btn btn-secondary"
+                    // Deliberate (review finding A4): the only control in the dialog once creation has failed.
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
                     onClick={() => dialogRef.current?.close()}
                   >

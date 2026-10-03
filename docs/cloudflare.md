@@ -29,11 +29,11 @@ Bump it deliberately after reading the changelog, and re-run `npm run cf-typegen
 
 **Free-plan limits that matter.**
 
-| Limit | Free plan |
-| --- | --- |
-| Requests to the Worker | 100,000 per day |
-| CPU time per request | 10 ms |
-| Worker script size | 3 MB compressed |
+| Limit                     | Free plan              |
+| ------------------------- | ---------------------- |
+| Requests to the Worker    | 100,000 per day        |
+| CPU time per request      | 10 ms                  |
+| Worker script size        | 3 MB compressed        |
 | Requests to static assets | unlimited, not counted |
 
 The API does little CPU work per request; SHA-256 and HMAC over short strings are microseconds. Turnstile
@@ -115,12 +115,12 @@ npx wrangler d1 migrations list pikadai --remote
 
 **Free-plan limits.**
 
-| Limit | Free plan |
-| --- | --- |
-| Storage | 5 GB across all databases |
-| Rows read | 5 million per day |
-| Rows written | 100,000 per day |
-| Databases | 10 |
+| Limit        | Free plan                 |
+| ------------ | ------------------------- |
+| Storage      | 5 GB across all databases |
+| Rows read    | 5 million per day         |
+| Rows written | 100,000 per day           |
+| Databases    | 10                        |
 
 A poll view reads a few dozen rows; creating or editing writes a handful. These limits are far away for a
 hobby service. The nightly purge is one `DELETE` statement.
@@ -146,11 +146,11 @@ npx wrangler d1 execute pikadai --remote --command "SELECT COUNT(*) FROM events"
 Three limiters are declared under `ratelimits` in `wrangler.jsonc` and used by the middleware in
 `worker/lib/ratelimit.ts`.
 
-| Binding | Limit | Applied to |
-| --- | --- | --- |
-| `CREATE_LIMITER` | 5 per 60 s | `POST /api/events` |
-| `WRITE_LIMITER` | 40 per 60 s | tickets, participants, options, PATCH and DELETE |
-| `READ_LIMITER` | 120 per 60 s | `GET /api/events/:id` |
+| Binding          | Limit        | Applied to                                       |
+| ---------------- | ------------ | ------------------------------------------------ |
+| `CREATE_LIMITER` | 5 per 60 s   | `POST /api/events`                               |
+| `WRITE_LIMITER`  | 40 per 60 s  | tickets, participants, options, PATCH and DELETE |
+| `READ_LIMITER`   | 120 per 60 s | `GET /api/events/:id`                            |
 
 How it behaves:
 
@@ -187,12 +187,12 @@ including the `workers.dev` one and any custom domain. A mismatch makes every ve
 **Test keys.** Cloudflare publishes keys that always behave a certain way, which is what local development
 uses. They work from any hostname, including `localhost`.
 
-| Purpose | Site key | Secret key |
-| --- | --- | --- |
-| Always passes | `1x00000000000000000000AA` | `1x0000000000000000000000000000000AA` |
-| Always fails | `2x00000000000000000000AB` | `2x0000000000000000000000000000000AF` |
-| Forces an interactive challenge | `3x00000000000000000000FF` | |
-| Token already spent | | `3x0000000000000000000000000000000FF` |
+| Purpose                         | Site key                   | Secret key                            |
+| ------------------------------- | -------------------------- | ------------------------------------- |
+| Always passes                   | `1x00000000000000000000AA` | `1x0000000000000000000000000000000AA` |
+| Always fails                    | `2x00000000000000000000AB` | `2x0000000000000000000000000000000AF` |
+| Forces an interactive challenge | `3x00000000000000000000FF` |                                       |
+| Token already spent             |                            | `3x0000000000000000000000000000000FF` |
 
 `.env.development` and `.dev.vars.example` ship with the always-pass pair. The test secrets always answer
 with `hostname: "example.com"` and no `action`, and mark the response with `metadata.result_with_testing_key`;
@@ -221,11 +221,11 @@ appears in the Worker's logs.
 
 ## Secrets and variables
 
-| Name | Kind | Set with | Used for |
-| --- | --- | --- | --- |
-| `TURNSTILE_SECRET_KEY` | secret | `npx wrangler secret put TURNSTILE_SECRET_KEY` | verifying CAPTCHA tokens |
-| `TICKET_SECRET` | secret | `npx wrangler secret put TICKET_SECRET` | signing creation tickets |
-| `VITE_TURNSTILE_SITE_KEY` | client build var | `.env.production` | rendering the widget |
+| Name                      | Kind             | Set with                                       | Used for                 |
+| ------------------------- | ---------------- | ---------------------------------------------- | ------------------------ |
+| `TURNSTILE_SECRET_KEY`    | secret           | `npx wrangler secret put TURNSTILE_SECRET_KEY` | verifying CAPTCHA tokens |
+| `TICKET_SECRET`           | secret           | `npx wrangler secret put TICKET_SECRET`        | signing creation tickets |
+| `VITE_TURNSTILE_SITE_KEY` | client build var | `.env.production`                              | rendering the widget     |
 
 Secrets are encrypted at rest and never readable back through the API or dashboard. Locally they come
 from `.dev.vars`, which is gitignored; copy `.dev.vars.example` to create it. Rotating `TICKET_SECRET`
@@ -253,20 +253,20 @@ does not use custom token headers.
 
 ## Wrangler cheat sheet
 
-| Task | Command |
-| --- | --- |
-| Log in | `npx wrangler login` |
-| Who am I | `npx wrangler whoami` |
-| Create the database | `npm run db:create` |
-| Apply migrations | `npm run db:migrate:local` / `npm run db:migrate:remote` |
-| Run SQL | `npx wrangler d1 execute pikadai [--remote] --command "…"` |
-| Set a secret | `npx wrangler secret put NAME` |
-| List secrets | `npx wrangler secret list` |
-| Build and deploy | `npm run deploy` |
-| List deployments | `npx wrangler deployments list` |
-| Roll back | `npx wrangler rollback` |
-| Stream logs | `npx wrangler tail` |
-| Regenerate types | `npm run cf-typegen` |
+| Task                | Command                                                    |
+| ------------------- | ---------------------------------------------------------- |
+| Log in              | `npx wrangler login`                                       |
+| Who am I            | `npx wrangler whoami`                                      |
+| Create the database | `npm run db:create`                                        |
+| Apply migrations    | `npm run db:migrate:local` / `npm run db:migrate:remote`   |
+| Run SQL             | `npx wrangler d1 execute pikadai [--remote] --command "…"` |
+| Set a secret        | `npx wrangler secret put NAME`                             |
+| List secrets        | `npx wrangler secret list`                                 |
+| Build and deploy    | `npm run deploy`                                           |
+| List deployments    | `npx wrangler deployments list`                            |
+| Roll back           | `npx wrangler rollback`                                    |
+| Stream logs         | `npx wrangler tail`                                        |
+| Regenerate types    | `npm run cf-typegen`                                       |
 
 ## Official documentation
 

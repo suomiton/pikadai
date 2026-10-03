@@ -143,7 +143,11 @@ export interface Poll extends CreateEventResponse {
 export async function createPoll(c: Client = client(), overrides: Partial<Draft> = {}): Promise<Poll> {
   stubSiteverify(siteverifyOk('create'));
   const ticket = await agedTicket(c.ip);
-  const res = await c.post<CreateEventResponse>('/api/events', { ...draft(overrides), ticket, turnstileToken: DUMMY_TOKEN });
+  const res = await c.post<CreateEventResponse>('/api/events', {
+    ...draft(overrides),
+    ticket,
+    turnstileToken: DUMMY_TOKEN,
+  });
   if (res.status !== 201) throw new Error(`createPoll failed: ${res.status} ${JSON.stringify(res.body)}`);
   const view = await getView(c, res.body.id);
   return { ...res.body, client: c, view };
@@ -182,7 +186,10 @@ export async function insertEventRow(row: { id: string; expires_at: number; crea
     .run();
 }
 
-export async function countRows(table: 'events' | 'participants' | 'options' | 'votes', eventId?: string): Promise<number> {
+export async function countRows(
+  table: 'events' | 'participants' | 'options' | 'votes',
+  eventId?: string,
+): Promise<number> {
   const sql =
     table === 'events'
       ? 'SELECT COUNT(*) AS n FROM events WHERE id = ?'

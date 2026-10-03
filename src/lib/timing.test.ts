@@ -7,7 +7,9 @@ describe('timing', () => {
 
   it('sleep resolves after the given time', async () => {
     let done = false;
-    void sleep(500).then(() => { done = true; });
+    void sleep(500).then(() => {
+      done = true;
+    });
     await vi.advanceTimersByTimeAsync(499);
     expect(done).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
@@ -17,7 +19,9 @@ describe('timing', () => {
   it('waitUntil waits for a future wall-clock time', async () => {
     vi.setSystemTime(10_000);
     let done = false;
-    void waitUntil(12_000).then(() => { done = true; });
+    void waitUntil(12_000).then(() => {
+      done = true;
+    });
     await vi.advanceTimersByTimeAsync(1_999);
     expect(done).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
@@ -27,7 +31,9 @@ describe('timing', () => {
   it('waitUntil resolves at once for a time already passed', async () => {
     vi.setSystemTime(10_000);
     let done = false;
-    void waitUntil(9_000).then(() => { done = true; });
+    void waitUntil(9_000).then(() => {
+      done = true;
+    });
     await vi.advanceTimersByTimeAsync(0);
     expect(done).toBe(true);
   });

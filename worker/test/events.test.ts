@@ -2,7 +2,7 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import type { CreateEventResponse, EventView, TicketResponse } from '@shared/types';
 import { LIMITS } from '@shared/limits';
-import { computeExpiresAt } from '../db/queries';
+import { computeExpiresAt } from '../lib/expiry';
 import {
   DUMMY_TOKEN,
   addParticipant,
@@ -106,7 +106,11 @@ describe('POST /api/events', () => {
   ])('rejects a Turnstile token that was %s', async (_label, siteverify) => {
     const c = client();
     stubSiteverify(siteverify);
-    const res = await c.post('/api/events', { ...draft(), ticket: await agedTicket(c.ip), turnstileToken: DUMMY_TOKEN });
+    const res = await c.post('/api/events', {
+      ...draft(),
+      ticket: await agedTicket(c.ip),
+      turnstileToken: DUMMY_TOKEN,
+    });
     expect(res.status).toBe(403);
     expect(res.body).toMatchObject({ code: 'captcha_failed' });
   });
@@ -114,14 +118,22 @@ describe('POST /api/events', () => {
   it("accepts Cloudflare's testing-key response, which names example.com and no action", async () => {
     const c = client();
     stubSiteverify({ success: true, hostname: 'example.com', metadata: { result_with_testing_key: true } });
-    const res = await c.post('/api/events', { ...draft(), ticket: await agedTicket(c.ip), turnstileToken: DUMMY_TOKEN });
+    const res = await c.post('/api/events', {
+      ...draft(),
+      ticket: await agedTicket(c.ip),
+      turnstileToken: DUMMY_TOKEN,
+    });
     expect(res.status).toBe(201);
   });
 
   it('treats a siteverify outage as a failed verification', async () => {
     const c = client();
     forbidOutboundFetch(); // the stub throws, as a network failure would
-    const res = await c.post('/api/events', { ...draft(), ticket: await agedTicket(c.ip), turnstileToken: DUMMY_TOKEN });
+    const res = await c.post('/api/events', {
+      ...draft(),
+      ticket: await agedTicket(c.ip),
+      turnstileToken: DUMMY_TOKEN,
+    });
     expect(res.status).toBe(403);
     expect(res.body).toMatchObject({ code: 'captcha_failed' });
   });
@@ -138,14 +150,21 @@ describe('POST /api/events', () => {
 
   it('rejects a body that is not JSON', async () => {
     const c = client();
-    const res = await c.call('POST', '/api/events', { raw: '{not json', headers: { 'content-type': 'application/json' } });
+    const res = await c.call('POST', '/api/events', {
+      raw: '{not json',
+      headers: { 'content-type': 'application/json' },
+    });
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ code: 'invalid_json' });
   });
 
   it('rejects bodies over the size limit before reading them', async () => {
     const c = client();
-    const big = JSON.stringify({ ...draft({ description: 'x'.repeat(LIMITS.requestBodyMaxBytes) }), ticket: 'x', turnstileToken: 'y' });
+    const big = JSON.stringify({
+      ...draft({ description: 'x'.repeat(LIMITS.requestBodyMaxBytes) }),
+      ticket: 'x',
+      turnstileToken: 'y',
+    });
     const res = await c.call('POST', '/api/events', { raw: big, headers: { 'content-type': 'application/json' } });
     expect(res.status).toBe(413);
     expect(res.body).toMatchObject({ code: 'payload_too_large' });
@@ -191,7 +210,11 @@ describe('PATCH /api/events/:id', () => {
     expect(anon.status).toBe(403);
     expect(anon.body).toMatchObject({ code: 'admin_required' });
 
-    const ok = await poll.client.patch(`/api/events/${poll.id}`, { title: 'Renamed', allowSuggestions: false }, bearer(poll.adminToken));
+    const ok = await poll.client.patch(
+      `/api/events/${poll.id}`,
+      { title: 'Renamed', allowSuggestions: false },
+      bearer(poll.adminToken),
+    );
     expect(ok.status).toBe(204);
     const view = await getView(poll.client, poll.id);
     expect(view.title).toBe('Renamed');

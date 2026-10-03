@@ -12,13 +12,13 @@ This document explains how the system is put together and why. For the pieces it
 
 ## Goals and constraints
 
-| Goal | How it shapes the design |
-| --- | --- |
-| Zero hosting cost | Everything runs on Cloudflare's free plan: Workers, static assets, D1, Turnstile, cron. |
-| Anonymous by design | No personal data is stored. The IP address is used only as a transient rate-limit key and ticket binding, and per-request platform logs are switched off; see [Observability](cloudflare.md#observability). |
-| Abuse-resistant without identity | Layered controls: Turnstile, rate limits, server-enforced creation delay, hard size limits. |
-| Backend stays unexposed | The API lives on the same origin as the page, has no listing endpoints, and uses unguessable capability URLs. |
-| Simple operations | One Worker, one deploy command, no servers to patch. |
+| Goal                             | How it shapes the design                                                                                                                                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zero hosting cost                | Everything runs on Cloudflare's free plan: Workers, static assets, D1, Turnstile, cron.                                                                                                                     |
+| Anonymous by design              | No personal data is stored. The IP address is used only as a transient rate-limit key and ticket binding, and per-request platform logs are switched off; see [Observability](cloudflare.md#observability). |
+| Abuse-resistant without identity | Layered controls: Turnstile, rate limits, server-enforced creation delay, hard size limits.                                                                                                                 |
+| Backend stays unexposed          | The API lives on the same origin as the page, has no listing endpoints, and uses unguessable capability URLs.                                                                                               |
+| Simple operations                | One Worker, one deploy command, no servers to patch.                                                                                                                                                        |
 
 ## High-level design
 
@@ -41,10 +41,14 @@ discoverable API host. Requests for `/api/*` always reach the Worker because of 
 
 ## Components
 
-**Frontend** (`src/`). React 19 with `react-router`. The event page fetches a single `EventView` JSON
-document and re-fetches it after every mutation; there is no client-side cache or websocket. Forms are
-validated with the same zod schemas the Worker uses, so users get instant feedback and the server still
-has the final say. Tokens are kept in `localStorage`; see [Trust model](#trust-model-and-identity).
+**Frontend** (`src/`). React 19 with `react-router`. A root `useReducer` store (`src/state/app.ts`) holds the
+poll being viewed, the viewer's tokens and the load status; `AppStateProvider` wraps the router and the page's
+sections read it through context hooks (`usePoll`, `usePollActions`) rather than props. The event page fetches a
+single `EventView` JSON document and re-fetches it after every mutation; there is no client-side cache or
+websocket. Reducers are pure and unit-tested; fetching and `localStorage` writes sit in `pollActions.ts` with
+injected dependencies. Forms are validated with the same zod schemas the Worker uses, so users get instant
+feedback and the server still has the final say. Tokens are kept in `localStorage`; see
+[Trust model](#trust-model-and-identity).
 
 **Worker** (`worker/`). A Hono application. Each route file owns one resource. Cross-cutting concerns live
 in `worker/lib/`: token hashing and constant-time comparison, creation tickets, Turnstile verification,
@@ -62,11 +66,11 @@ at once.
 There are no users, only three kinds of capability tokens. None is stored in plaintext; the database holds
 SHA-256 digests, and comparisons use `crypto.subtle.timingSafeEqual`.
 
-| Token | Bits | Who holds it | Where it travels | What it allows |
-| --- | --- | --- | --- | --- |
-| Poll id | 128 | anyone with the link | URL path `/e/:id` | read the poll, add an answer, suggest a date |
-| Admin token | 256 | the creator | URL fragment on first visit, then `localStorage`; header `Authorization: Bearer` | edit or delete the poll, any answer, any date |
-| Edit token | 256 | each participant | `localStorage`; header `Authorization: Bearer` plus `X-Participant-Id` | edit or remove their own answer |
+| Token       | Bits | Who holds it         | Where it travels                                                                 | What it allows                                |
+| ----------- | ---- | -------------------- | -------------------------------------------------------------------------------- | --------------------------------------------- |
+| Poll id     | 128  | anyone with the link | URL path `/e/:id`                                                                | read the poll, add an answer, suggest a date  |
+| Admin token | 256  | the creator          | URL fragment on first visit, then `localStorage`; header `Authorization: Bearer` | edit or delete the poll, any answer, any date |
+| Edit token  | 256  | each participant     | `localStorage`; header `Authorization: Bearer` plus `X-Participant-Id`           | edit or remove their own answer               |
 
 **Why the fragment.** The admin link is `/e/:id#admin=TOKEN`. Browsers never send the fragment to the
 server, so the token does not appear in edge logs or referrers. On first load the page copies it into
@@ -156,15 +160,15 @@ Admins can delete a poll at any time with the same cascade.
 
 The controls are layered so no single one has to be perfect.
 
-| Control | Stops | Where |
-| --- | --- | --- |
-| Turnstile on creation and first answer; the token must have been solved on this hostname for the matching `create` or `answer` action | bulk scripted creation and vote stuffing, tokens solved elsewhere | `worker/lib/turnstile.ts`, `src/components/TurnstileField.tsx` |
-| Per-client rate limits (5 creates, 40 writes, 120 reads per minute; IPv6 keyed by /64) | floods from one source | `worker/lib/ratelimit.ts`, `wrangler.jsonc` |
-| Creation tickets: 5 s minimum age, single use, bound to the requesting client | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts` |
-| Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char nickname, 40 dates, 100 participants | oversized requests, storage abuse and spam text | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
-| Unique nickname per poll | impersonation within a poll | unique index from `migrations/0002`, pre-check in the `participants` route |
-| Vote set replaced per save, unknown option ids rejected | orphan or forged votes | `participants` route |
-| Expiry plus nightly purge | indefinite hosting of junk | `worker/index.ts` `scheduled` handler |
+| Control                                                                                                                               | Stops                                                                  | Where                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Turnstile on creation and first answer; the token must have been solved on this hostname for the matching `create` or `answer` action | bulk scripted creation and vote stuffing, tokens solved elsewhere      | `worker/lib/turnstile.ts`, `src/components/TurnstileField.tsx`                         |
+| Per-client rate limits (5 creates, 40 writes, 120 reads per minute; IPv6 keyed by /64)                                                | floods from one source                                                 | `worker/lib/ratelimit.ts`, `wrangler.jsonc`                                            |
+| Creation tickets: 5 s minimum age, single use, bound to the requesting client                                                         | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts`                                                                |
+| Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char nickname, 40 dates, 100 participants                   | oversized requests, storage abuse and spam text                        | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
+| Unique nickname per poll                                                                                                              | impersonation within a poll                                            | unique index from `migrations/0002`, pre-check in the `participants` route             |
+| Vote set replaced per save, unknown option ids rejected                                                                               | orphan or forged votes                                                 | `participants` route                                                                   |
+| Expiry plus nightly purge                                                                                                             | indefinite hosting of junk                                             | `worker/index.ts` `scheduled` handler                                                  |
 
 Two limits of this layering are accepted on purpose. Tickets do not lower throughput below what the rate
 limiter allows: a patient bot that solves Turnstile, waits five seconds and creates five polls a minute gets
@@ -201,18 +205,18 @@ and `X-Content-Type-Options: nosniff` to every response, including error respons
 
 All request and response bodies are JSON. Errors are `{ error: string, code: string, details?: unknown }`.
 
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| POST | `/api/tickets` | none | Issue a creation ticket → `{ ticket, minAgeMs }` |
-| POST | `/api/events` | Turnstile + ticket | Create a poll → `{ id, adminToken }` |
-| GET | `/api/events/:id` | optional `X-Admin-Token` | Full poll view with `viewer.isAdmin` |
-| PATCH | `/api/events/:id` | admin | Change title, description, `allowSuggestions` |
-| DELETE | `/api/events/:id` | admin | Delete poll and everything in it |
-| POST | `/api/events/:id/options` | anyone while suggestions are on; admin always | Add a date |
-| DELETE | `/api/events/:id/options/:optionId` | admin | Remove a date and its votes |
-| POST | `/api/events/:id/participants` | Turnstile | Add an answer → `{ id, editToken }` |
-| PUT | `/api/events/:id/participants/:participantId` | own token or admin | Replace nickname and votes |
-| DELETE | `/api/events/:id/participants/:participantId` | own token or admin | Remove an answer |
+| Method | Path                                          | Auth                                          | Purpose                                          |
+| ------ | --------------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
+| POST   | `/api/tickets`                                | none                                          | Issue a creation ticket → `{ ticket, minAgeMs }` |
+| POST   | `/api/events`                                 | Turnstile + ticket                            | Create a poll → `{ id, adminToken }`             |
+| GET    | `/api/events/:id`                             | optional `X-Admin-Token`                      | Full poll view with `viewer.isAdmin`             |
+| PATCH  | `/api/events/:id`                             | admin                                         | Change title, description, `allowSuggestions`    |
+| DELETE | `/api/events/:id`                             | admin                                         | Delete poll and everything in it                 |
+| POST   | `/api/events/:id/options`                     | anyone while suggestions are on; admin always | Add a date                                       |
+| DELETE | `/api/events/:id/options/:optionId`           | admin                                         | Remove a date and its votes                      |
+| POST   | `/api/events/:id/participants`                | Turnstile                                     | Add an answer → `{ id, editToken }`              |
+| PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Replace nickname and votes                       |
+| DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
 
 Error codes the client maps to messages (`src/lib/errors.ts`):
 
