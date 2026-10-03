@@ -5,7 +5,7 @@
     "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": [],
+    "types": ["@cloudflare/vitest-pool-workers/types"],
     "paths": { "@shared/*": ["./shared/*"] },
     "strict": true,
     "noUnusedLocals": true,

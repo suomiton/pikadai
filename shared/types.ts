@@ -27,8 +27,13 @@ export interface EventView {
   viewer: { isAdmin: boolean };
 }
 
+/** Names the Turnstile widget is rendered with; the Worker requires the matching one in siteverify. */
+export type TurnstileAction = 'create' | 'answer';
+
 export interface TicketResponse {
   ticket: string;
+  /** How long the client must hold the ticket before creating; younger tickets are rejected. */
+  minAgeMs: number;
 }
 
 export interface CreateEventResponse {

@@ -4,7 +4,7 @@ import { addOptionSchema } from '@shared/schemas';
 import type { EventOption } from '@shared/types';
 import type { AppEnv } from '../env';
 import { countOptions, deleteOption, insertOption, refreshExpiry } from '../db/queries';
-import { isAdmin, loadEvent, participantFromToken, requireAdmin } from '../lib/auth';
+import { isAdmin, loadEvent, PARTICIPANT_ID_HEADER, participantFromToken, requireAdmin } from '../lib/auth';
 import { randomId } from '../lib/crypto';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
 import { rateLimit } from '../lib/ratelimit';
@@ -26,7 +26,7 @@ options.post('/', rateLimit((env) => env.WRITE_LIMITER), async (c) => {
   }
 
   // Attribute the suggestion to the participant if they prove who they are; otherwise anonymous.
-  const participantId = c.req.header('X-Participant-Id');
+  const participantId = c.req.header(PARTICIPANT_ID_HEADER);
   const suggester =
     !admin && participantId ? await participantFromToken(c, event, participantId) : null;
 

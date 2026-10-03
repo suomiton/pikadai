@@ -1,6 +1,7 @@
 import { ApiRequestError } from './api';
 
 const MESSAGES: Record<string, string> = {
+  invalid_json: 'The request could not be read. Please try again.',
   captcha_failed: 'The verification check failed. Please try again.',
   rate_limited: 'Too many requests from your connection. Wait a minute and try again.',
   ticket_too_early: 'That was quick. Please wait a moment and try again.',
@@ -8,6 +9,7 @@ const MESSAGES: Record<string, string> = {
   ticket_used: 'This creation attempt was already used. Please try again.',
   ticket_invalid: 'The creation step could not be verified. Please try again.',
   validation_failed: 'Some of the details were not accepted. Please check the form.',
+  payload_too_large: 'That request was too large. Please shorten the text and try again.',
   nickname_taken: 'Someone in this poll already uses that nickname.',
   event_full: 'This poll has reached its participant limit.',
   too_many_options: 'This poll already has the maximum number of dates.',

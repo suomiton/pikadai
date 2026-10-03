@@ -3,7 +3,9 @@
   "name": "pikadai",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-09-01",
-  "observability": { "enabled": true },
+  // Keep the Worker's own console output queryable, but do not persist per-request
+  // invocation logs: those carry request headers and the client IP. See docs/cloudflare.md.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } },
   "upload_source_maps": true,
 
   // The React build is served as static assets on the same origin as the API,
@@ -32,9 +34,5 @@
   ],
 
   // Nightly purge of expired polls.
-  "triggers": { "crons": ["17 3 * * *"] },
-
-  "vars": {
-    "MIN_CREATE_DELAY_MS": "5000"
-  }
+  "triggers": { "crons": ["17 3 * * *"] }
 }

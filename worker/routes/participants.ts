@@ -14,12 +14,15 @@ import {
 } from '../db/queries';
 import { isAdmin, loadEvent, participantFromToken } from '../lib/auth';
 import { randomId, randomToken, sha256Hex } from '../lib/crypto';
-import { errors, parseBody, readJson } from '../lib/http';
+import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
 import { clientIp, rateLimit } from '../lib/ratelimit';
-import { verifyTurnstile } from '../lib/turnstile';
+import { turnstileExpectations, verifyTurnstile } from '../lib/turnstile';
 
 /** Mounted at /api/events/:id/participants */
 export const participants = new Hono<AppEnv>();
+
+const nicknameTakenError = () =>
+  errors.conflict('That nickname is already taken in this poll', 'nickname_taken');
 
 /** Drop votes for options that don't belong to this event. */
 async function sanitizeVotes(
@@ -40,33 +43,43 @@ participants.post('/', rateLimit((env) => env.WRITE_LIMITER), async (c) => {
   const event = await loadEvent(c);
   const body = parseBody(createParticipantSchema, await readJson(c));
 
-  const human = await verifyTurnstile(c.env.TURNSTILE_SECRET_KEY, body.turnstileToken, clientIp(c));
-  if (!human) throw errors.forbidden('Verification failed, please try again', 'captcha_failed');
-
+  // Database checks before Turnstile: a full poll or a taken nickname must not spend the token.
   if ((await countParticipants(c.env.DB, event.id)) >= LIMITS.participantsMax) {
     throw errors.conflict('This poll is full', 'event_full');
   }
-  if (await nicknameTaken(c.env.DB, event.id, body.nickname, null)) {
-    throw errors.conflict('That nickname is already taken in this poll', 'nickname_taken');
-  }
-
+  if (await nicknameTaken(c.env.DB, event.id, body.nickname, null)) throw nicknameTakenError();
   const votes = await sanitizeVotes(c.env.DB, event.id, body.votes);
+
+  const human = await verifyTurnstile(
+    c.env.TURNSTILE_SECRET_KEY,
+    body.turnstileToken,
+    clientIp(c),
+    turnstileExpectations(c.req.url, 'answer'),
+  );
+  if (!human) throw errors.forbidden('Verification failed, please try again', 'captcha_failed');
+
   const now = Date.now();
   const id = randomId();
   const editToken = randomToken();
 
-  await insertParticipantWithVotes(
-    c.env.DB,
-    {
-      id,
-      event_id: event.id,
-      nickname: body.nickname,
-      edit_token_hash: await sha256Hex(editToken),
-      created_at: now,
-      updated_at: now,
-    },
-    votes,
-  );
+  try {
+    await insertParticipantWithVotes(
+      c.env.DB,
+      {
+        id,
+        event_id: event.id,
+        nickname: body.nickname,
+        edit_token_hash: await sha256Hex(editToken),
+        created_at: now,
+        updated_at: now,
+      },
+      votes,
+    );
+  } catch (err) {
+    // The unique index catches the race the pre-check above cannot.
+    if (isUniqueViolation(err)) throw nicknameTakenError();
+    throw err;
+  }
 
   return c.json({ id, editToken } satisfies CreateParticipantResponse, 201);
 });
@@ -84,11 +97,16 @@ participants.put('/:participantId', rateLimit((env) => env.WRITE_LIMITER), async
   const body = parseBody(updateParticipantSchema, await readJson(c));
   const nickname = body.nickname ?? participant.nickname;
   if (nickname !== participant.nickname && (await nicknameTaken(c.env.DB, event.id, nickname, participant.id))) {
-    throw errors.conflict('That nickname is already taken in this poll', 'nickname_taken');
+    throw nicknameTakenError();
   }
 
   const votes = await sanitizeVotes(c.env.DB, event.id, body.votes);
-  await updateParticipantWithVotes(c.env.DB, participant, nickname, votes, Date.now());
+  try {
+    await updateParticipantWithVotes(c.env.DB, participant, nickname, votes, Date.now());
+  } catch (err) {
+    if (isUniqueViolation(err)) throw nicknameTakenError();
+    throw err;
+  }
   return c.body(null, 204);
 });
 

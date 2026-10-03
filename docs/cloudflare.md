@@ -110,7 +110,8 @@ npx wrangler d1 migrations list pikadai --remote
   participant with their votes, uses this so a failure leaves nothing half-written.
 - A UNIQUE violation surfaces as an error whose message contains `UNIQUE constraint failed`. The Worker
   maps that to `409` for duplicate dates, nicknames, and replayed tickets.
-- `COLLATE NOCASE` in a query gives case-insensitive comparison, used for nickname uniqueness.
+- `COLLATE NOCASE` gives case-insensitive comparison, both in the nickname pre-check query and in the unique
+  index that enforces it.
 
 **Free-plan limits.**
 
@@ -153,7 +154,9 @@ Three limiters are declared under `ratelimits` in `wrangler.jsonc` and used by t
 
 How it behaves:
 
-- The key is the client IP from the `CF-Connecting-IP` header. It is used only in memory and never stored.
+- The key is derived from the `CF-Connecting-IP` header: the IPv4 address itself, or the /64 prefix of an
+  IPv6 address, because one subscriber usually owns a whole /64. `X-Forwarded-For` is ignored since a client
+  can set it. The key lives only in the limiter's memory; the Worker never stores or logs it.
 - `period` must be 10 or 60 seconds. `namespace_id` is any string that is unique within the account.
 - Counting is per Cloudflare location, not global, and is approximate. Treat it as flood protection, not an
   exact quota.
@@ -170,8 +173,12 @@ sent to Cloudflare's `siteverify` endpoint from `worker/lib/turnstile.ts`.
 
 **Flow.** The widget (`src/components/TurnstileField.tsx`) produces a token in the browser. The token is
 sent with the create-poll or add-answer request. The Worker posts it to
-`https://challenges.cloudflare.com/turnstile/v0/siteverify` with the secret and the client IP. Tokens are
-valid for five minutes and can be verified once; the client resets the widget after any failed submit.
+`https://challenges.cloudflare.com/turnstile/v0/siteverify` with the secret and the client IP, then requires
+the response's `hostname` to match the request's hostname and its `action` to be the one the widget was
+rendered with: `create` on the create page, `answer` in the vote grid. A token solved on another site bound
+to the same widget, or for the other form, is refused. Tokens are valid for five minutes and can be verified
+once; the Worker runs its cheaper checks first so a rejected request does not spend the token, and the client
+resets the widget after any failed submit.
 
 **Hostnames.** A widget is bound to a list of hostnames. Add every hostname the site is served from,
 including the `workers.dev` one and any custom domain. A mismatch makes every verification fail with
@@ -187,7 +194,10 @@ uses. They work from any hostname, including `localhost`.
 | Forces an interactive challenge | `3x00000000000000000000FF` | |
 | Token already spent | | `3x0000000000000000000000000000000FF` |
 
-`.env.development` and `.dev.vars.example` ship with the always-pass pair.
+`.env.development` and `.dev.vars.example` ship with the always-pass pair. The test secrets always answer
+with `hostname: "example.com"` and no `action`, and mark the response with `metadata.result_with_testing_key`;
+the Worker skips its hostname and action checks when that flag is set, which is why the pair works on
+`localhost`. A test secret in production would accept every token anyway, so the skip gives nothing away.
 
 ## Cron triggers
 
@@ -215,7 +225,6 @@ appears in the Worker's logs.
 | --- | --- | --- | --- |
 | `TURNSTILE_SECRET_KEY` | secret | `npx wrangler secret put TURNSTILE_SECRET_KEY` | verifying CAPTCHA tokens |
 | `TICKET_SECRET` | secret | `npx wrangler secret put TICKET_SECRET` | signing creation tickets |
-| `MIN_CREATE_DELAY_MS` | var in `wrangler.jsonc` | edit and redeploy | minimum ticket age |
 | `VITE_TURNSTILE_SITE_KEY` | client build var | `.env.production` | rendering the widget |
 
 Secrets are encrypted at rest and never readable back through the API or dashboard. Locally they come
@@ -224,15 +233,23 @@ invalidates in-flight tickets for at most 15 minutes and nothing else.
 
 ## Observability
 
-`observability.enabled` is on in `wrangler.jsonc`, so every request and `console` line is captured and
-queryable in the dashboard under the Worker's Observability tab. For a live stream from the terminal:
+`observability.enabled` is on in `wrangler.jsonc` with `logs.invocation_logs` set to `false`. Workers Logs
+therefore keeps only what the Worker itself prints with `console`, queryable under the Worker's
+Observability tab, and not the per-request invocation record, which would hold every request's headers and
+client IP for days. The routine `console` output is the purge count from the cron handler; unhandled errors
+are logged with their stack trace by `app.onError`, without request details. Aggregate metrics (request
+counts, status codes, CPU time) stay available under the Metrics tab and contain nothing per visitor.
+
+For a live stream from the terminal:
 
 ```sh
 npx wrangler tail
 ```
 
-The Worker logs nothing about request content. The only routine log line is the purge count from the
-cron handler. Unhandled errors are logged with their stack trace by `app.onError`.
+The stream is not persisted by Cloudflare, but it does show each request's headers and `CF-Connecting-IP`
+to whoever runs it. Cloudflare redacts headers it recognises as credentials, heuristically; keeping the
+tokens in the standard `Authorization` header gives that heuristic its easiest case, which is why the API
+does not use custom token headers.
 
 ## Wrangler cheat sheet
 

@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { LIMITS } from '@shared/limits';
 import type { AppEnv } from './env';
 import { deleteExpiredEvents } from './db/queries';
-import { HttpError } from './lib/http';
+import { errors, HttpError } from './lib/http';
 import { events } from './routes/events';
 import { options } from './routes/options';
 import { participants } from './routes/participants';
@@ -10,10 +12,25 @@ import { tickets } from './routes/tickets';
 const app = new Hono<AppEnv>();
 
 app.use('/api/*', async (c, next) => {
-  await next();
-  c.header('Cache-Control', 'no-store');
-  c.header('X-Content-Type-Options', 'nosniff');
+  try {
+    await next();
+  } finally {
+    // Also applied to error responses, which `onError` builds after this point.
+    c.header('Cache-Control', 'no-store');
+    c.header('X-Content-Type-Options', 'nosniff');
+  }
 });
+
+// Refuse oversized bodies before anything parses them. Legitimate requests stay under 2 KB.
+app.use(
+  '/api/*',
+  bodyLimit({
+    maxSize: LIMITS.requestBodyMaxBytes,
+    onError: () => {
+      throw errors.payloadTooLarge();
+    },
+  }),
+);
 
 app.route('/api/tickets', tickets);
 app.route('/api/events', events);

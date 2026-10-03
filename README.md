@@ -1,5 +1,7 @@
 # pikadai
 
+[![CI](https://github.com/suomiton/pikadai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/suomiton/pikadai/actions/workflows/ci.yml?query=branch%3Amain)
+
 Anonymous, login-free date polls. Create a poll, share one link, people answer with a nickname.
 No accounts, no email, no cookies, no tracking. Polls delete themselves after they expire.
 
@@ -30,6 +32,17 @@ npm run dev                         # http://localhost:5173
 
 The development build uses Cloudflare's public Turnstile test keys, which always pass.
 
+## Tests
+
+```sh
+npm test                            # unit tests, then the Worker inside workerd with a local D1
+npx playwright install chromium     # once per machine
+npm run test:e2e                    # browser journeys against the dev server (started if needed)
+```
+
+GitHub Actions runs `npm test` on every push to `main` and every pull request into it
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); the badge at the top shows `main`.
+
 ## Deploy
 
 See [docs/deployment.md](docs/deployment.md). In short: create the D1 database, set two secrets, put your
@@ -38,9 +51,12 @@ Turnstile site key in `.env.production`, and run `npm run deploy`.
 ## Layout
 
 ```
-worker/        Hono API: routes/, db/queries.ts, lib/ (auth, crypto, tickets, turnstile, ratelimit)
+worker/        Hono API: routes/, db/queries.ts, lib/ (auth, crypto, tickets, turnstile, ratelimit), test/
 shared/        zod schemas, limits and types imported by both sides
-src/           React app: pages/, components/, lib/ (api client, storage, dates), styles/
+src/           React app: pages/, components/, lib/ (api client, storage, dates, votes), styles/
 migrations/    D1 SQL migrations
+e2e/           Playwright browser tests
 docs/          Documentation
 ```
+
+Unit tests sit next to the code they test as `*.test.ts`.

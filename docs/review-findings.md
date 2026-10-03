@@ -14,18 +14,18 @@ defect with a workaround or a WCAG AA failure, **low** means hygiene.
 
 | Done | ID | Severity | Finding |
 | --- | --- | --- | --- |
-| [ ] | S1 | high | Workers Logs may record token headers and client IPs |
-| [ ] | S2 | high | No request body size limit on the API |
-| [ ] | S3 | medium | Nickname uniqueness is a read-then-write race |
-| [ ] | S4 | medium | IPv6 defeats the per-IP rate limiter |
-| [ ] | S5 | low | X-Forwarded-For fallback is spoofable and unnecessary |
-| [ ] | S6 | medium | Turnstile response is under-checked |
-| [ ] | S7 | low | Expensive checks run before cheap ones |
-| [ ] | S8 | low | Creation tickets add little over the rate limiter |
-| [ ] | S9 | medium | Two sources of truth for the minimum creation delay |
+| [x] | S1 | high | Workers Logs may record token headers and client IPs |
+| [x] | S2 | high | No request body size limit on the API |
+| [x] | S3 | medium | Nickname uniqueness is a read-then-write race |
+| [x] | S4 | medium | IPv6 defeats the per-IP rate limiter |
+| [x] | S5 | low | X-Forwarded-For fallback is spoofable and unnecessary |
+| [x] | S6 | medium | Turnstile response is under-checked |
+| [x] | S7 | low | Expensive checks run before cheap ones |
+| [x] | S8 | low | Creation tickets add little over the rate limiter |
+| [x] | S9 | medium | Two sources of truth for the minimum creation delay |
 | [ ] | S10 | medium | Google Fonts leaks visitor IPs; CSP justification is wrong |
-| [ ] | S11 | low | Participant and option caps are read-then-write races |
-| [ ] | S12 | low | CI example deploys from the wrong branch |
+| [x] | S11 | low | Participant and option caps are read-then-write races |
+| [x] | S12 | low | CI example deploys from the wrong branch |
 | [x] | A1 | high | Light theme fails AA contrast almost everywhere |
 | [x] | A2 | high | Vote buttons and status text do not announce changes |
 | [x] | A3 | high | Creation progress is visual only |
@@ -76,6 +76,9 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
   present, either send tokens as `Authorization: Bearer …` (Cloudflare redacts that header) or set
   `observability.logs.invocation_logs` to `false` and keep only `console` output. Update the three
   privacy statements to describe what the platform actually retains.
+- Done 2026-10-03: both. Cloudflare's tail docs confirm request headers are captured with only heuristic
+  redaction, so tokens now travel as `Authorization: Bearer` and invocation logs are off. Not checked against
+  a live deployment; the docs now describe `wrangler tail` honestly.
 
 ### S2. No request body size limit on the API (high)
 
@@ -134,6 +137,8 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
 - Fix: A judgment call. Either accept it as UI choreography and say so in `docs/architecture.md`, or bind
   the ticket to the IP hash in the signed payload so harvesting stops working. Removing the scheme
   entirely would also be defensible.
+- Done 2026-10-03: bound to the rate-limit key (IPv4 address or IPv6 /64) inside the HMAC input, and the
+  residual value of the scheme is stated in `docs/architecture.md`.
 
 ### S9. Two sources of truth for the minimum creation delay (medium)
 
@@ -143,6 +148,8 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
   Raising the var breaks every creation with `ticket_too_early`; the deployment doc has to warn about it.
 - Fix: Return `{ ticket, notBefore }` from `POST /api/tickets` and have the client wait until `notBefore`.
   Then delete the var or the constant so one remains.
+- Done 2026-10-03: the response carries a relative `minAgeMs` rather than an absolute `notBefore`, because
+  the client clock cannot be trusted against the server's. The var is gone; `LIMITS.minCreateDelayMs` remains.
 
 ### S10. Google Fonts leaks visitor IPs; CSP justification is wrong (medium)
 
@@ -153,6 +160,8 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
 - Fix: Iosevka is OFL. Self-host the three weights under `public/fonts/`, remove the two font origins from
   the CSP and the preconnects. Then test whether Turnstile still needs `'unsafe-inline'` for styles; if it
   does, document that as the real reason.
+- Decision 2026-10-03: left open on purpose. Google Fonts stays and the IP exposure is accepted; only the
+  wrong CSP justification in `docs/architecture.md` was corrected.
 
 ### S11. Participant and option caps are read-then-write races (low)
 
@@ -160,6 +169,7 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
 - Problem: Concurrent requests can exceed the caps by a few rows.
 - Fix: Acceptable at this scale. If it matters, do the count inside the batch with a conditional insert,
   or re-check after insert and roll back.
+- Done 2026-10-03: accepted; the overshoot is documented in `docs/architecture.md` and `docs/database.md`.
 
 ### S12. CI example deploys from the wrong branch (low)
 
@@ -377,3 +387,7 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
   `src/lib/`. Start with `verifyTicket`, `computeExpiresAt`, `monthGrid`, `cycle` and the tallies. Add
   ESLint with `eslint-plugin-jsx-a11y` and `eslint-plugin-react-hooks`, plus Prettier, and run all of it
   in the `build` script or a CI job.
+- Partly done 2026-10-03: tests exist at three levels (`npm test`, `npm run test:e2e`; see
+  `docs/project-structure.md`), and `cycle` plus the tallies moved to `src/lib/votes.ts` to make that
+  possible, which is a first slice of C1. `.github/workflows/ci.yml` runs `npm test` on every push to
+  main and every PR into main. The linter and formatter are still open.

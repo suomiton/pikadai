@@ -13,21 +13,30 @@ import {
 import { isAdmin, loadEvent, requireAdmin } from '../lib/auth';
 import { randomId, randomToken, sha256Hex } from '../lib/crypto';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
-import { clientIp, rateLimit } from '../lib/ratelimit';
+import { clientIp, rateLimit, rateLimitKey } from '../lib/ratelimit';
 import { verifyTicket } from '../lib/tickets';
-import { verifyTurnstile } from '../lib/turnstile';
+import { turnstileExpectations, verifyTurnstile } from '../lib/turnstile';
 
 export const events = new Hono<AppEnv>();
 
 events.post('/', rateLimit((env) => env.CREATE_LIMITER), async (c) => {
   const body = parseBody(createEventSchema, await readJson(c));
 
-  const human = await verifyTurnstile(c.env.TURNSTILE_SECRET_KEY, body.turnstileToken, clientIp(c));
-  if (!human) throw errors.forbidden('Verification failed, please try again', 'captcha_failed');
-
-  const minDelay = Number(c.env.MIN_CREATE_DELAY_MS) || LIMITS.minCreateDelayMs;
-  const ticket = await verifyTicket(c.env.TICKET_SECRET, body.ticket, minDelay, LIMITS.ticketMaxAgeMs);
+  // Local checks before Turnstile: a rejected ticket must not cost the user a solved challenge.
+  const ticket = await verifyTicket(c.env.TICKET_SECRET, body.ticket, {
+    bind: rateLimitKey(clientIp(c)),
+    minAgeMs: LIMITS.minCreateDelayMs,
+    maxAgeMs: LIMITS.ticketMaxAgeMs,
+  });
   if (!ticket.ok) throw errors.badRequest('Creation ticket rejected', `ticket_${ticket.reason}`);
+
+  const human = await verifyTurnstile(
+    c.env.TURNSTILE_SECRET_KEY,
+    body.turnstileToken,
+    clientIp(c),
+    turnstileExpectations(c.req.url, 'create'),
+  );
+  if (!human) throw errors.forbidden('Verification failed, please try again', 'captcha_failed');
 
   const now = Date.now();
   const dates = [...new Set(body.dates)].sort();

@@ -15,7 +15,7 @@ This document explains how the system is put together and why. For the pieces it
 | Goal | How it shapes the design |
 | --- | --- |
 | Zero hosting cost | Everything runs on Cloudflare's free plan: Workers, static assets, D1, Turnstile, cron. |
-| Anonymous by design | No personal data is stored. The IP address is used only as a transient rate-limit key. |
+| Anonymous by design | No personal data is stored. The IP address is used only as a transient rate-limit key and ticket binding, and per-request platform logs are switched off; see [Observability](cloudflare.md#observability). |
 | Abuse-resistant without identity | Layered controls: Turnstile, rate limits, server-enforced creation delay, hard size limits. |
 | Backend stays unexposed | The API lives on the same origin as the page, has no listing endpoints, and uses unguessable capability URLs. |
 | Simple operations | One Worker, one deploy command, no servers to patch. |
@@ -65,14 +65,20 @@ SHA-256 digests, and comparisons use `crypto.subtle.timingSafeEqual`.
 | Token | Bits | Who holds it | Where it travels | What it allows |
 | --- | --- | --- | --- | --- |
 | Poll id | 128 | anyone with the link | URL path `/e/:id` | read the poll, add an answer, suggest a date |
-| Admin token | 256 | the creator | URL fragment on first visit, then `localStorage`; header `X-Admin-Token` | edit or delete the poll, any answer, any date |
-| Edit token | 256 | each participant | `localStorage`; headers `X-Participant-Token` + `X-Participant-Id` | edit or remove their own answer |
+| Admin token | 256 | the creator | URL fragment on first visit, then `localStorage`; header `Authorization: Bearer` | edit or delete the poll, any answer, any date |
+| Edit token | 256 | each participant | `localStorage`; header `Authorization: Bearer` plus `X-Participant-Id` | edit or remove their own answer |
 
 **Why the fragment.** The admin link is `/e/:id#admin=TOKEN`. Browsers never send the fragment to the
 server, so the token does not appear in edge logs or referrers. On first load the page copies it into
 `localStorage` and rewrites the address bar without it, so a screenshot or a copied URL afterwards does
 not leak it. There is no recovery path if the admin link is lost; that is the price of having no accounts,
 and the UI says so next to the link.
+
+**Why `Authorization`.** A request carries at most one token, in the standard header: the admin token when
+the browser has one, otherwise the participant's edit token, since everything a participant may do the admin
+may do too. Cloudflare's log pipeline redacts request headers it recognises as credentials, and that
+recognition is heuristic; the standard header is the case it is built for, a custom `X-*` header is a
+gamble. The participant id travels separately because it is public anyway.
 
 **Why hashes.** A database leak would expose nothing usable: poll ids are public anyway, and the hashes
 cannot be inverted into tokens.
@@ -93,14 +99,14 @@ sequenceDiagram
 
     U->>U: validate draft with eventDraftSchema
     U->>W: POST /api/tickets
-    W-->>U: { ticket }  (HMAC-signed, timestamped)
-    Note over U: progress steps play for ≥ 5.8 s
+    W-->>U: { ticket, minAgeMs }  (HMAC-signed, timestamped, bound to the client)
+    Note over U: progress steps play for minAgeMs + 0.8 s
     U->>W: POST /api/events { draft, ticket, turnstileToken }
-    W->>W: rate limit CREATE_LIMITER (5/min per IP)
+    W->>W: rate limit CREATE_LIMITER (5/min per client)
     W->>W: validate with createEventSchema
-    W->>T: siteverify(turnstileToken)
+    W->>W: verify ticket: signature incl. client binding, age ≥ minAgeMs, age ≤ 15 min
+    W->>T: siteverify(turnstileToken) → must report this hostname and action=create
     T-->>W: success
-    W->>W: verify ticket: signature, age ≥ MIN_CREATE_DELAY_MS, age ≤ 15 min
     W->>D: batch insert event + options (ticket nonce UNIQUE)
     D-->>W: ok
     W-->>U: 201 { id, adminToken }
@@ -108,18 +114,24 @@ sequenceDiagram
 ```
 
 The "artificial delay" is enforced server-side, not just drawn on screen. A ticket is
-`<issuedAtMs>.<nonce>.<hmac>`; the Worker signs it with `TICKET_SECRET` and will not accept a poll until
-the ticket is at least `MIN_CREATE_DELAY_MS` old. The nonce is written to `events.ticket_nonce`, which has
-a UNIQUE index, so a ticket cannot be replayed. The client's step timings in `src/pages/CreatePage.tsx`
-end at 5.8 s to leave headroom above the 5 s minimum.
+`<issuedAtMs>.<nonce>.<hmac>`; the Worker signs it with `TICKET_SECRET` together with the requesting
+client's rate-limit key (the IPv4 address, or the /64 of an IPv6 address) and will not accept a poll until
+the ticket is at least `LIMITS.minCreateDelayMs` old. The ticket response carries that minimum as
+`minAgeMs` and the client paces its progress steps on it, so the delay has one source of truth. The nonce
+is written to `events.ticket_nonce`, which has a UNIQUE index, so a ticket cannot be replayed, and a ticket
+obtained on one network is rejected from another.
+
+Checks run cheapest first: schema, then the local ticket check, then Turnstile, then the database write. A
+rejected ticket therefore never costs the user a solved challenge.
 
 ### Answering a poll
 
 1. `GET /api/events/:id` returns the full view: options, participants, votes, and `viewer.isAdmin`.
 2. The user picks a nickname and taps cells; the Turnstile widget produces a token.
-3. `POST /api/events/:id/participants` verifies Turnstile, checks the participant cap and nickname
-   uniqueness (case-insensitive within the poll), drops votes for unknown options, and inserts the row and
-   its votes atomically.
+3. `POST /api/events/:id/participants` checks the participant cap, nickname uniqueness (case-insensitive
+   within the poll) and that every vote refers to one of the poll's dates, then verifies Turnstile and
+   inserts the row and its votes atomically. A unique index on `(event_id, nickname COLLATE NOCASE)` backs
+   the nickname check, so two simultaneous answers with the same name cannot both get in.
 4. The response `{ id, editToken }` is stored in `localStorage` under the poll id. Later edits send both
    as headers to `PUT /api/events/:id/participants/:participantId`.
 
@@ -146,13 +158,19 @@ The controls are layered so no single one has to be perfect.
 
 | Control | Stops | Where |
 | --- | --- | --- |
-| Turnstile on creation and first answer | bulk scripted creation and vote stuffing | `worker/lib/turnstile.ts`, `src/components/TurnstileField.tsx` |
-| Per-IP rate limits (5 creates, 40 writes, 120 reads per minute) | floods from one source | `worker/lib/ratelimit.ts`, `wrangler.jsonc` |
-| Creation tickets with a 5 s minimum age, single use | parallel mass creation even with a solved CAPTCHA | `worker/lib/tickets.ts` |
-| Hard limits: 100-char title, 500-char description, 32-char nickname, 40 dates, 100 participants | storage abuse and spam text | `shared/limits.ts`, enforced in schemas and route handlers |
-| Unique nickname per poll | impersonation within a poll | `participants` route |
+| Turnstile on creation and first answer; the token must have been solved on this hostname for the matching `create` or `answer` action | bulk scripted creation and vote stuffing, tokens solved elsewhere | `worker/lib/turnstile.ts`, `src/components/TurnstileField.tsx` |
+| Per-client rate limits (5 creates, 40 writes, 120 reads per minute; IPv6 keyed by /64) | floods from one source | `worker/lib/ratelimit.ts`, `wrangler.jsonc` |
+| Creation tickets: 5 s minimum age, single use, bound to the requesting client | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts` |
+| Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char nickname, 40 dates, 100 participants | oversized requests, storage abuse and spam text | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
+| Unique nickname per poll | impersonation within a poll | unique index from `migrations/0002`, pre-check in the `participants` route |
 | Vote set replaced per save, unknown option ids rejected | orphan or forged votes | `participants` route |
 | Expiry plus nightly purge | indefinite hosting of junk | `worker/index.ts` `scheduled` handler |
+
+Two limits of this layering are accepted on purpose. Tickets do not lower throughput below what the rate
+limiter allows: a patient bot that solves Turnstile, waits five seconds and creates five polls a minute gets
+through, and bounding that is the limiter's job, not the ticket's. The participant and option caps are
+checked before the insert rather than inside the transaction, so a burst of simultaneous requests can
+overshoot a cap by a few rows; at 100 and 40 that is harmless.
 
 What is deliberately **not** done: browser fingerprinting, persistent IP storage, or email verification.
 Each would undermine the anonymity promise, and the controls above are sufficient for a free hobby service.
@@ -173,9 +191,11 @@ connect-src 'self'
 frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
 ```
 
-`'unsafe-inline'` for styles is needed for React's inline `style` props and the Google Fonts stylesheet; it
-does not weaken script execution. The API adds `Cache-Control: no-store` and `X-Content-Type-Options:
-nosniff` to every response.
+`'unsafe-inline'` for styles is a precaution for the Turnstile widget and has not been shown to be necessary;
+neither the Google Fonts stylesheet, which is an external origin, nor React, which sets styles through the
+CSSOM, needs it. It does not weaken script execution. Google Fonts is the one third party on the page and is
+used knowingly: the visitor's IP reaches Google when the font loads. The API adds `Cache-Control: no-store`
+and `X-Content-Type-Options: nosniff` to every response, including error responses.
 
 ## API reference
 
@@ -183,7 +203,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
-| POST | `/api/tickets` | none | Issue a creation ticket |
+| POST | `/api/tickets` | none | Issue a creation ticket → `{ ticket, minAgeMs }` |
 | POST | `/api/events` | Turnstile + ticket | Create a poll → `{ id, adminToken }` |
 | GET | `/api/events/:id` | optional `X-Admin-Token` | Full poll view with `viewer.isAdmin` |
 | PATCH | `/api/events/:id` | admin | Change title, description, `allowSuggestions` |
@@ -196,7 +216,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 
 Error codes the client maps to messages (`src/lib/errors.ts`):
 
-`invalid_json`, `validation_failed`, `captcha_failed`, `ticket_invalid`, `ticket_too_early`,
+`invalid_json`, `validation_failed`, `payload_too_large`, `captcha_failed`, `ticket_invalid`, `ticket_too_early`,
 `ticket_expired`, `ticket_used`, `rate_limited`, `not_found`, `expired`, `admin_required`,
 `suggestions_disabled`, `too_many_options`, `date_exists`, `event_full`, `nickname_taken`,
 `unknown_option`, `not_owner`, `internal`.
@@ -213,6 +233,9 @@ behind the same hostname.
 
 **Server-enforced delay instead of a client-only wait.** A client-side timer is trivially skipped by a
 script. The ticket scheme costs one extra request and a few lines of HMAC code, and makes the delay real.
+Binding the ticket to the requesting client stops tickets being harvested from one address and spent from
+others; what the scheme does not do is lower the creation rate below the limiter's five per minute, see
+[Abuse controls](#abuse-controls).
 
 **Dates only, no time slots.** Timezones are the main source of bugs in scheduling tools. The schema can
 grow `start_time` and `end_time` columns on `options` later without changing anything else.
@@ -234,5 +257,6 @@ Revisit if a poll view ever grows beyond a few kilobytes.
 ## Non-goals and future work
 
 Not planned: accounts, email notifications, comments, or integrations with calendars. Reasonable next
-steps: time slots per date, a "hide results until I answer" option, exporting the chosen date as an `.ics`
-file, and an automated test suite seeded from the smoke test described in [deployment.md](deployment.md).
+steps: time slots per date, a "hide results until I answer" option, and exporting the chosen date as an
+`.ics` file. The test suite is described in [project-structure.md](project-structure.md#conventions) and
+[deployment.md](deployment.md#tests-to-run-before-a-deploy).

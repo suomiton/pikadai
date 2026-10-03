@@ -39,7 +39,7 @@ The output includes a `database_id`. Open `wrangler.jsonc` and replace the place
 npm run db:migrate:remote
 ```
 
-Expected: a table listing `0001_init.sql` with a tick.
+Expected: a table listing every file in `migrations/` with a tick.
 
 ### 2. Set the Worker secrets
 
@@ -169,7 +169,7 @@ database. If a migration must be undone, restore with D1 Time Travel to a timest
 | --- | --- | --- |
 | Rate limits | `ratelimits` in `wrangler.jsonc` | `npm run cf-typegen && npm run deploy` |
 | Cron schedule | `triggers.crons` in `wrangler.jsonc` | `npm run deploy` |
-| Minimum creation delay | `MIN_CREATE_DELAY_MS` in `wrangler.jsonc`; keep the client's `STEP_ENDS` in `src/pages/CreatePage.tsx` above it | `npm run deploy` |
+| Minimum creation delay | `minCreateDelayMs` in `shared/limits.ts`; the client reads it from the ticket response, so nothing else moves | `npm run deploy` |
 | Size and count limits | `shared/limits.ts` | `npm run deploy` (client and Worker update together) |
 | Expiry periods | `shared/limits.ts` | `npm run deploy`; existing rows keep their stored `expires_at` |
 
@@ -194,7 +194,7 @@ A minimal GitHub Actions job:
 
 ```yaml
 name: deploy
-on: { push: { branches: [master] } }
+on: { push: { branches: [main] } }
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -203,6 +203,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: cp .dev.vars.example .dev.vars   # test keys for the local Worker the browser tests use
+      - run: npm run test:e2e
       - run: npm run db:migrate:remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -226,24 +230,23 @@ CI.
 | `no such table: events` in production | migrations not applied remotely | `npm run db:migrate:remote` |
 | Every poll creation fails with `captcha_failed` | widget hostname list does not include this host, or secret does not match site key | fix widget hostnames; re-put the secret |
 | Turnstile widget shows a configuration error | `VITE_TURNSTILE_SITE_KEY` empty in `.env.production` at build time | set it and redeploy |
-| Creation fails with `ticket_too_early` | client step timings shorter than `MIN_CREATE_DELAY_MS` | keep `STEP_ENDS` last value above the var |
+| A creation fails with `ticket_invalid` once in a while | the client's address changed between asking for the ticket and creating, say a phone moving from Wi-Fi to mobile data | expected: tickets are bound to the client address, and trying again works |
 | `429` while testing | you hit the per-IP limits | wait a minute, or raise limits in `wrangler.jsonc` |
 | `/e/:id` returns 404 HTML in production | `not_found_handling` missing from assets config | restore it and redeploy |
 | Styles or fonts blocked in the browser console | CSP changed without updating `vite.config.ts` | add the origin to the policy |
 | Cron never runs | trigger removed from config, or Worker not deployed since adding it | check Settings → Triggers; redeploy |
 | Type errors after editing `wrangler.jsonc` | stale `worker-configuration.d.ts` | `npm run cf-typegen` |
 
-## Smoke test after changes to the API
+## Tests to run before a deploy
 
-The API was verified with a script that exercises every endpoint against `npm run dev`: ticket timing,
-replay protection, ownership rules, suggestions, admin actions, expiry recalculation, rate limiting, and
-the cron handler. The sequence is a good template for an automated test suite:
+```sh
+npm test            # unit tests under Node, then the whole Worker inside workerd with a local D1
+npm run test:e2e    # browser journeys with Playwright; starts `npm run dev` if nothing is on :5173
+```
 
-1. `POST /api/tickets`, then `POST /api/events` immediately → expect `ticket_too_early`.
-2. Wait 5.2 s, create → `201`. Replay the same ticket → `409 ticket_used`.
-3. `GET` as anonymous and with `X-Admin-Token`; check `viewer.isAdmin` and that no hashes are present.
-4. Add two participants; duplicate nickname → `409`; vote for an unknown option → `400`.
-5. Edit without token → `403`; with own token → `204`; as admin → `204`.
-6. Suggest a date → `201` with `suggestedBy`; duplicate → `409`; check `expiresAt` moved.
-7. Delete the date as admin → `204`; check `expiresAt` restored. Disable suggestions → suggesting → `403`.
-8. Delete participants and the event; `GET` → `404`. Invoke the scheduled handler → `200`.
+The Worker tests cover every endpoint: ticket age and binding, replay protection, Turnstile hostname and
+action checks (siteverify is stubbed, so no network), ownership rules, nickname and date uniqueness
+including the concurrent case, caps, expiry recalculation, rate limiting by client and by IPv6 /64, the
+body limit, response headers, and the purge. The browser tests create and answer polls with the Turnstile
+test keys, so they do need network access to `challenges.cloudflare.com`. Run
+`npx playwright install chromium` once per machine.

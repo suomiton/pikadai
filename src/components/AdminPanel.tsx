@@ -44,13 +44,14 @@ export function AdminPanel({ event, adminToken, onChanged }: Props) {
 
   // The form unmounts when it closes, so focus goes back to the button that opened it; on a
   // validation error, focus lands on the first invalid field once its message is in the DOM.
+  // While a request is in flight the buttons are disabled and cannot take focus, so wait for it.
   useEffect(() => {
     const target = pendingFocus.current;
-    if (!target) return;
+    if (!target || busy) return;
     pendingFocus.current = null;
     if (target === 'opener') editButtonRef.current?.focus();
     else fieldRefs[target].current?.focus();
-  }, [open, fieldErrors]);
+  }, [open, fieldErrors, busy]);
 
   function close() {
     pendingFocus.current = 'opener';

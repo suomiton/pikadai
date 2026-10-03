@@ -8,3 +8,8 @@ dist
 .env.*.local
 *.log
 .DS_Store
+
+# test output
+test-results
+playwright-report
+blob-report
