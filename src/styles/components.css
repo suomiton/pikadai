@@ -25,8 +25,15 @@
 }
 
 /* Event header */
-.event-head h1 {
+.event-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
   margin-bottom: 0.5rem;
+}
+.event-title-row .tag {
+  margin-left: 0;
 }
 .event-description {
   white-space: pre-wrap;
@@ -370,8 +377,11 @@ textarea.input {
   position: relative;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  margin: -0.25rem;
-  padding: 0.25rem;
+  /* Room for focus rings on the top, right and bottom. None on the left: the sticky nickname column
+     anchors inside the padding, so a left strip would let scrolled cells show beside it. The nickname
+     cells' own padding keeps their focus rings clear of that edge. */
+  margin: -0.25rem -0.25rem -0.25rem 0;
+  padding: 0.25rem 0.25rem 0.25rem 0;
 }
 .vote-table {
   border-collapse: separate;
