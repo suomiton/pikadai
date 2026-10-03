@@ -9,7 +9,7 @@ interface Props {
 }
 
 /**
- * Shown where a credential is handed to the browser (the admin link, a first answer) when storage
+ * Shown where a credential is handed to the browser (the admin link, joining a poll) when storage
  * is blocked. The poll still works in this tab, but nothing will be remembered after it closes.
  */
 export function StorageNotice({ consequence }: Props) {
