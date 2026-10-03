@@ -116,7 +116,7 @@ for (const mine of [true, false]) {
   }) => {
     const { poll, deletions } = await openPoll(page, { mine });
     await page.getByRole('button', { name: mine ? 'Edit your answers' : 'Edit Ada' }).click();
-    await page.getByLabel('Nickname').fill('Unsaved draft');
+    await page.getByLabel('Nickname', { exact: true }).fill('Unsaved draft');
     const opener = page.getByRole('button', { name: 'Remove', exact: true });
     await opener.click();
 
@@ -124,12 +124,12 @@ for (const mine of [true, false]) {
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
     await expect(dialog).toHaveAccessibleDescription(
       mine
-        ? 'Your answers will be removed from this poll. This cannot be undone.'
-        : 'Ada and all their answers will be removed from this poll. This cannot be undone.',
+        ? 'Your answers and comments will be removed from this poll. This cannot be undone.'
+        : 'Ada and all their answers and comments will be removed from this poll. This cannot be undone.',
     );
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(opener).toBeFocused();
-    await expect(page.getByLabel('Nickname')).toHaveValue('Unsaved draft');
+    await expect(page.getByLabel('Nickname', { exact: true })).toHaveValue('Unsaved draft');
     expect(deletions()).toBe(0);
 
     await opener.click();

@@ -34,7 +34,9 @@ export function Comments() {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
+    // scrollHeight leaves the border out, and the box is sized border-box.
+    const border = el.offsetHeight - el.clientHeight;
+    el.style.height = `${el.scrollHeight + border}px`;
   }, [body, canComment]);
 
   // The form unmounts once the comment is posted; focus moves to the note that took its place.

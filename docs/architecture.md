@@ -1,7 +1,7 @@
 # Architecture
 
-Pikadai is an anonymous date-poll service. Someone creates a poll, shares one link, and people answer with
-a nickname. There are no accounts, no email, no cookies, and polls delete themselves after they expire.
+Pikadai is an anonymous date-poll service. Someone creates a poll, shares one link, and people answer and
+comment with a nickname. There are no accounts, no email, no cookies, and polls delete themselves after they expire.
 
 This document explains how the system is put together and why. For the pieces it refers to, see:
 
@@ -28,7 +28,7 @@ This document explains how the system is put together and why. For the pieces it
                            ├── Static Assets ─── React SPA + _headers      ◀ every path except /api/*
                            │
                            └── Worker (Hono) ─── /api/*
-                                 ├── D1 (SQLite)                 polls, dates, answers
+                                 ├── D1 (SQLite)                 polls, dates, answers, comments
                                  ├── Rate-limit bindings         in-memory, per IP
                                  ├── Turnstile siteverify        outbound HTTPS to Cloudflare
                                  └── Cron trigger                nightly purge of expired polls
@@ -62,18 +62,18 @@ JSON. Database access is isolated in `worker/db/queries.ts` so route handlers ne
 through the `@shared/*` path alias. Changing a limit here changes the form, the API, and the error messages
 at once.
 
-**Database**. Cloudflare D1, which is SQLite. Four tables. Described in [database.md](database.md).
+**Database**. Cloudflare D1, which is SQLite. Five tables. Described in [database.md](database.md).
 
 ## Trust model and identity
 
 There are no users, only three kinds of capability tokens. None is stored in plaintext; the database holds
 SHA-256 digests, and comparisons use `crypto.subtle.timingSafeEqual`.
 
-| Token       | Bits | Who holds it         | Where it travels                                                                 | What it allows                                |
-| ----------- | ---- | -------------------- | -------------------------------------------------------------------------------- | --------------------------------------------- |
-| Poll id     | 128  | anyone with the link | URL path `/e/:id`                                                                | read the poll, add an answer, suggest a date  |
-| Admin token | 256  | the creator          | URL fragment on first visit, then `localStorage`; header `Authorization: Bearer` | edit or delete the poll, any answer, any date |
-| Edit token  | 256  | each participant     | `localStorage`; header `Authorization: Bearer` plus `X-Participant-Id`           | edit or remove their own answer               |
+| Token       | Bits | Who holds it         | Where it travels                                                                 | What it allows                                 |
+| ----------- | ---- | -------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Poll id     | 128  | anyone with the link | URL path `/e/:id`                                                                | read the poll, add an answer, suggest a date   |
+| Admin token | 256  | the creator          | URL fragment on first visit, then `localStorage`; header `Authorization: Bearer` | edit or delete the poll, any answer, any date  |
+| Edit token  | 256  | each participant     | `localStorage`; header `Authorization: Bearer` plus `X-Participant-Id`           | edit or remove their own answer, post comments |
 
 **Why the fragment.** The admin link is `/e/:id#admin=TOKEN`. Browsers never send the fragment to the
 server, so the token does not appear in edge logs or referrers. On first load the page copies it into
@@ -133,19 +133,39 @@ obtained on one network is rejected from another.
 Checks run cheapest first: schema, then the local ticket check, then Turnstile, then the database write. A
 rejected ticket therefore never costs the user a solved challenge.
 
-### Answering a poll
+### Joining and answering a poll
 
-1. `GET /api/events/:id` returns the full view: options, participants, votes, and `viewer.isAdmin`.
-2. The user picks a nickname and taps cells; the Turnstile widget produces a token.
-3. `POST /api/events/:id/participants` checks the participant cap, nickname uniqueness (case-insensitive
-   within the poll) and that every vote refers to one of the poll's dates, then verifies Turnstile and
-   inserts the row and its votes atomically. A unique index on `(event_id, nickname COLLATE NOCASE)` backs
-   the nickname check, so two simultaneous answers with the same name cannot both get in.
-4. The response `{ id, editToken }` is stored in `localStorage` under the poll id. Later edits send both
-   as headers to `PUT /api/events/:id/participants/:participantId`.
+The nickname comes before the dates. A nickname is the one identity a person has in a poll, and both the
+availability answers and the comments are posted under it, so it is taken once, in a step of its own.
+
+1. `GET /api/events/:id` returns the full view: options, participants, votes, comments, and `viewer.isAdmin`.
+2. A visitor without an identity for this poll sees the nickname form above the table (`JoinForm`). They
+   type a nickname; the Turnstile widget produces a token.
+3. `POST /api/events/:id/participants` with an empty vote set checks the participant cap and nickname
+   uniqueness (case-insensitive within the poll), then verifies Turnstile and inserts the row. A unique
+   index on `(event_id, nickname COLLATE NOCASE)` backs the nickname check, so two simultaneous joins with
+   the same name cannot both get in.
+4. The response `{ id, editToken }` is stored in `localStorage` under the poll id, and the new row opens
+   for editing with focus on its first date cell.
+5. Every save of answers, now and later, sends both as headers to
+   `PUT /api/events/:id/participants/:participantId`, which also checks that every vote refers to one of the
+   poll's dates.
 
 A vote is one of `yes`, `maybe`, `no`. A missing vote means "no answer" and is shown as `·`. Each save
 replaces the participant's whole vote set, which keeps the client logic simple and avoids partial updates.
+A participant who joined only to comment shows as a row of `·`.
+
+### Commenting
+
+Anyone with the link reads the comments; posting one needs the participant token, so the organiser
+comments by joining like everyone else. `POST /api/events/:id/comments` carries the edit token and
+`X-Participant-Id`, and the Worker refuses anything else with `not_participant`. The text is trimmed and
+capped at 512 characters, a poll holds at most 200 comments, and a participant may post one comment every
+10 seconds. That last rule is decided by the insert statement itself (`INSERT … SELECT … WHERE NOT EXISTS`
+a newer comment by the same participant), so simultaneous posts cannot slip through; a refused post is
+`429 comment_too_soon`. The client additionally hides the comment form after one post until the page is
+reloaded. Comments show the participant's current nickname, cannot be edited or deleted, and go when
+their participant goes: leaving the poll or being removed by the organiser takes the comments along.
 
 ### Suggesting a date
 
@@ -158,22 +178,23 @@ poll's expiry.
 
 `expires_at` is midnight UTC after the last date option plus 30 days, or creation plus 90 days when a poll
 has no dates. Reads of an expired poll return `410 Gone` even before the purge runs. A cron trigger fires
-daily at 03:17 UTC and deletes expired events; foreign keys cascade to options, participants, and votes.
+daily at 03:17 UTC and deletes expired events; foreign keys cascade to options, participants, votes, and comments.
 Admins can delete a poll at any time with the same cascade.
 
 ## Abuse controls
 
 The controls are layered so no single one has to be perfect.
 
-| Control                                                                                                                               | Stops                                                                  | Where                                                                                  |
-| ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Turnstile on creation and first answer; the token must have been solved on this hostname for the matching `create` or `answer` action | bulk scripted creation and vote stuffing, tokens solved elsewhere      | `worker/lib/turnstile.ts`, `src/components/TurnstileField.tsx`                         |
-| Per-client rate limits (5 creates, 40 writes, 120 reads per minute; IPv6 keyed by /64)                                                | floods from one source                                                 | `worker/lib/ratelimit.ts`, `wrangler.jsonc`                                            |
-| Creation tickets: 5 s minimum age, single use, bound to the requesting client                                                         | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts`                                                                |
-| Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char nickname, 40 dates, 100 participants                   | oversized requests, storage abuse and spam text                        | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
-| Unique nickname per poll                                                                                                              | impersonation within a poll                                            | unique index from `migrations/0002`, pre-check in the `participants` route             |
-| Vote set replaced per save, unknown option ids rejected                                                                               | orphan or forged votes                                                 | `participants` route                                                                   |
-| Expiry plus nightly purge                                                                                                             | indefinite hosting of junk                                             | `worker/index.ts` `scheduled` handler                                                  |
+| Control                                                                                                                                             | Stops                                                                  | Where                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Turnstile on creation and first answer; the token must have been solved on this hostname for the matching `create` or `answer` action               | bulk scripted creation and vote stuffing, tokens solved elsewhere      | `worker/lib/turnstile.ts`, `src/components/TurnstileField.tsx`                         |
+| Per-client rate limits (5 creates, 40 writes, 120 reads per minute; IPv6 keyed by /64)                                                              | floods from one source                                                 | `worker/lib/ratelimit.ts`, `wrangler.jsonc`                                            |
+| Creation tickets: 5 s minimum age, single use, bound to the requesting client                                                                       | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts`                                                                |
+| Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char nickname, 512-char comment, 40 dates, 100 participants, 200 comments | oversized requests, storage abuse and spam text                        | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
+| Comments need the participant token; one per 10 s per participant, decided by the insert statement                                                  | anonymous or scripted comment floods                                   | `comments` route, `insertComment` in `worker/db/queries.ts`                            |
+| Unique nickname per poll                                                                                                                            | impersonation within a poll                                            | unique index from `migrations/0002`, pre-check in the `participants` route             |
+| Vote set replaced per save, unknown option ids rejected                                                                                             | orphan or forged votes                                                 | `participants` route                                                                   |
+| Expiry plus nightly purge                                                                                                                           | indefinite hosting of junk                                             | `worker/index.ts` `scheduled` handler                                                  |
 
 Two limits of this layering are accepted on purpose. Tickets do not lower throughput below what the rate
 limiter allows: a patient bot that solves Turnstile, waits five seconds and creates five polls a minute gets
@@ -222,6 +243,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | POST   | `/api/events/:id/participants`                | Turnstile                                     | Add an answer → `{ id, editToken }`              |
 | PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Replace nickname and votes                       |
 | DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
+| POST   | `/api/events/:id/comments`                    | participant token + `X-Participant-Id`        | Post a comment → `Comment`                       |
 
 Error codes the client maps to messages (`src/lib/errors.ts`):
 
@@ -229,7 +251,7 @@ Error codes the client maps to messages (`src/lib/errors.ts`):
 `ticket_invalid`, `ticket_too_early`,
 `ticket_expired`, `ticket_used`, `rate_limited`, `not_found`, `expired`, `admin_required`,
 `suggestions_disabled`, `too_many_options`, `date_exists`, `event_full`, `nickname_taken`,
-`unknown_option`, `not_owner`, `internal`.
+`unknown_option`, `not_owner`, `not_participant`, `too_many_comments`, `comment_too_soon`, `internal`.
 
 ## Key decisions and trade-offs
 
@@ -266,7 +288,7 @@ Revisit if a poll view ever grows beyond a few kilobytes.
 
 ## Non-goals and future work
 
-Not planned: accounts, email notifications, comments, or integrations with calendars. Reasonable next
+Not planned: accounts, email notifications, editing or deleting comments, or integrations with calendars. Reasonable next
 steps: time slots per date, a "hide results until I answer" option, and exporting the chosen date as an
 `.ics` file. The test suite is described in [project-structure.md](project-structure.md#conventions) and
 [deployment.md](deployment.md#tests-to-run-before-a-deploy).
