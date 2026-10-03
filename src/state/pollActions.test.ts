@@ -158,3 +158,43 @@ describe('setIdentity and forgetPoll', () => {
     expect(h.state()).toEqual({ poll: null });
   });
 });
+
+describe('openPoll under real-world timing', () => {
+  it('keeps the admin token when the opening effect runs twice, as StrictMode does in development', async () => {
+    const h = harness('#admin=tok-from-hash');
+    h.getEvent.mockResolvedValue(event({ viewer: { isAdmin: true } }));
+    // The first run strips the hash; the second finds nothing there and must fall back to storage.
+    await h.actions.openPoll('ev1');
+    await h.actions.openPoll('ev1');
+    const opens = h.dispatched.filter((a) => a.type === 'poll/open');
+    expect(opens).toHaveLength(2);
+    expect(opens.map((a) => a.type === 'poll/open' && a.adminToken)).toEqual(['tok-from-hash', 'tok-from-hash']);
+    expect(h.state().poll?.adminToken).toBe('tok-from-hash');
+  });
+
+  it('ignores a late response for a poll the user has left and leaves that poll’s stored identity alone', async () => {
+    const h = harness();
+    const meA: ParticipantIdentity = { id: 'pa', token: 'tok-a' };
+    const meB: ParticipantIdentity = { id: 'pb', token: 'tok-b' };
+    h.storage.setParticipant('A', meA);
+    h.storage.setParticipant('B', meB);
+
+    let resolveA!: (view: EventView) => void;
+    h.getEvent.mockImplementationOnce(() => new Promise<EventView>((resolve) => (resolveA = resolve)));
+    h.getEvent.mockResolvedValueOnce(
+      event({ id: 'B', participants: [{ id: 'pb', nickname: 'Bea', votes: {}, createdAt: 0 }] }),
+    );
+
+    const openA = h.actions.openPoll('A');
+    await h.actions.openPoll('B');
+    // A's event does not list B's participant; without the id guard this would clear B's identity.
+    resolveA(event({ id: 'A', participants: [] }));
+    await openA;
+
+    expect(h.state().poll?.id).toBe('B');
+    expect(h.state().poll?.event?.id).toBe('B');
+    expect(h.state().poll?.me).toEqual(meB);
+    expect(h.storage.getParticipant('A')).toEqual(meA);
+    expect(h.storage.getParticipant('B')).toEqual(meB);
+  });
+});

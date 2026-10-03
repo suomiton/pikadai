@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
 import type { EventView } from '@shared/types';
 import { api } from '../lib/api';
 import { storage, type ParticipantIdentity } from '../lib/storage';
@@ -17,15 +17,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialAppState);
 
   // The actions read the latest state through this ref instead of closing over it, so they are
-  // created once and never go stale. The ref is updated after each commit, before any handler runs.
+  // created once and never go stale. A layout effect updates the ref synchronously in the commit,
+  // before any child's passive effect or event handler can call an action.
   const stateRef = useRef(state);
-  useEffect(() => {
+  useLayoutEffect(() => {
     stateRef.current = state;
   }, [state]);
 
   const actions = useMemo(
     () =>
-      // getState is only ever called from an action, after the effect above has run; never during render.
+      // getState is only ever called from an action, after the layout effect above has run; never during render.
       // eslint-disable-next-line react-hooks/refs
       createPollActions({
         api,
