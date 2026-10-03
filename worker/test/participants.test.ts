@@ -8,11 +8,13 @@ import {
   asParticipant,
   bearer,
   client,
+  countRows,
   createPoll,
   forbidOutboundFetch,
   getView,
   siteverifyOk,
   stubSiteverify,
+  stubSiteverifyDown,
 } from './helpers';
 
 describe('POST /api/events/:id/participants', () => {
@@ -49,6 +51,19 @@ describe('POST /api/events/:id/participants', () => {
       turnstileToken: DUMMY_TOKEN,
     });
     expect(wrongHost.status).toBe(403);
+  });
+
+  it('answers 503 when siteverify is down, so the client can retry instead of being refused', async () => {
+    const poll = await createPoll();
+    stubSiteverifyDown();
+    const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      nickname: 'Ada',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ code: 'verification_unavailable' });
+    expect(await countRows('participants', poll.id)).toBe(0);
   });
 
   it('rejects votes for dates outside the poll before contacting Turnstile', async () => {

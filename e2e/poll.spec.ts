@@ -1,4 +1,5 @@
-import { createPollViaApi, expect, futureIso, test } from './fixtures';
+import type { EventView } from '../shared/types';
+import { createPollViaApi, DUMMY_TURNSTILE_TOKEN, expect, futureIso, test } from './fixtures';
 import { answerDate, pickDate, waitForTurnstile } from './helpers';
 
 test.describe('creating a poll', () => {
@@ -171,6 +172,28 @@ test.describe('organising a poll', () => {
     await expect(page.getByText('organiser view')).toBeVisible();
   });
 
+  test('the organiser keeps access when the browser blocks storage', async ({ page }) => {
+    // Firefox with site data blocked and some private modes throw on every localStorage access.
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        get() {
+          throw new DOMException('Storage is blocked', 'SecurityError');
+        },
+      });
+    });
+    await page.goto('/');
+    await page.getByLabel('What are you planning?').fill('No storage');
+    await pickDate(page, futureIso(20));
+    const create = page.getByRole('button', { name: 'Create poll' });
+    await waitForTurnstile(create);
+    await create.click();
+
+    await expect(page).toHaveURL(/\/e\/[A-Za-z0-9_-]{22}$/, { timeout: 20_000 });
+    await expect(page.getByText('organiser view')).toBeVisible();
+    await expect(page.getByLabel('Admin link')).toHaveValue(/#admin=[A-Za-z0-9_-]{43}$/);
+    await expect(page.getByRole('note').filter({ hasText: 'not saving site data' })).toBeVisible();
+  });
+
   test('a visitor without the admin link gets no organiser controls', async ({ page, request, clientIp }) => {
     const poll = await createPollViaApi(request, clientIp);
     await page.goto(poll.participantUrl);
@@ -228,6 +251,90 @@ test.describe('organising a poll', () => {
 
     await page.goto(poll.adminUrl);
     await expect(page.getByRole('button', { name: 'Add a date' })).toBeVisible();
+  });
+});
+
+test.describe('when the poll changes underneath', () => {
+  test('removing a date under an open answer keeps the rest of the draft saveable', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    const headers = { 'CF-Connecting-IP': clientIp };
+    const view = (await (await request.get(`/api/events/${poll.id}`, { headers })).json()) as EventView;
+    const [first, second] = view.options;
+    const answered = await request.post(`/api/events/${poll.id}/participants`, {
+      headers,
+      data: {
+        nickname: 'Ada',
+        votes: { [first.id]: 'yes', [second.id]: 'yes' },
+        turnstileToken: DUMMY_TURNSTILE_TOKEN,
+      },
+    });
+    expect(answered.status()).toBe(201);
+
+    await page.goto(poll.adminUrl);
+    await page.getByRole('button', { name: 'Edit Ada' }).click();
+    await page.getByLabel('Nickname').fill('Ada B.');
+
+    // The organiser removes the first date while the answer is still open for editing.
+    await page
+      .getByRole('button', { name: /^Remove .+/ })
+      .first()
+      .click();
+    await page
+      .getByRole('alertdialog', { name: 'Remove this date?' })
+      .getByRole('button', { name: 'Remove date' })
+      .click();
+    await expect(page.locator('thead th.option-col')).toHaveCount(2);
+    await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
+    await expect(page.getByLabel('Nickname')).toHaveValue('Ada B.');
+
+    await page.getByRole('button', { name: 'Save' }).click();
+    const row = page.getByRole('row', { name: /Ada B\./ });
+    await expect(row).toBeVisible();
+    await expect(row.getByRole('img', { name: 'Yes' })).toHaveCount(1);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+
+  test('a failed refresh keeps the poll and an open draft on screen, and retry recovers', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    await page.goto(poll.adminUrl);
+    await page.getByRole('button', { name: 'Edit details' }).click();
+    await page.getByLabel('Title').fill('Draft title');
+
+    // The next re-fetch of the poll fails; the mutation before it succeeds.
+    let failures = 0;
+    await page.route(
+      (url) => url.pathname === `/api/events/${poll.id}`,
+      async (route) => {
+        if (route.request().method() === 'GET' && failures++ === 0) {
+          await route.fulfill({ status: 500, json: { error: 'Something broke', code: 'internal' } });
+        } else {
+          await route.fallback();
+        }
+      },
+    );
+    await page.getByRole('button', { name: 'Add a date' }).click();
+    await pickDate(page, futureIso(30));
+    await page.getByRole('button', { name: /^Add (?!your availability)/ }).click();
+
+    const alert = page.getByRole('alert').filter({ hasText: 'Could not refresh the poll.' });
+    await expect(alert).toBeVisible();
+    await expect(alert).toContainText('Something went wrong on our side.');
+    await expect(page.getByRole('heading', { level: 1, name: 'Board game night' })).toBeVisible();
+    await expect(page.getByLabel('Title')).toHaveValue('Draft title');
+    await expect(page.locator('thead th.option-col')).toHaveCount(3);
+
+    await alert.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.locator('thead th.option-col')).toHaveCount(4);
+    await expect(page.getByLabel('Title')).toHaveValue('Draft title');
   });
 });
 

@@ -1,4 +1,4 @@
-import { useReducer } from 'react';
+import { useCallback, useReducer } from 'react';
 import type { Answer, EventOption, Participant } from '@shared/types';
 import { cycle } from '../lib/votes';
 import { initialVoteEditor, voteEditorReducer, type VoteEditorState } from '../state/voteEditor';
@@ -13,13 +13,17 @@ export interface VoteEditor {
   toggle(option: EventOption): Answer | undefined;
   setNickname(value: string): void;
   setTurnstileToken(token: string | null): void;
+  /** Drop draft votes for dates no longer in the poll. Stable, so an effect can depend on it. */
+  syncOptions(optionIds: readonly string[]): void;
 }
 
 /** The editing state machine of the availability table, with its transitions bound to dispatch. */
 export function useVoteEditor(): VoteEditor {
   const [state, dispatch] = useReducer(voteEditorReducer, initialVoteEditor);
+  const syncOptions = useCallback((optionIds: readonly string[]) => dispatch({ type: 'options', optionIds }), []);
   return {
     state,
+    syncOptions,
     startNew: () => dispatch({ type: 'startNew' }),
     startEdit: (participant) => dispatch({ type: 'startEdit', participant }),
     close: () => dispatch({ type: 'close' }),

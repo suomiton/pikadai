@@ -1,5 +1,7 @@
+import { LIMITS } from '@shared/limits';
 import type { Answer } from '@shared/types';
-import { computeExpiresAt } from '../lib/expiry';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface EventRow {
   id: string;
@@ -130,26 +132,38 @@ function optionInsert(db: D1Database, option: OptionRow): D1PreparedStatement {
     .bind(option.id, option.event_id, option.date, option.suggested_by, option.created_at);
 }
 
+/**
+ * Recompute expires_at from the option rows as this transaction sees them. Same rule as
+ * `computeExpiresAt` in worker/lib/expiry.ts, which poll creation uses; it is repeated in SQL here so
+ * a batch can apply it to the rows it has just changed. A value computed in JavaScript from an earlier
+ * read could be written after a concurrent request's and pull the expiry back (review finding 1).
+ */
+function expiryUpdate(db: D1Database, eventId: string, now: number): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE events SET
+         expires_at = COALESCE(
+           (SELECT unixepoch(MAX(date), '+1 day') * 1000 + ? FROM options WHERE event_id = events.id),
+           created_at + ?
+         ),
+         updated_at = ?
+       WHERE id = ?`,
+    )
+    .bind(LIMITS.ttlAfterLastDateDays * DAY_MS, LIMITS.ttlWithoutDatesDays * DAY_MS, now, eventId);
+}
+
+/** Add a date and move the expiry in one transaction. */
 export async function insertOption(db: D1Database, option: OptionRow): Promise<void> {
-  await optionInsert(db, option).run();
+  await db.batch([optionInsert(db, option), expiryUpdate(db, option.event_id, option.created_at)]);
 }
 
-export async function deleteOption(db: D1Database, eventId: string, optionId: string): Promise<boolean> {
-  const result = await db.prepare('DELETE FROM options WHERE id = ? AND event_id = ?').bind(optionId, eventId).run();
-  return (result.meta.changes ?? 0) > 0;
-}
-
-/** Recompute expires_at from the current set of option dates. */
-export async function refreshExpiry(db: D1Database, event: EventRow, now: number): Promise<void> {
-  const options = await getOptions(db, event.id);
-  const expiresAt = computeExpiresAt(
-    options.map((o) => o.date),
-    event.created_at,
-  );
-  await db
-    .prepare('UPDATE events SET expires_at = ?, updated_at = ? WHERE id = ?')
-    .bind(expiresAt, now, event.id)
-    .run();
+/** Remove a date and move the expiry in one transaction; false when the option was not in this poll. */
+export async function deleteOption(db: D1Database, eventId: string, optionId: string, now: number): Promise<boolean> {
+  const [removed] = await db.batch([
+    db.prepare('DELETE FROM options WHERE id = ? AND event_id = ?').bind(optionId, eventId),
+    expiryUpdate(db, eventId, now),
+  ]);
+  return (removed.meta.changes ?? 0) > 0;
 }
 
 export async function getParticipants(db: D1Database, eventId: string): Promise<ParticipantRow[]> {

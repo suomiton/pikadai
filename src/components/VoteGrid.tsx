@@ -4,7 +4,7 @@ import { LIMITS } from '@shared/limits';
 import type { EventOption, Participant } from '@shared/types';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useVoteEditor } from '../hooks/useVoteEditor';
-import { api } from '../lib/api';
+import { api, ApiRequestError } from '../lib/api';
 import { formatDateLong } from '../lib/dates';
 import { computeTallies, LABEL } from '../lib/votes';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
@@ -51,6 +51,13 @@ export function VoteGrid() {
   const canSuggest = isAdmin || event.allowSuggestions;
 
   const tallies = useMemo(() => computeTallies(event.options, event.participants), [event]);
+
+  // A date removed while an answer is open must leave the draft too, or Save would still send it.
+  const optionIds = useMemo(() => event.options.map((o) => o.id), [event.options]);
+  const { syncOptions } = editor;
+  useEffect(() => {
+    syncOptions(optionIds);
+  }, [optionIds, syncOptions]);
   const bestYes = Math.max(0, ...event.options.map((o) => tallies[o.id]?.yes ?? 0));
   const isBest = (optionId: string) => bestYes > 0 && tallies[optionId]?.yes === bestYes;
 
@@ -114,23 +121,30 @@ export function VoteGrid() {
 
     setStatus('Saving your answers.');
     const saved = await run(async () => {
-      if (editing.kind === 'new') {
-        const res = await api.addParticipant(event.id, {
-          nickname: name,
-          votes: draftVotes,
-          turnstileToken: turnstileToken!,
-        });
-        setIdentity({ id: res.id, token: res.editToken });
-      } else {
-        await api.updateParticipant(
-          event.id,
-          editing.participantId,
-          { nickname: name, votes: draftVotes },
-          { adminToken, participant: me },
-        );
+      try {
+        if (editing.kind === 'new') {
+          const res = await api.addParticipant(event.id, {
+            nickname: name,
+            votes: draftVotes,
+            turnstileToken: turnstileToken!,
+          });
+          setIdentity(event.id, { id: res.id, token: res.editToken });
+        } else {
+          await api.updateParticipant(
+            event.id,
+            editing.participantId,
+            { nickname: name, votes: draftVotes },
+            { adminToken, participant: me },
+          );
+        }
+      } catch (err) {
+        // A date was removed after this page last fetched the poll. Show the current columns, which
+        // also prunes the draft, and keep the editor open so the rest can be saved on the next try.
+        if (err instanceof ApiRequestError && err.code === 'unknown_option') void refresh(event.id);
+        throw err;
       }
       editor.close();
-      await refresh();
+      await refresh(event.id);
     });
     if (saved) {
       setStatus('Your answers were saved.');
@@ -148,9 +162,9 @@ export function VoteGrid() {
 
     const removed = await run(async () => {
       await api.deleteParticipant(event.id, p.id, { adminToken, participant: mine ? me : null });
-      if (mine) setIdentity(null);
+      if (mine) setIdentity(event.id, null);
       editor.close();
-      await refresh();
+      await refresh(event.id);
     });
     if (removed) {
       setStatus(mine ? 'Your answers were removed.' : `${p.nickname} was removed from the poll.`);
@@ -163,7 +177,7 @@ export function VoteGrid() {
 
     const removed = await run(async () => {
       await api.deleteOption(event.id, option.id, adminToken);
-      await refresh();
+      await refresh(event.id);
     });
     if (removed) {
       setStatus(`${formatDateLong(option.date)} was removed from the poll.`);

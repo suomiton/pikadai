@@ -17,6 +17,7 @@ import {
   insertEventRow,
   siteverifyOk,
   stubSiteverify,
+  stubSiteverifyDown,
 } from './helpers';
 
 describe('POST /api/events', () => {
@@ -115,6 +116,18 @@ describe('POST /api/events', () => {
     expect(res.body).toMatchObject({ code: 'captcha_failed' });
   });
 
+  it('answers 503 when siteverify is down, after the ticket has been accepted', async () => {
+    const c = client();
+    stubSiteverifyDown();
+    const res = await c.post('/api/events', {
+      ...draft(),
+      ticket: await agedTicket(c.ip),
+      turnstileToken: DUMMY_TOKEN,
+    });
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ code: 'verification_unavailable' });
+  });
+
   it("accepts Cloudflare's testing-key response, which names example.com and no action", async () => {
     const c = client();
     stubSiteverify({ success: true, hostname: 'example.com', metadata: { result_with_testing_key: true } });
@@ -126,7 +139,7 @@ describe('POST /api/events', () => {
     expect(res.status).toBe(201);
   });
 
-  it('treats a siteverify outage as a failed verification', async () => {
+  it('treats an unreachable siteverify as unavailable, not as a refused token', async () => {
     const c = client();
     forbidOutboundFetch(); // the stub throws, as a network failure would
     const res = await c.post('/api/events', {
@@ -134,8 +147,8 @@ describe('POST /api/events', () => {
       ticket: await agedTicket(c.ip),
       turnstileToken: DUMMY_TOKEN,
     });
-    expect(res.status).toBe(403);
-    expect(res.body).toMatchObject({ code: 'captcha_failed' });
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ code: 'verification_unavailable' });
   });
 
   it('validates the body field by field', async () => {

@@ -45,8 +45,11 @@ discoverable API host. Requests for `/api/*` always reach the Worker because of 
 poll being viewed, the viewer's tokens and the load status; `AppStateProvider` wraps the router and the page's
 sections read it through context hooks (`usePoll`, `usePollActions`) rather than props. The event page fetches a
 single `EventView` JSON document and re-fetches it after every mutation; there is no client-side cache or
-websocket. Reducers are pure and unit-tested; fetching and `localStorage` writes sit in `pollActions.ts` with
-injected dependencies. Forms are validated with the same zod schemas the Worker uses, so users get instant
+websocket. Fetches are numbered so a late response never overwrites a newer one; every action names the poll
+it is about, so a request that finishes after the user has moved to another poll stores its tokens under the
+right one; and a failed re-fetch keeps the loaded poll on screen with a retry instead of replacing it.
+Reducers are pure and unit-tested; fetching and `localStorage` writes sit in `pollActions.ts` with injected
+dependencies. Forms are validated with the same zod schemas the Worker uses, so users get instant
 feedback and the server still has the final say. Tokens are kept in `localStorage`; see
 [Trust model](#trust-model-and-identity).
 
@@ -75,8 +78,10 @@ SHA-256 digests, and comparisons use `crypto.subtle.timingSafeEqual`.
 **Why the fragment.** The admin link is `/e/:id#admin=TOKEN`. Browsers never send the fragment to the
 server, so the token does not appear in edge logs or referrers. On first load the page copies it into
 `localStorage` and rewrites the address bar without it, so a screenshot or a copied URL afterwards does
-not leak it. There is no recovery path if the admin link is lost; that is the price of having no accounts,
-and the UI says so next to the link.
+not leak it. Creation hands the new token to the poll page the same way, so the organiser view opens even
+when the browser blocks `localStorage`; the page then warns that the link will not be remembered. There is
+no recovery path if the admin link is lost; that is the price of having no accounts, and the UI says so
+next to the link.
 
 **Why `Authorization`.** A request carries at most one token, in the standard header: the admin token when
 the browser has one, otherwise the participant's edit token, since everything a participant may do the admin
@@ -220,7 +225,8 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 
 Error codes the client maps to messages (`src/lib/errors.ts`):
 
-`invalid_json`, `validation_failed`, `payload_too_large`, `captcha_failed`, `ticket_invalid`, `ticket_too_early`,
+`invalid_json`, `validation_failed`, `payload_too_large`, `captcha_failed`, `verification_unavailable`,
+`ticket_invalid`, `ticket_too_early`,
 `ticket_expired`, `ticket_used`, `rate_limited`, `not_found`, `expired`, `admin_required`,
 `suggestions_disabled`, `too_many_options`, `date_exists`, `event_full`, `nickname_taken`,
 `unknown_option`, `not_owner`, `internal`.

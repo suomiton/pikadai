@@ -70,9 +70,10 @@ type Fixtures = {
  * would. Only the local origin gets the header: third parties such as the Turnstile
  * challenge endpoint must see an ordinary browser request.
  */
-async function tagAsClient(context: BrowserContext, ip: string): Promise<void> {
-  await context.route(/^http:\/\/localhost:5173\//, (route) =>
-    route.continue({ headers: { ...route.request().headers(), 'cf-connecting-ip': ip } }),
+async function tagAsClient(context: BrowserContext, ip: string, origin: string): Promise<void> {
+  await context.route(
+    (url) => url.origin === origin,
+    (route) => route.continue({ headers: { ...route.request().headers(), 'cf-connecting-ip': ip } }),
   );
 }
 
@@ -80,13 +81,13 @@ export const test = base.extend<Fixtures>({
   clientIp: async ({}, use) => {
     await use(randomClientIp());
   },
-  context: async ({ context, clientIp }, use) => {
-    await tagAsClient(context, clientIp);
+  context: async ({ context, clientIp, baseURL }, use) => {
+    await tagAsClient(context, clientIp, new URL(baseURL!).origin);
     await use(context);
   },
-  otherPerson: async ({ browser }, use) => {
+  otherPerson: async ({ browser, baseURL }, use) => {
     const context = await browser.newContext();
-    await tagAsClient(context, randomClientIp());
+    await tagAsClient(context, randomClientIp(), new URL(baseURL!).origin);
     await use(context);
     await context.close();
   },

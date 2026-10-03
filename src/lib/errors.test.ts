@@ -8,6 +8,7 @@ const WORKER_CODES = [
   'validation_failed',
   'payload_too_large',
   'captcha_failed',
+  'verification_unavailable',
   'ticket_invalid',
   'ticket_too_early',
   'ticket_expired',

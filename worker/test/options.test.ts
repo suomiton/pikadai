@@ -60,6 +60,21 @@ describe('POST /api/events/:id/options', () => {
     expect(bad.body).toMatchObject({ code: 'validation_failed' });
   });
 
+  it('keeps the expiry right when two dates are added at the same time', async () => {
+    const poll = await createPoll();
+    const dates = [futureIso(60), futureIso(45)];
+    const results = await Promise.all(dates.map((date) => client().post(`/api/events/${poll.id}/options`, { date })));
+    expect(results.map((r) => r.status)).toEqual([201, 201]);
+    const view = await getView(poll.client, poll.id);
+    expect(view.options.map((o) => o.date)).toEqual([...poll.view.options.map((o) => o.date), ...dates].sort());
+    expect(view.expiresAt).toBe(
+      computeExpiresAt(
+        view.options.map((o) => o.date),
+        view.createdAt,
+      ),
+    );
+  });
+
   it('caps the number of dates', async () => {
     const dates = Array.from({ length: LIMITS.optionsMax }, (_, i) => futureIso(10 + i));
     const poll = await createPoll(client(), { dates });

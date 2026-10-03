@@ -102,6 +102,13 @@ export function stubSiteverify(...responses: Array<Record<string, unknown>>): Fe
   return fn;
 }
 
+/** Siteverify during an outage: every call answers with a server error. */
+export function stubSiteverifyDown(status = 502): FetchMock {
+  const fn: FetchMock = vi.fn(async () => new Response('bad gateway', { status }));
+  vi.stubGlobal('fetch', fn);
+  return fn;
+}
+
 /** For tests that must prove a request was rejected before Turnstile was contacted. */
 export function forbidOutboundFetch(): FetchMock {
   const fn: FetchMock = vi.fn(async (input) => {

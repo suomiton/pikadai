@@ -29,6 +29,21 @@ function write(key: string, value: string | null): void {
 }
 
 export const storage = {
+  /**
+   * Whether this browser keeps what is written here. False in some private modes and when site data
+   * is blocked; the poll still works in this tab, but nothing survives a reload, so the UI says so
+   * where a credential is handed out.
+   */
+  available: (): boolean => {
+    try {
+      localStorage.setItem(`${PREFIX}:probe`, '1');
+      localStorage.removeItem(`${PREFIX}:probe`);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   getAdminToken: (eventId: string): string | null => read(`${PREFIX}:admin:${eventId}`),
   setAdminToken: (eventId: string, token: string | null): void => write(`${PREFIX}:admin:${eventId}`, token),
 

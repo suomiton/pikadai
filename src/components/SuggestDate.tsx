@@ -51,7 +51,7 @@ export function SuggestDate() {
     const added = await run(async () => {
       await api.addOption(event.id, { date }, { adminToken, participant: me });
       close();
-      await refresh();
+      await refresh(event.id);
     });
     if (added) setStatus(`${formatDateLong(date)} was added to the poll.`);
   }

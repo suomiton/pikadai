@@ -31,9 +31,14 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  /** Lets the caller abort a request another one has superseded. */
+  signal?: AbortSignal;
 }
 
-async function request<T>(path: string, { method = 'GET', body, headers = {} }: RequestOptions = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  { method = 'GET', body, headers = {}, signal }: RequestOptions = {},
+): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: {
@@ -41,6 +46,7 @@ async function request<T>(path: string, { method = 'GET', body, headers = {} }: 
       ...headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   });
 
   if (!res.ok) {
@@ -88,8 +94,8 @@ export const api = {
   createEvent: (input: CreateEventInput) =>
     request<CreateEventResponse>('/api/events', { method: 'POST', body: input }),
 
-  getEvent: (id: string, adminToken: string | null) =>
-    request<EventView>(eventPath(id), { headers: authHeaders({ adminToken }) }),
+  getEvent: (id: string, adminToken: string | null, signal?: AbortSignal) =>
+    request<EventView>(eventPath(id), { headers: authHeaders({ adminToken }), signal }),
 
   updateEvent: (id: string, input: UpdateEventInput, adminToken: string) =>
     request<void>(eventPath(id), { method: 'PATCH', body: input, headers: authHeaders({ adminToken }) }),

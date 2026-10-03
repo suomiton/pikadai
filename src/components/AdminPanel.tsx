@@ -73,7 +73,7 @@ export function AdminPanel() {
       await api.updateEvent(event.id, parsed.data, adminToken);
       pendingFocus.current = 'opener';
       dispatch({ type: 'close' });
-      await refresh();
+      await refresh(event.id);
     });
     if (saved) setStatus('Details saved.');
   }
@@ -82,7 +82,7 @@ export function AdminPanel() {
     if (busy) return;
     await run(async () => {
       await api.deleteEvent(event.id, adminToken);
-      forgetPoll();
+      forgetPoll(event.id);
       navigate('/');
     });
   }
