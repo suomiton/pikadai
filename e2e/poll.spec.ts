@@ -294,6 +294,45 @@ test.describe('when the poll changes underneath', () => {
     await expect(row.getByRole('img', { name: 'Yes' })).toHaveCount(1);
     await expect(page.getByRole('alert')).toHaveCount(0);
   });
+
+  test('a failed refresh keeps the poll and an open draft on screen, and retry recovers', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    await page.goto(poll.adminUrl);
+    await page.getByRole('button', { name: 'Edit details' }).click();
+    await page.getByLabel('Title').fill('Draft title');
+
+    // The next re-fetch of the poll fails; the mutation before it succeeds.
+    let failures = 0;
+    await page.route(
+      (url) => url.pathname === `/api/events/${poll.id}`,
+      async (route) => {
+        if (route.request().method() === 'GET' && failures++ === 0) {
+          await route.fulfill({ status: 500, json: { error: 'Something broke', code: 'internal' } });
+        } else {
+          await route.fallback();
+        }
+      },
+    );
+    await page.getByRole('button', { name: 'Add a date' }).click();
+    await pickDate(page, futureIso(30));
+    await page.getByRole('button', { name: /^Add (?!your availability)/ }).click();
+
+    const alert = page.getByRole('alert').filter({ hasText: 'Could not refresh the poll.' });
+    await expect(alert).toBeVisible();
+    await expect(alert).toContainText('Something went wrong on our side.');
+    await expect(page.getByRole('heading', { level: 1, name: 'Board game night' })).toBeVisible();
+    await expect(page.getByLabel('Title')).toHaveValue('Draft title');
+    await expect(page.locator('thead th.option-col')).toHaveCount(3);
+
+    await alert.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.locator('thead th.option-col')).toHaveCount(4);
+    await expect(page.getByLabel('Title')).toHaveValue('Draft title');
+  });
 });
 
 test.describe('layout', () => {

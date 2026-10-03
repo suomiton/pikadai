@@ -225,6 +225,19 @@ textarea.input {
   font-weight: 300;
 }
 
+/* A re-fetch failed while the poll stays on screen: between the header and the table. */
+.refresh-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-color: var(--danger);
+}
+.refresh-error p {
+  margin: 0;
+}
+
 /* A warning that is not an error, such as blocked storage. */
 .notice {
   margin: 0;
