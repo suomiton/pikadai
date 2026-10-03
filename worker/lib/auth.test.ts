@@ -25,6 +25,7 @@ async function fixtures(): Promise<{ event: EventRow; participant: ParticipantRo
       event_id: 'ev1',
       nickname: 'Ada',
       edit_token_hash: await sha256Hex(EDIT_TOKEN),
+      is_organiser: 0,
       created_at: 0,
       updated_at: 0,
     },

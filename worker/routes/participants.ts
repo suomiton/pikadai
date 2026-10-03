@@ -53,6 +53,8 @@ participants.post(
   async (c) => {
     const event = await loadEvent(c.env.DB, c.req.param('id'));
     const body = parseBody(createParticipantSchema, await readJson(c));
+    // The organiser joins like anyone else; the admin token on the request marks their row.
+    const organiser = await isAdmin(bearerToken(c.req.header('Authorization')), event);
 
     // Database checks before Turnstile: a full poll or a taken nickname must not spend the token.
     if ((await countParticipants(c.env.DB, event.id)) >= LIMITS.participantsMax) {
@@ -80,6 +82,7 @@ participants.post(
           event_id: event.id,
           nickname: body.nickname,
           edit_token_hash: await sha256Hex(editToken),
+          is_organiser: organiser ? 1 : 0,
           created_at: now,
           updated_at: now,
         },

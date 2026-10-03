@@ -114,8 +114,13 @@ export const api = {
       headers: authHeaders({ adminToken }),
     }),
 
-  addParticipant: (id: string, input: CreateParticipantInput) =>
-    request<CreateParticipantResponse>(`${eventPath(id)}/participants`, { method: 'POST', body: input }),
+  /** The admin token, when this browser has one, marks the new row as the organiser's. */
+  addParticipant: (id: string, input: CreateParticipantInput, adminToken: string | null) =>
+    request<CreateParticipantResponse>(`${eventPath(id)}/participants`, {
+      method: 'POST',
+      body: input,
+      headers: authHeaders({ adminToken }),
+    }),
 
   updateParticipant: (id: string, participantId: string, input: UpdateParticipantInput, auth: Auth) =>
     request<void>(`${eventPath(id)}/participants/${encodeURIComponent(participantId)}`, {

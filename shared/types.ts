@@ -17,6 +17,8 @@ export interface Participant {
   nickname: string;
   votes: Record<string, Answer>;
   createdAt: number;
+  /** Joined with the admin token: the organiser's own row. Shown with a pill after the nickname. */
+  isOrganiser: boolean;
 }
 
 /** A comment, posted under a participant's nickname; the nickname follows the participant's current one. */
@@ -24,6 +26,8 @@ export interface Comment {
   id: string;
   participantId: string;
   nickname: string;
+  /** The author is the organiser's row; see `Participant.isOrganiser`. */
+  isOrganiser: boolean;
   body: string;
   createdAt: number;
 }

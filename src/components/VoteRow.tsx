@@ -13,13 +13,14 @@ interface Props {
   onEdit: (participant: Participant) => void;
 }
 
-/** A saved participant: nickname, read-only answer glyphs and the Edit button. */
+/** A saved participant: nickname with its tags, read-only answer glyphs and the Edit button. */
 export function VoteRow({ participant: p, options, isBest, isMine, canEdit, disabled, onEdit }: Props) {
   return (
     <tr className={isMine ? 'is-me' : undefined}>
       <th scope="row" className="name-col">
         <span className="participant-name">{p.nickname}</span>
         {isMine && <span className="tag">you</span>}
+        {p.isOrganiser && <span className="tag tag-accent">organiser</span>}
       </th>
       <VoteCells options={options} votes={p.votes} isBest={isBest} />
       <td className="actions-col">

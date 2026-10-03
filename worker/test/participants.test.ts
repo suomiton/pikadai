@@ -34,6 +34,33 @@ describe('POST /api/events/:id/participants', () => {
     });
   });
 
+  it('marks the row as the organiser when the join carries the admin token, and only then', async () => {
+    const poll = await createPoll();
+    stubSiteverify(siteverifyOk('answer'));
+    const asOrganiser = await poll.client.post<CreateParticipantResponse>(
+      `/api/events/${poll.id}/participants`,
+      { nickname: 'Host', votes: {}, turnstileToken: DUMMY_TOKEN },
+      bearer(poll.adminToken),
+    );
+    expect(asOrganiser.status).toBe(201);
+    const guest = await addParticipant(client(), poll.id, 'Guest');
+    stubSiteverify(siteverifyOk('answer'));
+    const wrongToken = await client().post<CreateParticipantResponse>(
+      `/api/events/${poll.id}/participants`,
+      { nickname: 'Pretender', votes: {}, turnstileToken: DUMMY_TOKEN },
+      bearer('not-the-admin-token'),
+    );
+    expect(wrongToken.status).toBe(201);
+
+    const view = await getView(poll.client, poll.id);
+    expect(view.participants.map((p) => [p.nickname, p.isOrganiser])).toEqual([
+      ['Host', true],
+      ['Guest', false],
+      ['Pretender', false],
+    ]);
+    expect(view.participants[1].id).toBe(guest.id);
+  });
+
   it('requires a token solved for the answer action on this hostname', async () => {
     const poll = await createPoll();
     stubSiteverify(siteverifyOk('create'));

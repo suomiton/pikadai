@@ -28,6 +28,8 @@ export interface ParticipantRow {
   event_id: string;
   nickname: string;
   edit_token_hash: string;
+  /** 1 when the join request carried the admin token. */
+  is_organiser: number;
   created_at: number;
   updated_at: number;
 }
@@ -46,9 +48,10 @@ export interface CommentRow {
   created_at: number;
 }
 
-/** A comment as the view reads it: joined to its participant for the current nickname. */
+/** A comment as the view reads it: joined to its participant for the current nickname and role. */
 export interface CommentWithAuthor extends CommentRow {
   nickname: string;
+  is_organiser: number;
 }
 
 export async function getEventRow(db: D1Database, id: string): Promise<EventRow | null> {
@@ -231,14 +234,15 @@ export async function insertParticipantWithVotes(
   const statements = [
     db
       .prepare(
-        `INSERT INTO participants (id, event_id, nickname, edit_token_hash, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO participants (id, event_id, nickname, edit_token_hash, is_organiser, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         participant.id,
         participant.event_id,
         participant.nickname,
         participant.edit_token_hash,
+        participant.is_organiser,
         participant.created_at,
         participant.updated_at,
       ),
@@ -294,7 +298,7 @@ export async function getVotesForEvent(db: D1Database, eventId: string): Promise
 export async function getCommentsForEvent(db: D1Database, eventId: string): Promise<CommentWithAuthor[]> {
   const { results } = await db
     .prepare(
-      `SELECT c.id, c.event_id, c.participant_id, c.body, c.created_at, p.nickname
+      `SELECT c.id, c.event_id, c.participant_id, c.body, c.created_at, p.nickname, p.is_organiser
        FROM comments c
        JOIN participants p ON p.id = c.participant_id
        WHERE c.event_id = ?

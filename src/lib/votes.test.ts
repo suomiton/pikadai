@@ -8,6 +8,7 @@ const participant = (id: string, votes: Participant['votes']): Participant => ({
   nickname: id,
   votes,
   createdAt: 0,
+  isOrganiser: false,
 });
 
 describe('cycle', () => {

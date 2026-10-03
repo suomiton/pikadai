@@ -110,14 +110,15 @@ Constraints: `UNIQUE (event_id, date)`, so a date appears at most once per poll.
 
 One row per answer in a poll.
 
-| Column            | Type                                  | Notes                                                                                        |
-| ----------------- | ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                        |
-| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                              |
-| `nickname`        | TEXT                                  | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`) |
-| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                      |
-| `created_at`      | INTEGER                               |                                                                                              |
-| `updated_at`      | INTEGER                               |                                                                                              |
+| Column            | Type                                  | Notes                                                                                          |
+| ----------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                          |
+| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                                |
+| `nickname`        | TEXT                                  | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`)   |
+| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                        |
+| `is_organiser`    | INTEGER                               | 1 when the join request carried the admin token (migration 0004); shown as an "organiser" pill |
+| `created_at`      | INTEGER                               |                                                                                                |
+| `updated_at`      | INTEGER                               |                                                                                                |
 
 Indexes: `idx_participants_event_id (event_id)` and the unique `idx_participants_event_nickname (event_id,
 nickname COLLATE NOCASE)` from migration 0002. SQLite accepts a collation per indexed column, so the index

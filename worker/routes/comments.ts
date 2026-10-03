@@ -49,6 +49,7 @@ comments.post(
         id: comment.id,
         participantId: participant.id,
         nickname: participant.nickname,
+        isOrganiser: participant.is_organiser === 1,
         body: comment.body,
         createdAt: now,
       } satisfies Comment,

@@ -281,6 +281,46 @@ test.describe('organising a poll', () => {
     await expect(page.getByRole('note').filter({ hasText: 'not saving site data' })).toHaveCount(2);
   });
 
+  test('the organiser joins under a nickname and is marked on their row and their comments', async ({
+    page,
+    otherPerson,
+    request,
+    clientIp,
+  }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    await page.goto(poll.adminUrl);
+    await page.getByLabel('Your nickname').fill('Host');
+    const join = page.getByRole('button', { name: 'Join' });
+    await waitForTurnstile(join);
+    await join.click();
+    await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Save' }).click();
+    const row = page.getByRole('row', { name: /Host/ });
+    await expect(row.getByText('you')).toBeVisible();
+    await expect(row.getByText('organiser', { exact: true })).toBeVisible();
+
+    await page.getByLabel('Add a comment').fill('Welcome, everyone.');
+    await page.getByRole('button', { name: 'Send' }).click();
+    const comment = page.getByRole('listitem').filter({ hasText: 'Welcome, everyone.' });
+    await expect(comment.getByText('organiser', { exact: true })).toBeVisible();
+
+    // Everyone sees the pill on the organiser's row and comment; an ordinary participant gets none.
+    const other = await otherPerson.newPage();
+    await other.goto(poll.participantUrl);
+    await expect(other.getByRole('row', { name: /Host/ }).getByText('organiser', { exact: true })).toBeVisible();
+    await expect(
+      other.getByRole('listitem').filter({ hasText: 'Welcome, everyone.' }).getByText('organiser', { exact: true }),
+    ).toBeVisible();
+    await other.getByLabel('Your nickname').fill('Guest');
+    const otherJoin = other.getByRole('button', { name: 'Join' });
+    await waitForTurnstile(otherJoin);
+    await otherJoin.click();
+    await other.getByRole('button', { name: 'Cancel' }).click();
+    const guest = other.getByRole('row', { name: /Guest/ });
+    await expect(guest.getByText('you')).toBeVisible();
+    await expect(guest.getByText('organiser', { exact: true })).toHaveCount(0);
+  });
+
   test('a visitor without the admin link gets no organiser controls', async ({ page, request, clientIp }) => {
     const poll = await createPollViaApi(request, clientIp);
     await page.goto(poll.participantUrl);

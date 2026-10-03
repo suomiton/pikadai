@@ -111,7 +111,7 @@ export function VoteGrid() {
     setStatus('Joining the poll.');
     const outcome: { me?: ParticipantIdentity; onScreen?: boolean } = {};
     const joined = await run(async () => {
-      const res = await api.addParticipant(event.id, { nickname: name, votes: {}, turnstileToken });
+      const res = await api.addParticipant(event.id, { nickname: name, votes: {}, turnstileToken }, adminToken);
       outcome.me = { id: res.id, token: res.editToken };
       setIdentity(event.id, outcome.me);
       // The row has to be on screen before it can be edited; a failed refresh shows its own retry.
@@ -122,7 +122,7 @@ export function VoteGrid() {
       return false;
     }
     if (outcome.onScreen) {
-      editor.startEdit({ id: outcome.me.id, nickname: name, votes: {}, createdAt: Date.now() });
+      editor.startEdit({ id: outcome.me.id, nickname: name, votes: {}, createdAt: Date.now(), isOrganiser: isAdmin });
       requestFocus('editor');
       setStatus(`You joined as ${name}. Tap a date to add your availability.`);
     } else {

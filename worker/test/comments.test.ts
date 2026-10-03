@@ -1,8 +1,19 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { LIMITS } from '@shared/limits';
-import type { Comment } from '@shared/types';
-import { addParticipant, asParticipant, bearer, client, countRows, createPoll, getView } from './helpers';
+import type { Comment, CreateParticipantResponse } from '@shared/types';
+import {
+  DUMMY_TOKEN,
+  addParticipant,
+  asParticipant,
+  bearer,
+  client,
+  countRows,
+  createPoll,
+  getView,
+  siteverifyOk,
+  stubSiteverify,
+} from './helpers';
 
 describe('POST /api/events/:id/comments', () => {
   it('posts a comment under the participant nickname and lists it in the view, oldest first', async () => {
@@ -19,6 +30,7 @@ describe('POST /api/events/:id/comments', () => {
     expect(first.body).toMatchObject({
       participantId: ada.id,
       nickname: 'Ada',
+      isOrganiser: false,
       body: 'I can host if Saturday wins.',
     });
     expect(first.body.id).toMatch(/^[A-Za-z0-9_-]{22}$/);
@@ -153,6 +165,24 @@ describe('POST /api/events/:id/comments', () => {
     await poll.client.delete(`/api/events/${poll.id}/participants/${grace.id}`, bearer(poll.adminToken));
     expect((await getView(poll.client, poll.id)).comments.map((c) => c.body)).toEqual(['From Ada']);
     expect(await countRows('comments', poll.id)).toBe(1);
+  });
+
+  it('carries the organiser flag of its author', async () => {
+    const poll = await createPoll();
+    stubSiteverify(siteverifyOk('answer'));
+    const host = await poll.client.post<CreateParticipantResponse>(
+      `/api/events/${poll.id}/participants`,
+      { nickname: 'Host', votes: {}, turnstileToken: DUMMY_TOKEN },
+      bearer(poll.adminToken),
+    );
+    const posted = await poll.client.post<Comment>(
+      `/api/events/${poll.id}/comments`,
+      { body: 'Welcome, everyone.' },
+      asParticipant(host.body),
+    );
+    expect(posted.status).toBe(201);
+    expect(posted.body.isOrganiser).toBe(true);
+    expect((await getView(poll.client, poll.id)).comments[0]).toMatchObject({ nickname: 'Host', isOrganiser: true });
   });
 
   it('is gone with the poll', async () => {

@@ -8,7 +8,7 @@ import { createPollActions, type PollActionDeps, type PollActions } from './poll
 const me: ParticipantIdentity = { id: 'p1', token: 'tok-p1' };
 const meA: ParticipantIdentity = { id: 'pa', token: 'tok-a' };
 const meB: ParticipantIdentity = { id: 'pb', token: 'tok-b' };
-const bea = { id: 'pb', nickname: 'Bea', votes: {}, createdAt: 0 };
+const bea = { id: 'pb', nickname: 'Bea', votes: {}, createdAt: 0, isOrganiser: false };
 
 const event = (overrides: Partial<EventView> = {}): EventView => ({
   id: 'ev1',
@@ -18,7 +18,7 @@ const event = (overrides: Partial<EventView> = {}): EventView => ({
   createdAt: 0,
   expiresAt: 1,
   options: [],
-  participants: [{ id: 'p1', nickname: 'Ada', votes: {}, createdAt: 0 }],
+  participants: [{ id: 'p1', nickname: 'Ada', votes: {}, createdAt: 0, isOrganiser: false }],
   comments: [],
   viewer: { isAdmin: false },
   ...overrides,

@@ -12,7 +12,7 @@ async function openPoll(page: Page, { mine = false, nickname = 'Ada' } = {}) {
     createdAt: Date.now(),
     expiresAt: Date.now() + 86_400_000,
     options: [14, 15, 16].map((days, i) => ({ id: String(i).repeat(22), date: futureIso(days), suggestedBy: null })),
-    participants: [{ id: 'p'.repeat(22), nickname, votes: {}, createdAt: Date.now() }],
+    participants: [{ id: 'p'.repeat(22), nickname, votes: {}, createdAt: Date.now(), isOrganiser: false }],
     comments: [],
     viewer: { isAdmin: !mine },
   };

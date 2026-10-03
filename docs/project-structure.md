@@ -57,7 +57,8 @@ pikadai/
 ├── migrations/
 │   ├── 0001_init.sql          D1 schema (see database.md)
 │   ├── 0002_participants_nickname_unique.sql
-│   └── 0003_comments.sql
+│   ├── 0003_comments.sql
+│   └── 0004_participants_is_organiser.sql
 │
 ├── src/                       React application
 │   ├── main.tsx               Mounts the router, imports global CSS

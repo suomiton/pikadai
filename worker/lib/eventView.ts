@@ -30,11 +30,13 @@ export function toEventView(
       nickname: p.nickname,
       votes: votesByParticipant.get(p.id) ?? {},
       createdAt: p.created_at,
+      isOrganiser: p.is_organiser === 1,
     })),
     comments: comments.map((c): Comment => ({
       id: c.id,
       participantId: c.participant_id,
       nickname: c.nickname,
+      isOrganiser: c.is_organiser === 1,
       body: c.body,
       createdAt: c.created_at,
     })),

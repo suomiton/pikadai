@@ -76,6 +76,7 @@ export function Comments() {
               <p className="comment-head">
                 <span className="comment-author">{c.nickname}</span>
                 {me?.id === c.participantId && <span className="tag">you</span>}
+                {c.isOrganiser && <span className="tag tag-accent">organiser</span>}
                 <time className="comment-time" dateTime={new Date(c.createdAt).toISOString()}>
                   {formatDateTime(c.createdAt)}
                 </time>

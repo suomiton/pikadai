@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { Participant } from '@shared/types';
 import { initialVoteEditor, voteEditorReducer, type VoteEditorState } from './voteEditor';
 
-const ada: Participant = { id: 'p1', nickname: 'Ada', votes: { o1: 'yes', o2: 'no' }, createdAt: 0 };
-const fresh: Participant = { id: 'p2', nickname: 'Grace', votes: {}, createdAt: 0 };
+const ada: Participant = {
+  id: 'p1',
+  nickname: 'Ada',
+  votes: { o1: 'yes', o2: 'no' },
+  createdAt: 0,
+  isOrganiser: false,
+};
+const fresh: Participant = { id: 'p2', nickname: 'Grace', votes: {}, createdAt: 0, isOrganiser: false };
 
 const toggle = (state: VoteEditorState, optionId: string): VoteEditorState =>
   voteEditorReducer(state, { type: 'toggle', optionId });

@@ -144,7 +144,9 @@ availability answers and the comments are posted under it, so it is taken once, 
 3. `POST /api/events/:id/participants` with an empty vote set checks the participant cap and nickname
    uniqueness (case-insensitive within the poll), then verifies Turnstile and inserts the row. A unique
    index on `(event_id, nickname COLLATE NOCASE)` backs the nickname check, so two simultaneous joins with
-   the same name cannot both get in.
+   the same name cannot both get in. When the request carries the admin token, the row is marked
+   `is_organiser`, and the organiser's nickname is shown with an outlined "organiser" pill on their answer
+   row and on their comments. The client sends the token whenever it has one; the server decides.
 4. The response `{ id, editToken }` is stored in `localStorage` under the poll id, and the new row opens
    for editing with focus on its first date cell.
 5. Every save of answers, now and later, sends both as headers to
@@ -240,7 +242,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | DELETE | `/api/events/:id`                             | admin                                         | Delete poll and everything in it                 |
 | POST   | `/api/events/:id/options`                     | anyone while suggestions are on; admin always | Add a date                                       |
 | DELETE | `/api/events/:id/options/:optionId`           | admin                                         | Remove a date and its votes                      |
-| POST   | `/api/events/:id/participants`                | Turnstile                                     | Add an answer → `{ id, editToken }`              |
+| POST   | `/api/events/:id/participants`                | Turnstile; admin token marks the organiser    | Join: add a participant → `{ id, editToken }`    |
 | PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Replace nickname and votes                       |
 | DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
 | POST   | `/api/events/:id/comments`                    | participant token + `X-Participant-Id`        | Post a comment → `Comment`                       |
