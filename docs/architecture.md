@@ -257,5 +257,6 @@ Revisit if a poll view ever grows beyond a few kilobytes.
 ## Non-goals and future work
 
 Not planned: accounts, email notifications, comments, or integrations with calendars. Reasonable next
-steps: time slots per date, a "hide results until I answer" option, exporting the chosen date as an `.ics`
-file, and an automated test suite seeded from the smoke test described in [deployment.md](deployment.md).
+steps: time slots per date, a "hide results until I answer" option, and exporting the chosen date as an
+`.ics` file. The test suite is described in [project-structure.md](project-structure.md#conventions) and
+[deployment.md](deployment.md#tests-to-run-before-a-deploy).

@@ -387,3 +387,6 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
   `src/lib/`. Start with `verifyTicket`, `computeExpiresAt`, `monthGrid`, `cycle` and the tallies. Add
   ESLint with `eslint-plugin-jsx-a11y` and `eslint-plugin-react-hooks`, plus Prettier, and run all of it
   in the `build` script or a CI job.
+- Partly done 2026-10-03: tests exist at three levels (`npm test`, `npm run test:e2e`; see
+  `docs/project-structure.md`), and `cycle` plus the tallies moved to `src/lib/votes.ts` to make that
+  possible, which is a first slice of C1. The linter and formatter are still open.

@@ -203,6 +203,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: cp .dev.vars.example .dev.vars   # test keys for the local Worker the browser tests use
+      - run: npm run test:e2e
       - run: npm run db:migrate:remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -233,17 +237,16 @@ CI.
 | Cron never runs | trigger removed from config, or Worker not deployed since adding it | check Settings → Triggers; redeploy |
 | Type errors after editing `wrangler.jsonc` | stale `worker-configuration.d.ts` | `npm run cf-typegen` |
 
-## Smoke test after changes to the API
+## Tests to run before a deploy
 
-The API was verified with a script that exercises every endpoint against `npm run dev`: ticket timing,
-replay protection, ownership rules, suggestions, admin actions, expiry recalculation, rate limiting, and
-the cron handler. The sequence is a good template for an automated test suite:
+```sh
+npm test            # unit tests under Node, then the whole Worker inside workerd with a local D1
+npm run test:e2e    # browser journeys with Playwright; starts `npm run dev` if nothing is on :5173
+```
 
-1. `POST /api/tickets`, then `POST /api/events` immediately → expect `ticket_too_early`.
-2. Wait 5.2 s, create → `201`. Replay the same ticket → `409 ticket_used`.
-3. `GET` as anonymous and with `X-Admin-Token`; check `viewer.isAdmin` and that no hashes are present.
-4. Add two participants; duplicate nickname → `409`; vote for an unknown option → `400`.
-5. Edit without token → `403`; with own token → `204`; as admin → `204`.
-6. Suggest a date → `201` with `suggestedBy`; duplicate → `409`; check `expiresAt` moved.
-7. Delete the date as admin → `204`; check `expiresAt` restored. Disable suggestions → suggesting → `403`.
-8. Delete participants and the event; `GET` → `404`. Invoke the scheduled handler → `200`.
+The Worker tests cover every endpoint: ticket age and binding, replay protection, Turnstile hostname and
+action checks (siteverify is stubbed, so no network), ownership rules, nickname and date uniqueness
+including the concurrent case, caps, expiry recalculation, rate limiting by client and by IPv6 /64, the
+body limit, response headers, and the purge. The browser tests create and answer polls with the Turnstile
+test keys, so they do need network access to `challenges.cloudflare.com`. Run
+`npx playwright install chromium` once per machine.

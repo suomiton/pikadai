@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import type { EventView } from '@shared/types';
 import { AdminPanel } from '../components/AdminPanel';
@@ -47,13 +47,20 @@ export function EventPage() {
     void load();
   }, [load]);
 
-  // Forget a stored identity whose row no longer exists (e.g. removed by the organiser).
+  // Forget a stored identity whose row no longer exists (e.g. removed by the organiser). Judged
+  // only against freshly loaded data: right after answering, the identity is set before the
+  // re-fetch lands, and the stale participant list must not be allowed to discard it.
+  const meRef = useRef(me);
   useEffect(() => {
-    if (event && me && !event.participants.some((p) => p.id === me.id)) {
+    meRef.current = me;
+  }, [me]);
+  useEffect(() => {
+    const current = meRef.current;
+    if (event && current && !event.participants.some((p) => p.id === current.id)) {
       storage.setParticipant(id, null);
       setMe(null);
     }
-  }, [event, me, id]);
+  }, [event, id]);
 
   if (loading) {
     return (

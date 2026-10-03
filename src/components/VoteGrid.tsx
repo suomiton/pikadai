@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { formatDate, formatDateLong } from '../lib/dates';
 import { describeError } from '../lib/errors';
 import { storage, type ParticipantIdentity } from '../lib/storage';
+import { computeTallies, cycle } from '../lib/votes';
 import { TurnstileField } from './TurnstileField';
 
 type Cell = Answer | 'none';
@@ -16,19 +17,6 @@ type Opener = { kind: 'add' } | { kind: 'edit'; participantId: string };
 const GLYPH: Record<Cell, string> = { yes: '✓', maybe: '~', no: '✕', none: '·' };
 const LABEL: Record<Cell, string> = { yes: 'Yes', maybe: 'If need be', no: 'No', none: 'No answer' };
 const NICKNAME_REQUIRED = 'Please enter a nickname.';
-
-function cycle(answer: Answer | undefined): Answer | undefined {
-  switch (answer) {
-    case undefined:
-      return 'yes';
-    case 'yes':
-      return 'maybe';
-    case 'maybe':
-      return 'no';
-    case 'no':
-      return undefined;
-  }
-}
 
 interface Props {
   event: EventView;
@@ -57,24 +45,13 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
   const nicknameRef = useRef<HTMLInputElement>(null);
   const openerRef = useRef<Opener | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
+  const handledFocusRequest = useRef(0);
 
   const hasAnswered = me !== null && event.participants.some((p) => p.id === me.id);
   const isFull = event.participants.length >= LIMITS.participantsMax;
   const editingId = editing?.kind === 'existing' ? editing.participantId : null;
 
-  const tallies = useMemo(() => {
-    const t: Record<string, { yes: number; maybe: number }> = {};
-    for (const o of event.options) t[o.id] = { yes: 0, maybe: 0 };
-    for (const p of event.participants) {
-      for (const [optionId, answer] of Object.entries(p.votes)) {
-        const bucket = t[optionId];
-        if (!bucket) continue;
-        if (answer === 'yes') bucket.yes++;
-        else if (answer === 'maybe') bucket.maybe++;
-      }
-    }
-    return t;
-  }, [event]);
+  const tallies = useMemo(() => computeTallies(event.options, event.participants), [event]);
 
   const bestYes = Math.max(0, ...event.options.map((o) => tallies[o.id]?.yes ?? 0));
   const isBest = (optionId: string) => bestYes > 0 && tallies[optionId]?.yes === bestYes;
@@ -85,7 +62,9 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
    * screen: the Add button disappears once you have answered, and an Edit button goes with its row.
    */
   useEffect(() => {
-    if (focusRequest === 0) return;
+    // Buttons are disabled while a request is in flight and cannot take focus; wait it out.
+    if (focusRequest === handledFocusRequest.current || busy) return;
+    handledFocusRequest.current = focusRequest;
     const section = sectionRef.current;
     if (!section) return;
     const editButton = (participantId: string) =>
@@ -98,7 +77,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
       tableRegionRef.current,
     ];
     candidates.find((el): el is HTMLElement => el !== null)?.focus();
-  }, [focusRequest]);
+  }, [focusRequest, busy]);
 
   const returnFocus = () => setFocusRequest((n) => n + 1);
 

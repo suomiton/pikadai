@@ -30,6 +30,14 @@ npm run dev                         # http://localhost:5173
 
 The development build uses Cloudflare's public Turnstile test keys, which always pass.
 
+## Tests
+
+```sh
+npm test                            # unit tests, then the Worker inside workerd with a local D1
+npx playwright install chromium     # once per machine
+npm run test:e2e                    # browser journeys against the dev server (started if needed)
+```
+
 ## Deploy
 
 See [docs/deployment.md](docs/deployment.md). In short: create the D1 database, set two secrets, put your
@@ -38,9 +46,12 @@ Turnstile site key in `.env.production`, and run `npm run deploy`.
 ## Layout
 
 ```
-worker/        Hono API: routes/, db/queries.ts, lib/ (auth, crypto, tickets, turnstile, ratelimit)
+worker/        Hono API: routes/, db/queries.ts, lib/ (auth, crypto, tickets, turnstile, ratelimit), test/
 shared/        zod schemas, limits and types imported by both sides
-src/           React app: pages/, components/, lib/ (api client, storage, dates), styles/
+src/           React app: pages/, components/, lib/ (api client, storage, dates, votes), styles/
 migrations/    D1 SQL migrations
+e2e/           Playwright browser tests
 docs/          Documentation
 ```
+
+Unit tests sit next to the code they test as `*.test.ts`.
