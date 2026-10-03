@@ -1,12 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { LIMITS } from '@shared/limits';
-import type { Answer, EventOption, EventView, Participant } from '@shared/types';
+import type { Answer, EventOption, Participant } from '@shared/types';
 import { api } from '../lib/api';
 import { formatDate, formatDateLong } from '../lib/dates';
 import { describeError } from '../lib/errors';
-import { storage, type ParticipantIdentity } from '../lib/storage';
 import { computeTallies, cycle } from '../lib/votes';
+import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { TurnstileField } from './TurnstileField';
 
 type Cell = Answer | 'none';
@@ -18,15 +18,9 @@ const GLYPH: Record<Cell, string> = { yes: '✓', maybe: '~', no: '✕', none: '
 const LABEL: Record<Cell, string> = { yes: 'Yes', maybe: 'If need be', no: 'No', none: 'No answer' };
 const NICKNAME_REQUIRED = 'Please enter a nickname.';
 
-interface Props {
-  event: EventView;
-  me: ParticipantIdentity | null;
-  adminToken: string | null;
-  onChanged: () => Promise<void>;
-  onIdentityChange: (identity: ParticipantIdentity | null) => void;
-}
-
-export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }: Props) {
+export function VoteGrid() {
+  const { event, me, adminToken } = usePoll();
+  const { refresh, setIdentity } = usePollActions();
   const isAdmin = event.viewer.isAdmin;
   const id = useId();
   const [editing, setEditing] = useState<Editing>(null);
@@ -139,8 +133,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
           turnstileToken: turnstileToken!,
         });
         const identity = { id: res.id, token: res.editToken };
-        storage.setParticipant(event.id, identity);
-        onIdentityChange(identity);
+        setIdentity(identity);
       } else {
         await api.updateParticipant(
           event.id,
@@ -151,7 +144,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
       }
       setEditing(null);
       setTurnstileToken(null);
-      await onChanged();
+      await refresh();
       setStatus('Your answers were saved.');
       returnFocus();
     } catch (err) {
@@ -174,11 +167,10 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
     try {
       await api.deleteParticipant(event.id, p.id, { adminToken, participant: mine ? me : null });
       if (mine) {
-        storage.setParticipant(event.id, null);
-        onIdentityChange(null);
+        setIdentity(null);
       }
       setEditing(null);
-      await onChanged();
+      await refresh();
       setStatus(mine ? 'Your answers were removed.' : `${p.nickname} was removed from the poll.`);
       returnFocus();
     } catch (err) {
@@ -196,7 +188,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
     setError(null);
     try {
       await api.deleteOption(event.id, option.id, adminToken);
-      await onChanged();
+      await refresh();
       setStatus(`${formatDateLong(option.date)} was removed from the poll.`);
       tableRegionRef.current?.focus(); // the button that had focus went with its column
     } catch (err) {

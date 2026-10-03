@@ -1,12 +1,9 @@
+import { usePoll } from '../state/AppStateProvider';
 import { CopyField } from './CopyField';
 
-interface Props {
-  eventId: string;
-  adminToken: string | null;
-}
-
-export function ShareBox({ eventId, adminToken }: Props) {
-  const participantLink = `${window.location.origin}/e/${eventId}`;
+export function ShareBox() {
+  const { id, adminToken } = usePoll();
+  const participantLink = `${window.location.origin}/e/${id}`;
 
   return (
     <section className="card stack">

@@ -1,68 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { Link, useParams } from 'react-router';
-import type { EventView } from '@shared/types';
 import { AdminPanel } from '../components/AdminPanel';
 import { ShareBox } from '../components/ShareBox';
 import { SuggestDate } from '../components/SuggestDate';
 import { VoteGrid } from '../components/VoteGrid';
-import { api } from '../lib/api';
 import { formatTimestamp } from '../lib/dates';
-import { describeError } from '../lib/errors';
-import { storage, type ParticipantIdentity } from '../lib/storage';
-
-/**
- * The admin link carries its token in the URL fragment, which browsers never
- * send to the server. On first visit we move it into localStorage and strip it
- * from the address bar so it isn't leaked by copy-paste or screenshots.
- */
-function captureAdminTokenFromHash(eventId: string): string | null {
-  const match = /(?:^#|[#&])admin=([A-Za-z0-9_-]+)/.exec(window.location.hash);
-  if (!match) return null;
-  const token = match[1];
-  storage.setAdminToken(eventId, token);
-  window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  return token;
-}
+import { useAppState, usePollActions } from '../state/AppStateProvider';
 
 export function EventPage() {
   const { id = '' } = useParams();
-  const [adminToken] = useState<string | null>(() => captureAdminTokenFromHash(id) ?? storage.getAdminToken(id));
-  const [me, setMe] = useState<ParticipantIdentity | null>(() => storage.getParticipant(id));
-  const [event, setEvent] = useState<EventView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { openPoll } = usePollActions();
+  const { poll } = useAppState();
 
-  const load = useCallback(async () => {
-    try {
-      setEvent(await api.getEvent(id, adminToken));
-      setError(null);
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [id, adminToken]);
-
+  // Capturing the admin link, reading storage and the first fetch all happen here, once per route
+  // id, so they repeat if the id changes while this page stays mounted. Nothing runs during render.
   useEffect(() => {
-    void load();
-  }, [load]);
+    void openPoll(id);
+  }, [id, openPoll]);
 
-  // Forget a stored identity whose row no longer exists (e.g. removed by the organiser). Judged
-  // only against freshly loaded data: right after answering, the identity is set before the
-  // re-fetch lands, and the stale participant list must not be allowed to discard it.
-  const meRef = useRef(me);
-  useEffect(() => {
-    meRef.current = me;
-  }, [me]);
-  useEffect(() => {
-    const current = meRef.current;
-    if (event && current && !event.participants.some((p) => p.id === current.id)) {
-      storage.setParticipant(id, null);
-      setMe(null);
-    }
-  }, [event, id]);
+  // Until the effect has dispatched, the store may still hold another poll or nothing at all.
+  const current = poll?.id === id ? poll : null;
 
-  if (loading) {
+  if (!current || (!current.event && !current.error)) {
     return (
       <p className="status">
         Loading
@@ -71,11 +30,11 @@ export function EventPage() {
     );
   }
 
-  if (error || !event) {
+  if (current.error || !current.event) {
     return (
       <section className="card stack">
         <h1>Poll unavailable</h1>
-        <p>{error ?? 'This poll could not be loaded.'}</p>
+        <p>{current.error ?? 'This poll could not be loaded.'}</p>
         <div className="btn-row">
           <Link to="/" className="btn btn-primary">
             Create a new poll
@@ -85,8 +44,8 @@ export function EventPage() {
     );
   }
 
+  const { event, adminToken } = current;
   const isAdmin = event.viewer.isAdmin;
-  const effectiveAdminToken = isAdmin ? adminToken : null;
 
   return (
     <div className="stack-lg">
@@ -99,10 +58,10 @@ export function EventPage() {
         </p>
       </header>
 
-      <VoteGrid event={event} me={me} adminToken={effectiveAdminToken} onChanged={load} onIdentityChange={setMe} />
-      <SuggestDate event={event} me={me} adminToken={effectiveAdminToken} onChanged={load} />
-      <ShareBox eventId={event.id} adminToken={effectiveAdminToken} />
-      {effectiveAdminToken && <AdminPanel event={event} adminToken={effectiveAdminToken} onChanged={load} />}
+      <VoteGrid />
+      <SuggestDate />
+      <ShareBox />
+      {adminToken && <AdminPanel />}
     </div>
   );
 }

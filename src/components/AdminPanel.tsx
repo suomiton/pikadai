@@ -2,21 +2,17 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { LIMITS } from '@shared/limits';
 import { updateEventSchema } from '@shared/schemas';
-import type { EventView } from '@shared/types';
 import { api } from '../lib/api';
 import { describeError } from '../lib/errors';
-import { storage } from '../lib/storage';
-
-interface Props {
-  event: EventView;
-  adminToken: string;
-  onChanged: () => Promise<void>;
-}
+import { useAdminToken, usePoll, usePollActions } from '../state/AppStateProvider';
 
 type FieldKey = 'title' | 'description';
 type FocusTarget = FieldKey | 'opener';
 
-export function AdminPanel({ event, adminToken, onChanged }: Props) {
+export function AdminPanel() {
+  const { event } = usePoll();
+  const adminToken = useAdminToken();
+  const { refresh, forgetPoll } = usePollActions();
   const navigate = useNavigate();
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -83,7 +79,7 @@ export function AdminPanel({ event, adminToken, onChanged }: Props) {
       await api.updateEvent(event.id, parsed.data, adminToken);
       pendingFocus.current = 'opener';
       setOpen(false);
-      await onChanged();
+      await refresh();
       setStatus('Details saved.');
     } catch (err) {
       setError(describeError(err));
@@ -98,8 +94,7 @@ export function AdminPanel({ event, adminToken, onChanged }: Props) {
     setError(null);
     try {
       await api.deleteEvent(event.id, adminToken);
-      storage.setAdminToken(event.id, null);
-      storage.setParticipant(event.id, null);
+      forgetPoll();
       navigate('/');
     } catch (err) {
       setError(describeError(err));

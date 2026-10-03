@@ -1,20 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '@shared/limits';
-import type { EventView } from '@shared/types';
 import { api } from '../lib/api';
 import { formatDate, formatDateLong, todayIso } from '../lib/dates';
 import { describeError } from '../lib/errors';
-import type { ParticipantIdentity } from '../lib/storage';
+import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { Calendar } from './Calendar';
 
-interface Props {
-  event: EventView;
-  me: ParticipantIdentity | null;
-  adminToken: string | null;
-  onChanged: () => Promise<void>;
-}
-
-export function SuggestDate({ event, me, adminToken, onChanged }: Props) {
+export function SuggestDate() {
+  const { event, me, adminToken } = usePoll();
+  const { refresh } = usePollActions();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,7 +45,7 @@ export function SuggestDate({ event, me, adminToken, onChanged }: Props) {
     try {
       await api.addOption(event.id, { date: picked }, { adminToken, participant: me });
       close();
-      await onChanged();
+      await refresh();
       setStatus(`${formatDateLong(picked)} was added to the poll.`);
     } catch (err) {
       setError(describeError(err));
