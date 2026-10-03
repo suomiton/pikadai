@@ -58,8 +58,8 @@ export function Calendar({ selected, onToggle, minDate, disabledDates }: Props) 
     if (!sameMonth(target, cursor)) setCursor(target);
   }
 
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    const from = (e.target as HTMLElement).dataset.iso;
+  function onKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
+    const from = e.currentTarget.dataset.iso;
     if (!from) return;
     const weekday = (parseIso(from).getDay() + 6) % 7; // 0 = Monday
     let to: string;
@@ -129,7 +129,6 @@ export function Calendar({ selected, onToggle, minDate, disabledDates }: Props) 
         role="group"
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-help`}
-        onKeyDown={onKeyDown}
       >
         {WEEKDAYS.map((short, i) => (
           <span key={short} className="calendar-weekday">
@@ -164,6 +163,7 @@ export function Calendar({ selected, onToggle, minDate, disabledDates }: Props) 
               aria-pressed={isSelected}
               aria-label={`${formatDateLong(iso)}${note}`}
               onFocus={() => setFocusIso(iso)}
+              onKeyDown={onKeyDown}
               onClick={() => {
                 setFocusIso(iso);
                 if (!unavailable) onToggle(iso);

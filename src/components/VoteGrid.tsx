@@ -239,7 +239,9 @@ export function VoteGrid() {
               ),
             )}
 
-            {editing?.kind === 'new' && <VoteEditRow {...editRowProps} isMine autoFocus placeholder="Your nickname" />}
+            {editing?.kind === 'new' && (
+              <VoteEditRow {...editRowProps} isMine focusOnMount placeholder="Your nickname" />
+            )}
 
             {event.participants.length === 0 && editing === null && (
               <tr className="is-empty">

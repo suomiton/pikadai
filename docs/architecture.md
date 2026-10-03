@@ -41,10 +41,14 @@ discoverable API host. Requests for `/api/*` always reach the Worker because of 
 
 ## Components
 
-**Frontend** (`src/`). React 19 with `react-router`. The event page fetches a single `EventView` JSON
-document and re-fetches it after every mutation; there is no client-side cache or websocket. Forms are
-validated with the same zod schemas the Worker uses, so users get instant feedback and the server still
-has the final say. Tokens are kept in `localStorage`; see [Trust model](#trust-model-and-identity).
+**Frontend** (`src/`). React 19 with `react-router`. A root `useReducer` store (`src/state/app.ts`) holds the
+poll being viewed, the viewer's tokens and the load status; `AppStateProvider` wraps the router and the page's
+sections read it through context hooks (`usePoll`, `usePollActions`) rather than props. The event page fetches a
+single `EventView` JSON document and re-fetches it after every mutation; there is no client-side cache or
+websocket. Reducers are pure and unit-tested; fetching and `localStorage` writes sit in `pollActions.ts` with
+injected dependencies. Forms are validated with the same zod schemas the Worker uses, so users get instant
+feedback and the server still has the final say. Tokens are kept in `localStorage`; see
+[Trust model](#trust-model-and-identity).
 
 **Worker** (`worker/`). A Hono application. Each route file owns one resource. Cross-cutting concerns live
 in `worker/lib/`: token hashing and constant-time comparison, creation tickets, Turnstile verification,

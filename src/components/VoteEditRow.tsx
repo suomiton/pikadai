@@ -15,7 +15,8 @@ interface Props {
   errorId: string;
   nicknameRef: Ref<HTMLInputElement>;
   isMine: boolean;
-  autoFocus?: boolean;
+  /** A new answer: move focus into the nickname input so the keyboard user lands where typing starts. */
+  focusOnMount?: boolean;
   placeholder?: string;
 }
 
@@ -31,7 +32,7 @@ export function VoteEditRow({
   errorId,
   nicknameRef,
   isMine,
-  autoFocus,
+  focusOnMount,
   placeholder,
 }: Props) {
   return (
@@ -46,7 +47,9 @@ export function VoteEditRow({
           aria-label="Nickname"
           aria-invalid={nicknameInvalid || undefined}
           aria-describedby={nicknameInvalid ? errorId : undefined}
-          autoFocus={autoFocus}
+          // Deliberate (review finding A13): the row appears on a button press and typing is the next step.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus={focusOnMount}
           placeholder={placeholder}
         />
       </th>

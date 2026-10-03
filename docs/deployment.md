@@ -240,6 +240,8 @@ CI.
 ## Tests to run before a deploy
 
 ```sh
+npm run lint        # ESLint: TypeScript rules, rules of hooks and jsx-a11y; CI runs this and the format check first
+npm run format:check
 npm test            # unit tests under Node, then the whole Worker inside workerd with a local D1
 npm run test:e2e    # browser journeys with Playwright; starts `npm run dev` if nothing is on :5173
 ```

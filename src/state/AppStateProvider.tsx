@@ -24,7 +24,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   const actions = useMemo(
-    () => createPollActions({ api, storage, dispatch, getState: () => stateRef.current, location: browserLocation }),
+    () =>
+      // getState is only ever called from an action, after the effect above has run; never during render.
+      // eslint-disable-next-line react-hooks/refs
+      createPollActions({
+        api,
+        storage,
+        dispatch,
+        getState: () => stateRef.current,
+        location: browserLocation,
+      }),
     [],
   );
   const value = useMemo(() => ({ state, actions }), [state, actions]);

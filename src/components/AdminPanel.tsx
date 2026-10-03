@@ -24,10 +24,8 @@ export function AdminPanel() {
   const [status, setStatus] = useState('');
 
   const editButtonRef = useRef<HTMLButtonElement>(null);
-  const fieldRefs = {
-    title: useRef<HTMLInputElement>(null),
-    description: useRef<HTMLTextAreaElement>(null),
-  };
+  const titleRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const pendingFocus = useRef<FocusTarget | null>(null);
 
   // While the form is closed it mirrors the saved values, so reopening never shows an old draft.
@@ -43,7 +41,7 @@ export function AdminPanel() {
     if (!target || busy) return;
     pendingFocus.current = null;
     if (target === 'opener') editButtonRef.current?.focus();
-    else fieldRefs[target].current?.focus();
+    else (target === 'title' ? titleRef : descriptionRef).current?.focus();
   }, [open, fieldErrors, busy]);
 
   function close() {
@@ -114,7 +112,7 @@ export function AdminPanel() {
         <form className="stack" onSubmit={save} noValidate>
           <TextField
             id={`${id}-title`}
-            ref={fieldRefs.title}
+            ref={titleRef}
             label="Title"
             value={title}
             onChange={(value) => dispatch({ type: 'field', key: 'title', value })}
@@ -124,7 +122,7 @@ export function AdminPanel() {
           />
           <TextField
             id={`${id}-description`}
-            ref={fieldRefs.description}
+            ref={descriptionRef}
             label="Details"
             value={description}
             onChange={(value) => dispatch({ type: 'field', key: 'description', value })}

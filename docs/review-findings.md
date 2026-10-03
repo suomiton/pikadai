@@ -40,16 +40,16 @@ defect with a workaround or a WCAG AA failure, **low** means hygiene.
 | [x]  | A12 | medium   | iOS zooms the page on every input focus                    |
 | [x]  | A13 | medium   | Small tap targets, tiny text and autofocus on mobile       |
 | [x]  | A14 | low      | Input focus relies on a 1px border change                  |
-| [ ]  | C1  | medium   | VoteGrid has too many responsibilities                     |
-| [ ]  | C2  | medium   | Busy/error handling and form markup are copy-pasted        |
-| [ ]  | C3  | low      | ISO date parsing exists three times                        |
-| [ ]  | C4  | low      | The Answer type is defined twice                           |
-| [ ]  | C5  | medium   | queries.ts mixes data access with domain logic             |
-| [ ]  | C6  | low      | sanitizeVotes is misnamed and over-built                   |
-| [ ]  | C7  | low      | Auth helpers are coupled to the Hono context               |
-| [ ]  | C8  | medium   | Side effects run inside a React state initialiser          |
-| [ ]  | C9  | low      | Duplicate SQL for inserting an option                      |
-| [ ]  | C10 | medium   | No tests and no linter                                     |
+| [x]  | C1  | medium   | VoteGrid has too many responsibilities                     |
+| [x]  | C2  | medium   | Busy/error handling and form markup are copy-pasted        |
+| [x]  | C3  | low      | ISO date parsing exists three times                        |
+| [x]  | C4  | low      | The Answer type is defined twice                           |
+| [x]  | C5  | medium   | queries.ts mixes data access with domain logic             |
+| [x]  | C6  | low      | sanitizeVotes is misnamed and over-built                   |
+| [x]  | C7  | low      | Auth helpers are coupled to the Hono context               |
+| [x]  | C8  | medium   | Side effects run inside a React state initialiser          |
+| [x]  | C9  | low      | Duplicate SQL for inserting an option                      |
+| [x]  | C10 | medium   | No tests and no linter                                     |
 
 ## What is already right
 
@@ -323,6 +323,9 @@ nickname COLLATE NOCASE)`. Keep the pre-check for the friendly error and map the
   rendering live in one component.
 - Fix: Extract a pure `computeTallies(event)` into `src/lib/`, a `VoteRow` component, an `OptionHeader`
   component and an `EditPanel`. Keep the state machine in a `useVoteEditor` hook.
+- Done 2026-10-03: `VoteGrid` composes `OptionHeader`, `VoteRow`, `VoteEditRow`, `VoteCells` and `EditPanel`; the
+  editing state machine is `voteEditorReducer` (`src/state/voteEditor.ts`, unit-tested) behind `useVoteEditor`. The
+  file went from 437 to 298 lines and keeps only the mutations, the tallies and the focus return.
 
 ### C2. Busy/error handling and form markup are copy-pasted (medium)
 
@@ -333,16 +336,20 @@ nickname COLLATE NOCASE)`. Keep the pre-check for the friendly error and map the
   paragraph eight times, and field markup twice.
 - Fix: A `useAsyncAction()` hook returning `{ run, busy, error }`, a `<FormError message />` component,
   and a `<TextField>` that owns label, input, error and the `aria-*` wiring from A5.
+- Done 2026-10-03: `useAsyncAction`, `FormError`, `StatusAnnouncer` and `TextField` replace the copies. `CreatePage`
+  and `AdminPanel` run on reducers (`src/state/createForm.ts`, `adminForm.ts`), both unit-tested.
 
 ### C3. ISO date parsing exists three times (low)
 
 - Where: `shared/schemas.ts:5`, `src/lib/dates.ts:16`, `worker/db/queries.ts:45`
 - Fix: One `parseIsoParts(iso): [y, m, d]` in `shared/dates.ts`, used by all three.
+- Done 2026-10-03: `parseIsoParts` in `shared/dates.ts`, used by the schema, the client and the expiry module.
 
 ### C4. The Answer type is defined twice (low)
 
 - Where: `shared/types.ts:1`, `shared/schemas.ts:15`
 - Fix: `export type Answer = z.infer<typeof answerSchema>` and delete the literal union.
+- Done 2026-10-03.
 
 ### C5. queries.ts mixes data access with domain logic (medium)
 
@@ -351,6 +358,8 @@ nickname COLLATE NOCASE)`. Keep the pre-check for the friendly error and map the
   without a database and the module has two reasons to change.
 - Fix: Move `computeExpiresAt` to `shared/expiry.ts` or `worker/lib/expiry.ts`. Split `buildEventView`
   into `fetchEventRows(db, id)` and a pure `toEventView(rows, isAdmin)`.
+- Done 2026-10-03: `computeExpiresAt` lives in `worker/lib/expiry.ts`; `buildEventView` became `fetchEventRows` in
+  `queries.ts` plus a pure `toEventView` in `worker/lib/eventView.ts`. Both pure functions have unit tests.
 
 ### C6. sanitizeVotes is misnamed and over-built (low)
 
@@ -359,12 +368,15 @@ nickname COLLATE NOCASE)`. Keep the pre-check for the friendly error and map the
   for no reason.
 - Fix: Rename to `assertVotesBelongToEvent`, find the first unknown id and throw, return the input.
   Fix the two descriptions.
+- Done 2026-10-03: `assertVotesBelongToEvent`; the docs already said "rejected", only the code comment was wrong.
 
 ### C7. Auth helpers are coupled to the Hono context (low)
 
 - Where: `worker/lib/auth.ts:20`, `:31`
 - Fix: Accept the header value and the row; let the route read the header. The helpers become pure
   async functions that tests can call directly.
+- Done 2026-10-03: `auth.ts` has no Hono import. `isParticipantOwner(token, row)` replaces `participantFromToken`,
+  `loadEvent(db, id)` takes the id, and routes read the header themselves. `auth.test.ts` covers the helpers.
 
 ### C8. Side effects run inside a React state initialiser (medium)
 
@@ -372,11 +384,16 @@ nickname COLLATE NOCASE)`. Keep the pre-check for the friendly error and map the
 - Problem: The initialiser writes `localStorage` and rewrites history during render, and never re-runs
   if the route id changes while the component stays mounted.
 - Fix: Move the capture into a `useEffect` keyed on `id`, or into a React Router loader.
+- Done 2026-10-03: the poll session (event, tokens, load status) lives in a root `useReducer` store
+  (`src/state/app.ts`) behind `AppStateProvider`, which wraps the router. `openPoll(id)` runs from an effect keyed
+  on the route id and is unit-tested with injected dependencies (`src/state/pollActions.ts`). The sections read the
+  poll through `usePoll()` instead of five props from `EventPage`.
 
 ### C9. Duplicate SQL for inserting an option (low)
 
 - Where: `worker/db/queries.ts:78`, `:132`
 - Fix: One `optionInsert(db, option)` statement builder used by both.
+- Done 2026-10-03: `optionInsert` in `queries.ts`.
 
 ### C10. No tests and no linter (medium)
 
@@ -391,3 +408,7 @@ nickname COLLATE NOCASE)`. Keep the pre-check for the friendly error and map the
   `docs/project-structure.md`), and `cycle` plus the tallies moved to `src/lib/votes.ts` to make that
   possible, which is a first slice of C1. `.github/workflows/ci.yml` runs `npm test` on every push to
   main and every PR into main. The linter and formatter are still open.
+- Done 2026-10-03: ESLint (`typescript-eslint`, `react-hooks`, `jsx-a11y`) and Prettier are configured, and
+  `npm run lint` plus `npm run format:check` run in CI before the tests. The lint pass removed an `aria-invalid`
+  that ARIA does not allow on `role="group"` and moved the calendar key handler onto the day buttons; the two
+  deliberate autofocus uses (A4, A13) carry a disable with the reason beside it.

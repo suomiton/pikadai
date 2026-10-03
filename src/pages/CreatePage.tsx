@@ -32,11 +32,9 @@ export function CreatePage() {
   const { title, description, allowSuggestions, turnstileToken, fieldErrors, progress } = form;
   const turnstileRef = useRef<TurnstileInstance>(null);
 
-  const fieldRefs = {
-    title: useRef<HTMLInputElement>(null),
-    description: useRef<HTMLTextAreaElement>(null),
-    dates: useRef<HTMLDivElement>(null),
-  };
+  const titleRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const datesRef = useRef<HTMLDivElement>(null);
   const focusAfterErrors = useRef<FieldKey | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -47,7 +45,7 @@ export function CreatePage() {
     const key = focusAfterErrors.current;
     if (!key) return;
     focusAfterErrors.current = null;
-    fieldRefs[key].current?.focus();
+    (key === 'title' ? titleRef : key === 'description' ? descriptionRef : datesRef).current?.focus();
   }, [fieldErrors]);
 
   // A native <dialog> opened with showModal() moves and traps focus and makes the form behind inert.
@@ -119,7 +117,7 @@ export function CreatePage() {
       <form className="card stack create-form" onSubmit={handleSubmit} noValidate>
         <TextField
           id={`${id}-title`}
-          ref={fieldRefs.title}
+          ref={titleRef}
           label="What are you planning?"
           value={title}
           onChange={(value) => dispatch({ type: 'field', key: 'title', value })}
@@ -130,7 +128,7 @@ export function CreatePage() {
 
         <TextField
           id={`${id}-description`}
-          ref={fieldRefs.description}
+          ref={descriptionRef}
           label={
             <>
               Details <em className="muted">optional</em>
@@ -145,12 +143,11 @@ export function CreatePage() {
         />
 
         <div
-          ref={fieldRefs.dates}
+          ref={datesRef}
           className="field"
           role="group"
           tabIndex={-1}
           aria-labelledby={`${id}-dates-label`}
-          aria-invalid={fieldErrors.dates ? true : undefined}
           aria-describedby={fieldErrors.dates ? `${id}-dates-error` : undefined}
         >
           <span id={`${id}-dates-label`} className="field-label">
@@ -221,6 +218,8 @@ export function CreatePage() {
                   <button
                     type="button"
                     className="btn btn-secondary"
+                    // Deliberate (review finding A4): the only control in the dialog once creation has failed.
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
                     onClick={() => dialogRef.current?.close()}
                   >
