@@ -12,44 +12,44 @@ defect with a workaround or a WCAG AA failure, **low** means hygiene.
 
 ## Summary
 
-| Done | ID | Severity | Finding |
-| --- | --- | --- | --- |
-| [x] | S1 | high | Workers Logs may record token headers and client IPs |
-| [x] | S2 | high | No request body size limit on the API |
-| [x] | S3 | medium | Nickname uniqueness is a read-then-write race |
-| [x] | S4 | medium | IPv6 defeats the per-IP rate limiter |
-| [x] | S5 | low | X-Forwarded-For fallback is spoofable and unnecessary |
-| [x] | S6 | medium | Turnstile response is under-checked |
-| [x] | S7 | low | Expensive checks run before cheap ones |
-| [x] | S8 | low | Creation tickets add little over the rate limiter |
-| [x] | S9 | medium | Two sources of truth for the minimum creation delay |
-| [ ] | S10 | medium | Google Fonts leaks visitor IPs; CSP justification is wrong |
-| [x] | S11 | low | Participant and option caps are read-then-write races |
-| [x] | S12 | low | CI example deploys from the wrong branch |
-| [x] | A1 | high | Light theme fails AA contrast almost everywhere |
-| [x] | A2 | high | Vote buttons and status text do not announce changes |
-| [x] | A3 | high | Creation progress is visual only |
-| [x] | A4 | medium | Creation overlay is not a working modal |
-| [x] | A5 | medium | Form errors are not wired to their fields |
-| [x] | A6 | medium | Focus is lost after Save, Cancel and Remove |
-| [x] | A7 | medium | Calendar is hard to use with a screen reader |
-| [x] | A8 | medium | Vote table lacks a caption, heading and keyboard scrolling |
-| [x] | A9 | low | Reduced motion is only half honoured |
-| [x] | A10 | low | CSS generated content is read aloud |
-| [x] | A11 | low | Weekday names are hard-coded English |
-| [x] | A12 | medium | iOS zooms the page on every input focus |
-| [x] | A13 | medium | Small tap targets, tiny text and autofocus on mobile |
-| [x] | A14 | low | Input focus relies on a 1px border change |
-| [ ] | C1 | medium | VoteGrid has too many responsibilities |
-| [ ] | C2 | medium | Busy/error handling and form markup are copy-pasted |
-| [ ] | C3 | low | ISO date parsing exists three times |
-| [ ] | C4 | low | The Answer type is defined twice |
-| [ ] | C5 | medium | queries.ts mixes data access with domain logic |
-| [ ] | C6 | low | sanitizeVotes is misnamed and over-built |
-| [ ] | C7 | low | Auth helpers are coupled to the Hono context |
-| [ ] | C8 | medium | Side effects run inside a React state initialiser |
-| [ ] | C9 | low | Duplicate SQL for inserting an option |
-| [ ] | C10 | medium | No tests and no linter |
+| Done | ID  | Severity | Finding                                                    |
+| ---- | --- | -------- | ---------------------------------------------------------- |
+| [x]  | S1  | high     | Workers Logs may record token headers and client IPs       |
+| [x]  | S2  | high     | No request body size limit on the API                      |
+| [x]  | S3  | medium   | Nickname uniqueness is a read-then-write race              |
+| [x]  | S4  | medium   | IPv6 defeats the per-IP rate limiter                       |
+| [x]  | S5  | low      | X-Forwarded-For fallback is spoofable and unnecessary      |
+| [x]  | S6  | medium   | Turnstile response is under-checked                        |
+| [x]  | S7  | low      | Expensive checks run before cheap ones                     |
+| [x]  | S8  | low      | Creation tickets add little over the rate limiter          |
+| [x]  | S9  | medium   | Two sources of truth for the minimum creation delay        |
+| [ ]  | S10 | medium   | Google Fonts leaks visitor IPs; CSP justification is wrong |
+| [x]  | S11 | low      | Participant and option caps are read-then-write races      |
+| [x]  | S12 | low      | CI example deploys from the wrong branch                   |
+| [x]  | A1  | high     | Light theme fails AA contrast almost everywhere            |
+| [x]  | A2  | high     | Vote buttons and status text do not announce changes       |
+| [x]  | A3  | high     | Creation progress is visual only                           |
+| [x]  | A4  | medium   | Creation overlay is not a working modal                    |
+| [x]  | A5  | medium   | Form errors are not wired to their fields                  |
+| [x]  | A6  | medium   | Focus is lost after Save, Cancel and Remove                |
+| [x]  | A7  | medium   | Calendar is hard to use with a screen reader               |
+| [x]  | A8  | medium   | Vote table lacks a caption, heading and keyboard scrolling |
+| [x]  | A9  | low      | Reduced motion is only half honoured                       |
+| [x]  | A10 | low      | CSS generated content is read aloud                        |
+| [x]  | A11 | low      | Weekday names are hard-coded English                       |
+| [x]  | A12 | medium   | iOS zooms the page on every input focus                    |
+| [x]  | A13 | medium   | Small tap targets, tiny text and autofocus on mobile       |
+| [x]  | A14 | low      | Input focus relies on a 1px border change                  |
+| [ ]  | C1  | medium   | VoteGrid has too many responsibilities                     |
+| [ ]  | C2  | medium   | Busy/error handling and form markup are copy-pasted        |
+| [ ]  | C3  | low      | ISO date parsing exists three times                        |
+| [ ]  | C4  | low      | The Answer type is defined twice                           |
+| [ ]  | C5  | medium   | queries.ts mixes data access with domain logic             |
+| [ ]  | C6  | low      | sanitizeVotes is misnamed and over-built                   |
+| [ ]  | C7  | low      | Auth helpers are coupled to the Hono context               |
+| [ ]  | C8  | medium   | Side effects run inside a React state initialiser          |
+| [ ]  | C9  | low      | Duplicate SQL for inserting an option                      |
+| [ ]  | C10 | medium   | No tests and no linter                                     |
 
 ## What is already right
 
@@ -95,7 +95,7 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
   cannot enforce this because `UNIQUE` would need a `COLLATE NOCASE` column; that is wrong, collation is
   allowed per index column.
 - Fix: New migration: `CREATE UNIQUE INDEX idx_participants_event_nickname ON participants (event_id,
-  nickname COLLATE NOCASE)`. Keep the pre-check for the friendly error and map the UNIQUE violation to
+nickname COLLATE NOCASE)`. Keep the pre-check for the friendly error and map the UNIQUE violation to
   `nickname_taken` as a fallback, as the ticket nonce already does. Correct the paragraph in
   `docs/database.md`.
 
@@ -186,20 +186,20 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
 - Problem: Ratios computed from the token values. AA needs 4.5:1 for text and 3:1 for component
   boundaries. Bold text under 18.66px and regular text under 24px do not count as large.
 
-| Pair | Dark | Light | Used by |
-| --- | --- | --- | --- |
-| Faint text on card | 3.6 | 2.9 | `.hint`, `.opt-year`, `.calendar-weekday` |
-| Faint text on page | 4.6 | 2.7 | `.meta`, `.site-footer` |
-| "No" glyph on card | 1.9 | n/a | `.vote-cell.is-no` |
-| "No" glyph on vote button | 2.5 | n/a | `.vote-btn` |
-| "Yes" glyph on card | 7.9 | 2.7 | `.vote-cell.is-yes` |
-| "Maybe" glyph on vote button | 4.7 | 1.8 | `.vote-btn` |
-| Primary button text | 7.9 | 3.8 | `.btn-primary` |
-| Primary button text on hover | ok | 2.1 | `.btn-primary:hover` |
-| Accent on card | 7.9 | 3.8 | links, `.is-today`, `.tally strong` |
-| Error text on card | 4.1 | 5.2 | `.field-error`, `.form-error` |
-| Input border against its fill | 1.8 | 1.2 | `.input` |
-| Input fill against the card | 1.3 | 1.1 | `.input` |
+| Pair                          | Dark | Light | Used by                                   |
+| ----------------------------- | ---- | ----- | ----------------------------------------- |
+| Faint text on card            | 3.6  | 2.9   | `.hint`, `.opt-year`, `.calendar-weekday` |
+| Faint text on page            | 4.6  | 2.7   | `.meta`, `.site-footer`                   |
+| "No" glyph on card            | 1.9  | n/a   | `.vote-cell.is-no`                        |
+| "No" glyph on vote button     | 2.5  | n/a   | `.vote-btn`                               |
+| "Yes" glyph on card           | 7.9  | 2.7   | `.vote-cell.is-yes`                       |
+| "Maybe" glyph on vote button  | 4.7  | 1.8   | `.vote-btn`                               |
+| Primary button text           | 7.9  | 3.8   | `.btn-primary`                            |
+| Primary button text on hover  | ok   | 2.1   | `.btn-primary:hover`                      |
+| Accent on card                | 7.9  | 3.8   | links, `.is-today`, `.tally strong`       |
+| Error text on card            | 4.1  | 5.2   | `.field-error`, `.form-error`             |
+| Input border against its fill | 1.8  | 1.2   | `.input`                                  |
+| Input fill against the card   | 1.3  | 1.1   | `.input`                                  |
 
 - Fix: For light mode, pick a darker gold for text and glyph use (around `#8a4f12` reaches 4.5:1 on the
   cream card) and keep the bright golds for backgrounds only. Give the "no" glyph its own token that is
@@ -257,7 +257,7 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
 - Problem: Day buttons are labelled with the raw ISO string, read as digits. The weekday row is hidden.
   Paging months changes the title silently. WCAG 1.3.1, 4.1.2.
 - Fix: Label each day with `formatDate(iso, { weekday: 'long', day: 'numeric', month: 'long', year:
-  'numeric' })`. Make the title an `aria-live="polite"` heading and reference it from the grid with
+'numeric' })`. Make the title an `aria-live="polite"` heading and reference it from the grid with
   `aria-labelledby`. A roving `tabindex` with arrow keys would reduce the tab stops from thirty-plus to one.
 
 ### A8. Vote table lacks a caption, heading and keyboard scrolling (medium)

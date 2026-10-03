@@ -43,7 +43,14 @@ describe('error constructors', () => {
     expect(errors.payloadTooLarge()).toMatchObject({ status: 413, code: 'payload_too_large' });
     expect(errors.tooMany()).toMatchObject({ status: 429, code: 'rate_limited' });
     expect(errors.gone()).toMatchObject({ status: 410, code: 'expired' });
-    expect(errors.forbidden('Admin link required', 'admin_required')).toMatchObject({ status: 403, code: 'admin_required' });
-    expect(errors.badRequest('Bad', 'custom', [{ path: 'x' }])).toMatchObject({ status: 400, code: 'custom', details: [{ path: 'x' }] });
+    expect(errors.forbidden('Admin link required', 'admin_required')).toMatchObject({
+      status: 403,
+      code: 'admin_required',
+    });
+    expect(errors.badRequest('Bad', 'custom', [{ path: 'x' }])).toMatchObject({
+      status: 400,
+      code: 'custom',
+      details: [{ path: 'x' }],
+    });
   });
 });

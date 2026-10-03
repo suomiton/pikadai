@@ -115,7 +115,9 @@ const rows = PAIRS.map(([fg, bg, min, usedBy]) => {
   return [`${fg} on ${bg}`, `${min}:1`, mark(dark), mark(light), usedBy];
 });
 
-const widths = rows[0].map((_, i) => Math.max(...rows.map((r) => r[i].length), ['Pair', 'Min', 'Dark', 'Light', 'Used by'][i].length));
+const widths = rows[0].map((_, i) =>
+  Math.max(...rows.map((r) => r[i].length), ['Pair', 'Min', 'Dark', 'Light', 'Used by'][i].length),
+);
 const line = (cells) => cells.map((c, i) => c.padEnd(widths[i])).join('  ');
 console.log(line(['Pair', 'Min', 'Dark', 'Light', 'Used by']));
 console.log(widths.map((w) => '-'.repeat(w)).join('  '));

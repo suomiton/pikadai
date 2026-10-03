@@ -180,11 +180,7 @@ export function AdminPanel({ event, adminToken, onChanged }: Props) {
             )}
           </div>
           <label className="check">
-            <input
-              type="checkbox"
-              checked={allowSuggestions}
-              onChange={(e) => setAllowSuggestions(e.target.checked)}
-            />
+            <input type="checkbox" checked={allowSuggestions} onChange={(e) => setAllowSuggestions(e.target.checked)} />
             <span>Participants may suggest other dates</span>
           </label>
           {error && (

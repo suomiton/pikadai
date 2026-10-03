@@ -50,7 +50,12 @@ async function request<T>(path: string, { method = 'GET', body, headers = {} }: 
     } catch {
       // Non-JSON error body (e.g. an edge 5xx page); fall back to the status text.
     }
-    throw new ApiRequestError(res.status, payload.code ?? 'http_error', payload.error ?? res.statusText, payload.details);
+    throw new ApiRequestError(
+      res.status,
+      payload.code ?? 'http_error',
+      payload.error ?? res.statusText,
+      payload.details,
+    );
   }
 
   if (res.status === 204) return undefined as T;

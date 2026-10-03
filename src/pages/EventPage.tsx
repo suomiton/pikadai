@@ -65,7 +65,8 @@ export function EventPage() {
   if (loading) {
     return (
       <p className="status">
-        Loading<span className="dots" aria-hidden="true" />
+        Loading
+        <span className="dots" aria-hidden="true" />
       </p>
     );
   }

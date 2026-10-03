@@ -16,7 +16,9 @@
     "cf-typegen": "wrangler types",
     "db:create": "wrangler d1 create pikadai",
     "db:migrate:local": "wrangler d1 migrations apply pikadai --local",
-    "db:migrate:remote": "wrangler d1 migrations apply pikadai --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply pikadai --remote",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.6.1",
@@ -34,6 +36,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
+    "prettier": "^3.9.9",
     "typescript": "~5.9.0",
     "vite": "^8.3.2",
     "vitest": "^4.1.11",

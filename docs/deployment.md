@@ -12,12 +12,12 @@ else; where background helps, it links to [cloudflare.md](cloudflare.md).
 
 ## Prerequisites
 
-| Need | Check |
-| --- | --- |
-| Node.js 20 or newer and npm | `node --version` |
-| Project dependencies | `npm install` has been run |
-| A Cloudflare account | free plan is enough; no card |
-| Wrangler logged in | `npx wrangler whoami` prints your account |
+| Need                        | Check                                     |
+| --------------------------- | ----------------------------------------- |
+| Node.js 20 or newer and npm | `node --version`                          |
+| Project dependencies        | `npm install` has been run                |
+| A Cloudflare account        | free plan is enough; no card              |
+| Wrangler logged in          | `npx wrangler whoami` prints your account |
 
 Log in with `npx wrangler login`. It opens a browser for OAuth. Do not paste API tokens into files.
 
@@ -156,22 +156,22 @@ database. If a migration must be undone, restore with D1 Time Travel to a timest
 
 ## Rotating secrets
 
-| Secret | Effect of rotation |
-| --- | --- |
-| `TICKET_SECRET` | Tickets issued before the change fail verification. Anyone mid-creation for up to 15 minutes sees "please try again". Nothing else is affected. |
-| `TURNSTILE_SECRET_KEY` | Must match the widget's secret. Rotate by creating a new widget or using the dashboard's rotate action, then `wrangler secret put`. |
+| Secret                 | Effect of rotation                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TICKET_SECRET`        | Tickets issued before the change fail verification. Anyone mid-creation for up to 15 minutes sees "please try again". Nothing else is affected. |
+| `TURNSTILE_SECRET_KEY` | Must match the widget's secret. Rotate by creating a new widget or using the dashboard's rotate action, then `wrangler secret put`.             |
 
 `npx wrangler secret put NAME` takes effect on the next request; no redeploy is needed.
 
 ## Changing limits and schedules
 
-| Change | Where | Then |
-| --- | --- | --- |
-| Rate limits | `ratelimits` in `wrangler.jsonc` | `npm run cf-typegen && npm run deploy` |
-| Cron schedule | `triggers.crons` in `wrangler.jsonc` | `npm run deploy` |
-| Minimum creation delay | `minCreateDelayMs` in `shared/limits.ts`; the client reads it from the ticket response, so nothing else moves | `npm run deploy` |
-| Size and count limits | `shared/limits.ts` | `npm run deploy` (client and Worker update together) |
-| Expiry periods | `shared/limits.ts` | `npm run deploy`; existing rows keep their stored `expires_at` |
+| Change                 | Where                                                                                                         | Then                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Rate limits            | `ratelimits` in `wrangler.jsonc`                                                                              | `npm run cf-typegen && npm run deploy`                         |
+| Cron schedule          | `triggers.crons` in `wrangler.jsonc`                                                                          | `npm run deploy`                                               |
+| Minimum creation delay | `minCreateDelayMs` in `shared/limits.ts`; the client reads it from the ticket response, so nothing else moves | `npm run deploy`                                               |
+| Size and count limits  | `shared/limits.ts`                                                                                            | `npm run deploy` (client and Worker update together)           |
+| Expiry periods         | `shared/limits.ts`                                                                                            | `npm run deploy`; existing rows keep their stored `expires_at` |
 
 ## Custom domain
 
@@ -205,7 +205,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npx playwright install --with-deps chromium
-      - run: cp .dev.vars.example .dev.vars   # test keys for the local Worker the browser tests use
+      - run: cp .dev.vars.example .dev.vars # test keys for the local Worker the browser tests use
       - run: npm run test:e2e
       - run: npm run db:migrate:remote
         env:
@@ -223,19 +223,19 @@ CI.
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| `You are not authenticated` | no wrangler login on this machine | `npx wrangler login` |
-| Deploy fails mentioning the D1 `database_id` | placeholder id still in `wrangler.jsonc` | run step 1 |
-| `no such table: events` in production | migrations not applied remotely | `npm run db:migrate:remote` |
-| Every poll creation fails with `captcha_failed` | widget hostname list does not include this host, or secret does not match site key | fix widget hostnames; re-put the secret |
-| Turnstile widget shows a configuration error | `VITE_TURNSTILE_SITE_KEY` empty in `.env.production` at build time | set it and redeploy |
+| Symptom                                                | Likely cause                                                                                                          | Fix                                                                       |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `You are not authenticated`                            | no wrangler login on this machine                                                                                     | `npx wrangler login`                                                      |
+| Deploy fails mentioning the D1 `database_id`           | placeholder id still in `wrangler.jsonc`                                                                              | run step 1                                                                |
+| `no such table: events` in production                  | migrations not applied remotely                                                                                       | `npm run db:migrate:remote`                                               |
+| Every poll creation fails with `captcha_failed`        | widget hostname list does not include this host, or secret does not match site key                                    | fix widget hostnames; re-put the secret                                   |
+| Turnstile widget shows a configuration error           | `VITE_TURNSTILE_SITE_KEY` empty in `.env.production` at build time                                                    | set it and redeploy                                                       |
 | A creation fails with `ticket_invalid` once in a while | the client's address changed between asking for the ticket and creating, say a phone moving from Wi-Fi to mobile data | expected: tickets are bound to the client address, and trying again works |
-| `429` while testing | you hit the per-IP limits | wait a minute, or raise limits in `wrangler.jsonc` |
-| `/e/:id` returns 404 HTML in production | `not_found_handling` missing from assets config | restore it and redeploy |
-| Styles or fonts blocked in the browser console | CSP changed without updating `vite.config.ts` | add the origin to the policy |
-| Cron never runs | trigger removed from config, or Worker not deployed since adding it | check Settings → Triggers; redeploy |
-| Type errors after editing `wrangler.jsonc` | stale `worker-configuration.d.ts` | `npm run cf-typegen` |
+| `429` while testing                                    | you hit the per-IP limits                                                                                             | wait a minute, or raise limits in `wrangler.jsonc`                        |
+| `/e/:id` returns 404 HTML in production                | `not_found_handling` missing from assets config                                                                       | restore it and redeploy                                                   |
+| Styles or fonts blocked in the browser console         | CSP changed without updating `vite.config.ts`                                                                         | add the origin to the policy                                              |
+| Cron never runs                                        | trigger removed from config, or Worker not deployed since adding it                                                   | check Settings → Triggers; redeploy                                       |
+| Type errors after editing `wrangler.jsonc`             | stale `worker-configuration.d.ts`                                                                                     | `npm run cf-typegen`                                                      |
 
 ## Tests to run before a deploy
 

@@ -12,51 +12,55 @@ import { rateLimit } from '../lib/ratelimit';
 /** Mounted at /api/events/:id/options */
 export const options = new Hono<AppEnv>();
 
-options.post('/', rateLimit((env) => env.WRITE_LIMITER), async (c) => {
-  const event = await loadEvent(c);
-  const admin = await isAdmin(c, event);
-  if (!admin && event.allow_suggestions !== 1) {
-    throw errors.forbidden('The organiser has turned off date suggestions', 'suggestions_disabled');
-  }
+options.post(
+  '/',
+  rateLimit((env) => env.WRITE_LIMITER),
+  async (c) => {
+    const event = await loadEvent(c);
+    const admin = await isAdmin(c, event);
+    if (!admin && event.allow_suggestions !== 1) {
+      throw errors.forbidden('The organiser has turned off date suggestions', 'suggestions_disabled');
+    }
 
-  const body = parseBody(addOptionSchema, await readJson(c));
+    const body = parseBody(addOptionSchema, await readJson(c));
 
-  if ((await countOptions(c.env.DB, event.id)) >= LIMITS.optionsMax) {
-    throw errors.conflict(`This poll already has the maximum of ${LIMITS.optionsMax} dates`, 'too_many_options');
-  }
+    if ((await countOptions(c.env.DB, event.id)) >= LIMITS.optionsMax) {
+      throw errors.conflict(`This poll already has the maximum of ${LIMITS.optionsMax} dates`, 'too_many_options');
+    }
 
-  // Attribute the suggestion to the participant if they prove who they are; otherwise anonymous.
-  const participantId = c.req.header(PARTICIPANT_ID_HEADER);
-  const suggester =
-    !admin && participantId ? await participantFromToken(c, event, participantId) : null;
+    // Attribute the suggestion to the participant if they prove who they are; otherwise anonymous.
+    const participantId = c.req.header(PARTICIPANT_ID_HEADER);
+    const suggester = !admin && participantId ? await participantFromToken(c, event, participantId) : null;
 
-  const option = {
-    id: randomId(),
-    event_id: event.id,
-    date: body.date,
-    suggested_by: admin ? null : (suggester?.id ?? null),
-    created_at: Date.now(),
-  };
+    const option = {
+      id: randomId(),
+      event_id: event.id,
+      date: body.date,
+      suggested_by: admin ? null : (suggester?.id ?? null),
+      created_at: Date.now(),
+    };
 
-  try {
-    await insertOption(c.env.DB, option);
-  } catch (err) {
-    if (isUniqueViolation(err)) throw errors.conflict('That date is already in the poll', 'date_exists');
-    throw err;
-  }
-  await refreshExpiry(c.env.DB, event, option.created_at);
+    try {
+      await insertOption(c.env.DB, option);
+    } catch (err) {
+      if (isUniqueViolation(err)) throw errors.conflict('That date is already in the poll', 'date_exists');
+      throw err;
+    }
+    await refreshExpiry(c.env.DB, event, option.created_at);
 
-  return c.json(
-    { id: option.id, date: option.date, suggestedBy: option.suggested_by } satisfies EventOption,
-    201,
-  );
-});
+    return c.json({ id: option.id, date: option.date, suggestedBy: option.suggested_by } satisfies EventOption, 201);
+  },
+);
 
-options.delete('/:optionId', rateLimit((env) => env.WRITE_LIMITER), async (c) => {
-  const event = await loadEvent(c);
-  await requireAdmin(c, event);
-  const removed = await deleteOption(c.env.DB, event.id, c.req.param('optionId'));
-  if (!removed) throw errors.notFound('Date not found');
-  await refreshExpiry(c.env.DB, event, Date.now());
-  return c.body(null, 204);
-});
+options.delete(
+  '/:optionId',
+  rateLimit((env) => env.WRITE_LIMITER),
+  async (c) => {
+    const event = await loadEvent(c);
+    await requireAdmin(c, event);
+    const removed = await deleteOption(c.env.DB, event.id, c.req.param('optionId'));
+    if (!removed) throw errors.notFound('Date not found');
+    await refreshExpiry(c.env.DB, event, Date.now());
+    return c.body(null, 204);
+  },
+);

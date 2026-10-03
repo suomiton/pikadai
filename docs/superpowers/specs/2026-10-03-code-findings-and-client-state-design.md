@@ -39,12 +39,14 @@ overturn rather than questions that were asked.
 ```ts
 interface PollSession {
   id: string;
-  adminToken: string | null;   // only kept once the server confirms viewer.isAdmin
+  adminToken: string | null; // only kept once the server confirms viewer.isAdmin
   me: ParticipantIdentity | null;
-  event: EventView | null;     // null while loading or after a failed first load
-  error: string | null;        // message from the last failed load
+  event: EventView | null; // null while loading or after a failed first load
+  error: string | null; // message from the last failed load
 }
-interface AppState { poll: PollSession | null }
+interface AppState {
+  poll: PollSession | null;
+}
 
 type AppAction =
   | { type: 'poll/open'; id: string; adminToken: string | null; me: ParticipantIdentity | null }
@@ -101,11 +103,11 @@ read what they need through `usePoll()`, `useAdminToken()` and `usePollActions()
 
 ### Local reducers (all in `src/state/`, pure, tested)
 
-| File | Used by | State |
-| --- | --- | --- |
-| `createForm.ts` | `CreatePage` | `title, description, dates: ReadonlySet, allowSuggestions, turnstileToken, fieldErrors, progress` |
-| `adminForm.ts` | `AdminPanel` | `open, title, description, allowSuggestions, fieldErrors` |
-| `voteEditor.ts` | `useVoteEditor` → `VoteGrid` | `editing, nickname, draftVotes, turnstileToken, opener` |
+| File            | Used by                      | State                                                                                             |
+| --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------- |
+| `createForm.ts` | `CreatePage`                 | `title, description, dates: ReadonlySet, allowSuggestions, turnstileToken, fieldErrors, progress` |
+| `adminForm.ts`  | `AdminPanel`                 | `open, title, description, allowSuggestions, fieldErrors`                                         |
+| `voteEditor.ts` | `useVoteEditor` → `VoteGrid` | `editing, nickname, draftVotes, turnstileToken, opener`                                           |
 
 `busy` and `error` leave every component and live in `useAsyncAction` (C2). `status` strings for live
 regions stay a single `useState` where needed.

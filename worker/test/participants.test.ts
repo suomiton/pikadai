@@ -25,17 +25,29 @@ describe('POST /api/events/:id/participants', () => {
 
     const view = await getView(poll.client, poll.id);
     expect(view.participants).toHaveLength(1);
-    expect(view.participants[0]).toMatchObject({ id: res.id, nickname: 'Ada', votes: { [a.id]: 'yes', [b.id]: 'maybe' } });
+    expect(view.participants[0]).toMatchObject({
+      id: res.id,
+      nickname: 'Ada',
+      votes: { [a.id]: 'yes', [b.id]: 'maybe' },
+    });
   });
 
   it('requires a token solved for the answer action on this hostname', async () => {
     const poll = await createPoll();
     stubSiteverify(siteverifyOk('create'));
-    const wrongAction = await poll.client.post(`/api/events/${poll.id}/participants`, { nickname: 'Ada', votes: {}, turnstileToken: DUMMY_TOKEN });
+    const wrongAction = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      nickname: 'Ada',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
     expect(wrongAction.status).toBe(403);
     expect(wrongAction.body).toMatchObject({ code: 'captcha_failed' });
     stubSiteverify(siteverifyOk('answer', 'other.example'));
-    const wrongHost = await poll.client.post(`/api/events/${poll.id}/participants`, { nickname: 'Ada', votes: {}, turnstileToken: DUMMY_TOKEN });
+    const wrongHost = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      nickname: 'Ada',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
     expect(wrongHost.status).toBe(403);
   });
 
@@ -56,7 +68,11 @@ describe('POST /api/events/:id/participants', () => {
     const poll = await createPoll();
     await addParticipant(poll.client, poll.id, 'Ada');
     const fetchMock = forbidOutboundFetch();
-    const res = await poll.client.post(`/api/events/${poll.id}/participants`, { nickname: 'ADA', votes: {}, turnstileToken: DUMMY_TOKEN });
+    const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      nickname: 'ADA',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({ code: 'nickname_taken' });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -67,7 +83,11 @@ describe('POST /api/events/:id/participants', () => {
     stubSiteverify(siteverifyOk('answer'));
     const attempts = await Promise.all(
       Array.from({ length: 5 }, () =>
-        poll.client.post(`/api/events/${poll.id}/participants`, { nickname: 'Racer', votes: {}, turnstileToken: DUMMY_TOKEN }),
+        poll.client.post(`/api/events/${poll.id}/participants`, {
+          nickname: 'Racer',
+          votes: {},
+          turnstileToken: DUMMY_TOKEN,
+        }),
       ),
     );
     const statuses = attempts.map((r) => r.status).sort();
@@ -86,7 +106,11 @@ describe('POST /api/events/:id/participants', () => {
       ),
     );
     const fetchMock = forbidOutboundFetch();
-    const res = await poll.client.post(`/api/events/${poll.id}/participants`, { nickname: 'Late', votes: {}, turnstileToken: DUMMY_TOKEN });
+    const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      nickname: 'Late',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({ code: 'event_full' });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -125,7 +149,11 @@ describe('PUT /api/events/:id/participants/:participantId', () => {
     const poll = await createPoll();
     const [a] = poll.view.options;
     const them = await addParticipant(client(), poll.id, 'Grace');
-    const res = await poll.client.put(`/api/events/${poll.id}/participants/${them.id}`, { votes: { [a.id]: 'maybe' } }, bearer(poll.adminToken));
+    const res = await poll.client.put(
+      `/api/events/${poll.id}/participants/${them.id}`,
+      { votes: { [a.id]: 'maybe' } },
+      bearer(poll.adminToken),
+    );
     expect(res.status).toBe(204);
     const [row] = (await getView(poll.client, poll.id)).participants;
     expect(row).toMatchObject({ nickname: 'Grace', votes: { [a.id]: 'maybe' } });
@@ -140,20 +168,33 @@ describe('PUT /api/events/:id/participants/:participantId', () => {
 
     expect((await poll.client.put(path, { votes: {} })).body).toMatchObject({ code: 'not_owner' });
     expect((await poll.client.put(path, { votes: {} }, asParticipant(grace))).status).toBe(403);
-    expect((await poll.client.put(path, { votes: {} }, { ...asParticipant(ada), Authorization: 'Bearer nope' })).status).toBe(403);
+    expect(
+      (await poll.client.put(path, { votes: {} }, { ...asParticipant(ada), Authorization: 'Bearer nope' })).status,
+    ).toBe(403);
     // Ada's token is valid, but not for a participant that belongs to another poll.
-    expect((await poll.client.put(`/api/events/${other.id}/participants/${ada.id}`, { votes: {} }, asParticipant(ada))).status).toBe(403);
+    expect(
+      (await poll.client.put(`/api/events/${other.id}/participants/${ada.id}`, { votes: {} }, asParticipant(ada)))
+        .status,
+    ).toBe(403);
   });
 
   it('refuses a rename onto a nickname someone else uses', async () => {
     const poll = await createPoll();
     const ada = await addParticipant(poll.client, poll.id, 'Ada');
     await addParticipant(client(), poll.id, 'Grace');
-    const res = await poll.client.put(`/api/events/${poll.id}/participants/${ada.id}`, { nickname: 'grace', votes: {} }, asParticipant(ada));
+    const res = await poll.client.put(
+      `/api/events/${poll.id}/participants/${ada.id}`,
+      { nickname: 'grace', votes: {} },
+      asParticipant(ada),
+    );
     expect(res.status).toBe(409);
     expect(res.body).toMatchObject({ code: 'nickname_taken' });
     // Keeping your own nickname, in any case, is fine.
-    const same = await poll.client.put(`/api/events/${poll.id}/participants/${ada.id}`, { nickname: 'Ada', votes: {} }, asParticipant(ada));
+    const same = await poll.client.put(
+      `/api/events/${poll.id}/participants/${ada.id}`,
+      { nickname: 'Ada', votes: {} },
+      asParticipant(ada),
+    );
     expect(same.status).toBe(204);
   });
 });
@@ -164,9 +205,15 @@ describe('DELETE /api/events/:id/participants/:participantId', () => {
     const ada = await addParticipant(poll.client, poll.id, 'Ada', { [poll.view.options[0].id]: 'yes' });
     const grace = await addParticipant(client(), poll.id, 'Grace');
 
-    expect((await poll.client.delete(`/api/events/${poll.id}/participants/${ada.id}`, asParticipant(ada))).status).toBe(204);
-    expect((await poll.client.delete(`/api/events/${poll.id}/participants/${grace.id}`, bearer(poll.adminToken))).status).toBe(204);
-    expect((await poll.client.delete(`/api/events/${poll.id}/participants/${grace.id}`, bearer(poll.adminToken))).status).toBe(404);
+    expect((await poll.client.delete(`/api/events/${poll.id}/participants/${ada.id}`, asParticipant(ada))).status).toBe(
+      204,
+    );
+    expect(
+      (await poll.client.delete(`/api/events/${poll.id}/participants/${grace.id}`, bearer(poll.adminToken))).status,
+    ).toBe(204);
+    expect(
+      (await poll.client.delete(`/api/events/${poll.id}/participants/${grace.id}`, bearer(poll.adminToken))).status,
+    ).toBe(404);
     expect((await getView(poll.client, poll.id)).participants).toEqual([]);
   });
 

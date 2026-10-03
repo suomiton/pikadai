@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { base64url, hmacSign, randomId, randomToken, safeEqual, sha256Hex } from './crypto';
 
 const base64urlToHex = (s: string) =>
-  Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+  Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join(
+    '',
+  );
 
 describe('base64url', () => {
   it('uses the URL-safe alphabet and no padding', () => {

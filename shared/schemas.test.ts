@@ -55,14 +55,17 @@ describe('eventDraftSchema', () => {
   it('caps the title and description lengths', () => {
     expect(eventDraftSchema.safeParse({ ...valid, title: 'x'.repeat(LIMITS.titleMax) }).success).toBe(true);
     expect(eventDraftSchema.safeParse({ ...valid, title: 'x'.repeat(LIMITS.titleMax + 1) }).success).toBe(false);
-    expect(
-      eventDraftSchema.safeParse({ ...valid, description: 'x'.repeat(LIMITS.descriptionMax + 1) }).success,
-    ).toBe(false);
+    expect(eventDraftSchema.safeParse({ ...valid, description: 'x'.repeat(LIMITS.descriptionMax + 1) }).success).toBe(
+      false,
+    );
   });
 
   it('requires at least one date and caps the count', () => {
     expect(firstMessage(eventDraftSchema.safeParse({ ...valid, dates: [] }))).toBe('Pick at least one date');
-    const many = Array.from({ length: LIMITS.optionsMax + 1 }, (_, i) => `2027-01-${String((i % 28) + 1).padStart(2, '0')}`);
+    const many = Array.from(
+      { length: LIMITS.optionsMax + 1 },
+      (_, i) => `2027-01-${String((i % 28) + 1).padStart(2, '0')}`,
+    );
     expect(eventDraftSchema.safeParse({ ...valid, dates: many }).success).toBe(false);
   });
 

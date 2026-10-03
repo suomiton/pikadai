@@ -103,26 +103,26 @@ pikadai/
 
 Not in the tree because they are generated or local only (all gitignored):
 
-| Path | What | Created by |
-| --- | --- | --- |
-| `node_modules/` | dependencies | `npm install` |
-| `dist/client/` | built SPA plus `_headers` | `npm run build` |
-| `dist/pikadai/` | built Worker plus resolved `wrangler.json` | `npm run build` |
-| `.wrangler/state/` | local D1, rate-limit, and cache state | `npm run dev`, `wrangler … --local` |
-| `.wrangler/deploy/config.json` | redirect so `wrangler deploy` finds the built config | `npm run build` |
-| `.dev.vars` | local Worker secrets | you, from `.dev.vars.example` |
-| `test-results/`, `playwright-report/` | Playwright traces and reports | `npm run test:e2e` |
+| Path                                  | What                                                 | Created by                          |
+| ------------------------------------- | ---------------------------------------------------- | ----------------------------------- |
+| `node_modules/`                       | dependencies                                         | `npm install`                       |
+| `dist/client/`                        | built SPA plus `_headers`                            | `npm run build`                     |
+| `dist/pikadai/`                       | built Worker plus resolved `wrangler.json`           | `npm run build`                     |
+| `.wrangler/state/`                    | local D1, rate-limit, and cache state                | `npm run dev`, `wrangler … --local` |
+| `.wrangler/deploy/config.json`        | redirect so `wrangler deploy` finds the built config | `npm run build`                     |
+| `.dev.vars`                           | local Worker secrets                                 | you, from `.dev.vars.example`       |
+| `test-results/`, `playwright-report/` | Playwright traces and reports                        | `npm run test:e2e`                  |
 
 ## The three sides
 
 The code is split by where it runs, and TypeScript project references enforce the split.
 
-| Project | Includes | `lib` | Why separate |
-| --- | --- | --- | --- |
-| `tsconfig.app.json` | `src/`, `shared/` | ES2023 + DOM | browser APIs allowed, Workers types not |
-| `tsconfig.worker.json` | `worker/`, `shared/`, `worker-configuration.d.ts` | ES2023 | Workers runtime types, no DOM |
-| `tsconfig.node.json` | `vite.config.ts`, `vitest.config.ts`, `test/` | ES2023 + Node | build and test tooling only |
-| `tsconfig.e2e.json` | `e2e/`, `playwright.config.ts` | ES2023 + DOM + Node | Playwright drives a browser from Node |
+| Project                | Includes                                          | `lib`               | Why separate                            |
+| ---------------------- | ------------------------------------------------- | ------------------- | --------------------------------------- |
+| `tsconfig.app.json`    | `src/`, `shared/`                                 | ES2023 + DOM        | browser APIs allowed, Workers types not |
+| `tsconfig.worker.json` | `worker/`, `shared/`, `worker-configuration.d.ts` | ES2023              | Workers runtime types, no DOM           |
+| `tsconfig.node.json`   | `vite.config.ts`, `vitest.config.ts`, `test/`     | ES2023 + Node       | build and test tooling only             |
+| `tsconfig.e2e.json`    | `e2e/`, `playwright.config.ts`                    | ES2023 + DOM + Node | Playwright drives a browser from Node   |
 
 `shared/` compiles under both the app and worker projects, so anything placed there must use only
 standard APIs available in both environments. Zod and plain types qualify; `window` or `D1Database` do
@@ -147,20 +147,21 @@ limits and D1.
 
 ## npm scripts
 
-| Script | Does |
-| --- | --- |
-| `dev` | Vite dev server with the Worker alongside |
-| `build` | `tsc -b` then `vite build` |
-| `preview` | build, then serve the built output locally |
-| `deploy` | build, then `wrangler deploy` |
-| `typecheck` | `tsc -b` only |
-| `test` | Vitest, both projects: unit tests under Node and the Worker inside workerd with a local D1 |
-| `test:unit` / `test:worker` | one Vitest project at a time |
-| `test:e2e` | Playwright against `npm run dev` (started for you unless one is already up); needs `npx playwright install chromium` once |
-| `cf-typegen` | regenerate `worker-configuration.d.ts` from `wrangler.jsonc` and `.dev.vars` |
-| `db:create` | create the production D1 database |
-| `db:migrate:local` | apply `migrations/` to the local D1 |
-| `db:migrate:remote` | apply `migrations/` to production D1 |
+| Script                      | Does                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `dev`                       | Vite dev server with the Worker alongside                                                                                 |
+| `build`                     | `tsc -b` then `vite build`                                                                                                |
+| `preview`                   | build, then serve the built output locally                                                                                |
+| `deploy`                    | build, then `wrangler deploy`                                                                                             |
+| `typecheck`                 | `tsc -b` only                                                                                                             |
+| `test`                      | Vitest, both projects: unit tests under Node and the Worker inside workerd with a local D1                                |
+| `test:unit` / `test:worker` | one Vitest project at a time                                                                                              |
+| `test:e2e`                  | Playwright against `npm run dev` (started for you unless one is already up); needs `npx playwright install chromium` once |
+| `format` / `format:check`   | Prettier over the whole tree: rewrite, or fail when a file is not formatted                                               |
+| `cf-typegen`                | regenerate `worker-configuration.d.ts` from `wrangler.jsonc` and `.dev.vars`                                              |
+| `db:create`                 | create the production D1 database                                                                                         |
+| `db:migrate:local`          | apply `migrations/` to the local D1                                                                                       |
+| `db:migrate:remote`         | apply `migrations/` to production D1                                                                                      |
 
 ## Conventions
 
@@ -174,8 +175,8 @@ limits and D1.
 - **No SQL outside `worker/db/queries.ts`.** Route handlers call named query functions.
 - **CSS** uses design tokens from `tokens.css`; components never hard-code colours. Class names are plain
   kebab-case with `is-*` state modifiers.
-- **Formatting** follows the Prettier-style defaults the files already use: two-space indent, single
-  quotes, trailing commas, 100-column soft limit. No formatter is wired up yet.
+- **Formatting** is Prettier (`.prettierrc`: single quotes, trailing commas, 120 columns). `npm run format`
+  rewrites the tree and `npm run format:check` is what CI runs.
 - **Tests** live next to what they test as `*.test.ts` (pure functions, run under Node), in
   `worker/test/` (the whole API in workerd, Turnstile stubbed, one fresh client address per test) and in
   `e2e/` (browser journeys with the Turnstile test keys). A new behaviour comes with a test at the lowest

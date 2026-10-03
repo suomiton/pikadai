@@ -133,8 +133,8 @@ export function CreatePage() {
       <section className="hero">
         <h1>Find a date that works for everyone.</h1>
         <p>
-          Pick some dates, share one link, and let people answer with just a nickname. No login, no email,
-          no tracking. The poll deletes itself after it expires.
+          Pick some dates, share one link, and let people answer with just a nickname. No login, no email, no tracking.
+          The poll deletes itself after it expires.
         </p>
       </section>
 
@@ -217,11 +217,7 @@ export function CreatePage() {
         </div>
 
         <label className="check">
-          <input
-            type="checkbox"
-            checked={allowSuggestions}
-            onChange={(e) => setAllowSuggestions(e.target.checked)}
-          />
+          <input type="checkbox" checked={allowSuggestions} onChange={(e) => setAllowSuggestions(e.target.checked)} />
           <span>Let participants suggest other dates</span>
         </label>
 
@@ -252,9 +248,7 @@ export function CreatePage() {
       >
         {progress && (
           <div className="card progress-card stack">
-            <h2 id={`${id}-progress-title`}>
-              {progress.failed ? 'Could not create the poll' : 'Creating your poll'}
-            </h2>
+            <h2 id={`${id}-progress-title`}>{progress.failed ? 'Could not create the poll' : 'Creating your poll'}</h2>
             <ProgressSteps steps={STEPS} current={progress.step} failed={progress.failed} />
             {progress.failed && (
               <>

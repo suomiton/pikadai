@@ -120,8 +120,8 @@ export function Calendar({ selected, onToggle, minDate, disabledDates }: Props) 
       </div>
 
       <p id={`${id}-help`} className="visually-hidden">
-        Use the arrow keys to move between days, Page Up and Page Down to change month, and Enter or Space
-        to pick a day.
+        Use the arrow keys to move between days, Page Up and Page Down to change month, and Enter or Space to pick a
+        day.
       </p>
       <div
         ref={gridRef}

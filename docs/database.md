@@ -55,13 +55,13 @@ fingerprints. Nicknames are free text chosen by the participant.
 
 ## Conventions
 
-| Convention | Detail |
-| --- | --- |
-| Identifiers | `TEXT`, 22-character base64url from 16 random bytes. Never sequential, so nothing can be enumerated. |
-| Timestamps | `INTEGER` unix epoch milliseconds, UTC. Named `*_at`. |
-| Calendar dates | `TEXT` in `YYYY-MM-DD`. No time, no zone. Sorting and comparing as strings is correct. |
-| Booleans | `INTEGER` 0 or 1 (SQLite has no boolean type). |
-| Secrets | Never stored. Only SHA-256 hex digests of tokens, in `*_token_hash` columns. |
+| Convention     | Detail                                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| Identifiers    | `TEXT`, 22-character base64url from 16 random bytes. Never sequential, so nothing can be enumerated. |
+| Timestamps     | `INTEGER` unix epoch milliseconds, UTC. Named `*_at`.                                                |
+| Calendar dates | `TEXT` in `YYYY-MM-DD`. No time, no zone. Sorting and comparing as strings is correct.               |
+| Booleans       | `INTEGER` 0 or 1 (SQLite has no boolean type).                                                       |
+| Secrets        | Never stored. Only SHA-256 hex digests of tokens, in `*_token_hash` columns.                         |
 
 ## Tables
 
@@ -69,17 +69,17 @@ fingerprints. Nicknames are free text chosen by the participant.
 
 One row per poll.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | TEXT PK | public poll id; the capability in the share link |
-| `title` | TEXT | 1–100 characters, trimmed |
-| `description` | TEXT | 0–500 characters, trimmed; default `''` |
-| `admin_token_hash` | TEXT | SHA-256 of the 43-character admin token |
-| `allow_suggestions` | INTEGER | 1 if participants may add dates; default 1 |
-| `ticket_nonce` | TEXT UNIQUE, nullable | nonce from the creation ticket; the UNIQUE index is what makes tickets single-use |
-| `created_at` | INTEGER | |
-| `updated_at` | INTEGER | bumped by PATCH and by expiry recalculation |
-| `expires_at` | INTEGER | when the poll becomes unreadable and eligible for purge; see [Expiry](#expiry) |
+| Column              | Type                  | Notes                                                                             |
+| ------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| `id`                | TEXT PK               | public poll id; the capability in the share link                                  |
+| `title`             | TEXT                  | 1–100 characters, trimmed                                                         |
+| `description`       | TEXT                  | 0–500 characters, trimmed; default `''`                                           |
+| `admin_token_hash`  | TEXT                  | SHA-256 of the 43-character admin token                                           |
+| `allow_suggestions` | INTEGER               | 1 if participants may add dates; default 1                                        |
+| `ticket_nonce`      | TEXT UNIQUE, nullable | nonce from the creation ticket; the UNIQUE index is what makes tickets single-use |
+| `created_at`        | INTEGER               |                                                                                   |
+| `updated_at`        | INTEGER               | bumped by PATCH and by expiry recalculation                                       |
+| `expires_at`        | INTEGER               | when the poll becomes unreadable and eligible for purge; see [Expiry](#expiry)    |
 
 Index: `idx_events_expires_at (expires_at)` for the purge query.
 
@@ -87,13 +87,13 @@ Index: `idx_events_expires_at (expires_at)` for the purge query.
 
 One row per candidate date in a poll.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | TEXT PK | |
-| `event_id` | TEXT FK → events, `ON DELETE CASCADE` | |
-| `date` | TEXT | `YYYY-MM-DD`; must be a real calendar date |
+| Column         | Type                                                   | Notes                                                                                                                                                     |
+| -------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | TEXT PK                                                |                                                                                                                                                           |
+| `event_id`     | TEXT FK → events, `ON DELETE CASCADE`                  |                                                                                                                                                           |
+| `date`         | TEXT                                                   | `YYYY-MM-DD`; must be a real calendar date                                                                                                                |
 | `suggested_by` | TEXT FK → participants, nullable, `ON DELETE SET NULL` | set when a participant proved identity while suggesting; null for creator-added dates. If that participant is later removed the date stays, unattributed. |
-| `created_at` | INTEGER | |
+| `created_at`   | INTEGER                                                |                                                                                                                                                           |
 
 Constraints: `UNIQUE (event_id, date)`, so a date appears at most once per poll. Index on `event_id`.
 
@@ -101,14 +101,14 @@ Constraints: `UNIQUE (event_id, date)`, so a date appears at most once per poll.
 
 One row per answer in a poll.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | TEXT PK | sent back to the browser together with the edit token |
-| `event_id` | TEXT FK → events, `ON DELETE CASCADE` | |
-| `nickname` | TEXT | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`) |
-| `edit_token_hash` | TEXT | SHA-256 of the participant's edit token |
-| `created_at` | INTEGER | |
-| `updated_at` | INTEGER | |
+| Column            | Type                                  | Notes                                                                                        |
+| ----------------- | ------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                        |
+| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                              |
+| `nickname`        | TEXT                                  | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`) |
+| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                      |
+| `created_at`      | INTEGER                               |                                                                                              |
+| `updated_at`      | INTEGER                               |                                                                                              |
 
 Indexes: `idx_participants_event_id (event_id)` and the unique `idx_participants_event_nickname (event_id,
 nickname COLLATE NOCASE)` from migration 0002. SQLite accepts a collation per indexed column, so the index
@@ -120,11 +120,11 @@ requests pass the pre-check together, and the Worker maps that UNIQUE violation 
 
 One row per participant per option they answered.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `participant_id` | TEXT FK → participants, `ON DELETE CASCADE` | |
-| `option_id` | TEXT FK → options, `ON DELETE CASCADE` | |
-| `answer` | TEXT | `CHECK (answer IN ('yes','no','maybe'))` |
+| Column           | Type                                        | Notes                                    |
+| ---------------- | ------------------------------------------- | ---------------------------------------- |
+| `participant_id` | TEXT FK → participants, `ON DELETE CASCADE` |                                          |
+| `option_id`      | TEXT FK → options, `ON DELETE CASCADE`      |                                          |
+| `answer`         | TEXT                                        | `CHECK (answer IN ('yes','no','maybe'))` |
 
 Primary key `(participant_id, option_id)`. Index on `option_id`. A missing row means "no answer", which
 the UI renders as `·`. Saving an answer deletes all of a participant's votes and inserts the new set in
@@ -153,10 +153,10 @@ one batch, so partial updates cannot occur.
 
 `expires_at` is computed in `computeExpiresAt` in `worker/db/queries.ts`:
 
-| Situation | `expires_at` |
-| --- | --- |
+| Situation                  | `expires_at`                                     |
+| -------------------------- | ------------------------------------------------ |
 | Poll has at least one date | midnight UTC after the latest date, plus 30 days |
-| Poll has no dates | `created_at` plus 90 days |
+| Poll has no dates          | `created_at` plus 90 days                        |
 
 It is recomputed whenever an option is added or removed. Example: a poll whose last date is 2026-11-21 expires
 at 2026-12-22T00:00:00Z. Adding 2026-11-28 moves that to 2026-12-29; removing it moves it back.
@@ -177,16 +177,16 @@ Cascades remove the poll's options, participants, and votes. The handler logs th
 
 All SQL lives in `worker/db/queries.ts`. The main ones:
 
-| Function | Used by | Query shape |
-| --- | --- | --- |
-| `getEventRow` | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?` |
-| `buildEventView` | GET | three selects (options, participants, votes joined to participants) assembled into `EventView` |
-| `insertEventWithOptions` | POST events | batch: 1 event insert + N option inserts |
-| `insertParticipantWithVotes` | POST participants | batch: 1 insert + N vote inserts |
-| `updateParticipantWithVotes` | PUT participant | batch: update, delete votes, insert votes |
-| `nicknameTaken` | POST/PUT participant | `… WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)` |
-| `insertOption` / `deleteOption` / `refreshExpiry` | options routes | insert or delete, then recompute `expires_at` |
-| `deleteExpiredEvents` | cron | the purge above |
+| Function                                          | Used by                       | Query shape                                                                                    |
+| ------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| `getEventRow`                                     | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                            |
+| `buildEventView`                                  | GET                           | three selects (options, participants, votes joined to participants) assembled into `EventView` |
+| `insertEventWithOptions`                          | POST events                   | batch: 1 event insert + N option inserts                                                       |
+| `insertParticipantWithVotes`                      | POST participants             | batch: 1 insert + N vote inserts                                                               |
+| `updateParticipantWithVotes`                      | PUT participant               | batch: update, delete votes, insert votes                                                      |
+| `nicknameTaken`                                   | POST/PUT participant          | `… WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`              |
+| `insertOption` / `deleteOption` / `refreshExpiry` | options routes                | insert or delete, then recompute `expires_at`                                                  |
+| `deleteExpiredEvents`                             | cron                          | the purge above                                                                                |
 
 A poll view costs roughly 3 + participants + options row reads, and creating a poll costs 1 + options row
 writes. See the D1 free-plan limits in [cloudflare.md](cloudflare.md#d1) for why this is comfortable.

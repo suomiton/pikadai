@@ -11,14 +11,14 @@ purge.
 
 ## Documentation
 
-| Document | Read it for |
-| --- | --- |
-| [Architecture](docs/architecture.md) | how the pieces fit, trust model, request flows, abuse controls, API reference, decisions |
-| [Cloudflare services](docs/cloudflare.md) | Workers, static assets, D1, rate limiting, Turnstile, cron, secrets; limits and commands |
-| [Deployment](docs/deployment.md) | first-time setup, routine deploys, rollback, secrets, custom domain, troubleshooting |
-| [Project structure](docs/project-structure.md) | directory map, build pipeline, conventions, where to change things |
-| [Database](docs/database.md) | schema, integrity rules, expiry, migrations, local database |
-| [Review findings](docs/review-findings.md) | open backlog from the 2026-10-03 review: security, accessibility, mobile, code patterns |
+| Document                                       | Read it for                                                                              |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [Architecture](docs/architecture.md)           | how the pieces fit, trust model, request flows, abuse controls, API reference, decisions |
+| [Cloudflare services](docs/cloudflare.md)      | Workers, static assets, D1, rate limiting, Turnstile, cron, secrets; limits and commands |
+| [Deployment](docs/deployment.md)               | first-time setup, routine deploys, rollback, secrets, custom domain, troubleshooting     |
+| [Project structure](docs/project-structure.md) | directory map, build pipeline, conventions, where to change things                       |
+| [Database](docs/database.md)                   | schema, integrity rules, expiry, migrations, local database                              |
+| [Review findings](docs/review-findings.md)     | open backlog from the 2026-10-03 review: security, accessibility, mobile, code patterns  |
 
 ## Quick start
 

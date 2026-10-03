@@ -269,8 +269,8 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
       >
         <table className="vote-table">
           <caption className="visually-hidden">
-            One row per participant and one column per date. The last row counts the yes and if-need-be
-            answers for each date.
+            One row per participant and one column per date. The last row counts the yes and if-need-be answers for each
+            date.
           </caption>
           <thead>
             <tr>
@@ -377,8 +377,9 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
         </table>
       </div>
 
-      {editing === null && !hasAnswered && (
-        isFull ? (
+      {editing === null &&
+        !hasAnswered &&
+        (isFull ? (
           <p className="hint">This poll is full.</p>
         ) : (
           <div>
@@ -386,8 +387,7 @@ export function VoteGrid({ event, me, adminToken, onChanged, onIdentityChange }:
               Add your availability
             </button>
           </div>
-        )
-      )}
+        ))}
 
       {editing !== null && (
         <div className="edit-panel stack">
