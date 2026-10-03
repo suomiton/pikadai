@@ -3,7 +3,7 @@ import { LIMITS } from '@shared/limits';
 import { addOptionSchema } from '@shared/schemas';
 import type { EventOption } from '@shared/types';
 import type { AppEnv } from '../env';
-import { countOptions, deleteOption, getParticipant, insertOption, refreshExpiry } from '../db/queries';
+import { countOptions, deleteOption, getParticipant, insertOption } from '../db/queries';
 import { bearerToken, isAdmin, isParticipantOwner, loadEvent, PARTICIPANT_ID_HEADER, requireAdmin } from '../lib/auth';
 import { randomId } from '../lib/crypto';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
@@ -48,7 +48,6 @@ options.post(
       if (isUniqueViolation(err)) throw errors.conflict('That date is already in the poll', 'date_exists');
       throw err;
     }
-    await refreshExpiry(c.env.DB, event, option.created_at);
 
     return c.json({ id: option.id, date: option.date, suggestedBy: option.suggested_by } satisfies EventOption, 201);
   },
@@ -60,9 +59,8 @@ options.delete(
   async (c) => {
     const event = await loadEvent(c.env.DB, c.req.param('id'));
     await requireAdmin(bearerToken(c.req.header('Authorization')), event);
-    const removed = await deleteOption(c.env.DB, event.id, c.req.param('optionId'));
+    const removed = await deleteOption(c.env.DB, event.id, c.req.param('optionId'), Date.now());
     if (!removed) throw errors.notFound('Date not found');
-    await refreshExpiry(c.env.DB, event, Date.now());
     return c.body(null, 204);
   },
 );

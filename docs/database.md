@@ -151,15 +151,21 @@ one batch, so partial updates cannot occur.
 
 ## Expiry
 
-`expires_at` is computed in `computeExpiresAt` in `worker/lib/expiry.ts`:
+`expires_at` follows one rule, written twice: `computeExpiresAt` in `worker/lib/expiry.ts` sets it when a
+poll is created, and an SQL expression in `worker/db/queries.ts` (`expiryUpdate`) recomputes it whenever an
+option is added or removed:
 
 | Situation                  | `expires_at`                                     |
 | -------------------------- | ------------------------------------------------ |
 | Poll has at least one date | midnight UTC after the latest date, plus 30 days |
 | Poll has no dates          | `created_at` plus 90 days                        |
 
-It is recomputed whenever an option is added or removed. Example: a poll whose last date is 2026-11-21 expires
-at 2026-12-22T00:00:00Z. Adding 2026-11-28 moves that to 2026-12-29; removing it moves it back.
+The recalculation runs in the same D1 batch (a transaction) as the option insert or delete and reads the
+option rows as that transaction sees them. Computing the value in the Worker from an earlier read and
+writing it afterwards would let two concurrent date changes apply their expiries in the wrong order, so a
+later date could end up with the earlier expiry and the purge could delete a live poll. Example: a poll
+whose last date is 2026-11-21 expires at 2026-12-22T00:00:00Z. Adding 2026-11-28 moves that to 2026-12-29;
+removing it moves it back.
 
 The periods are `ttlAfterLastDateDays` and `ttlWithoutDatesDays` in `shared/limits.ts`. Changing them
 affects polls created or edited afterwards; existing rows keep their stored value until an option change
@@ -177,16 +183,16 @@ Cascades remove the poll's options, participants, and votes. The handler logs th
 
 All SQL lives in `worker/db/queries.ts`. The main ones:
 
-| Function                                          | Used by                       | Query shape                                                                                                           |
-| ------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `getEventRow`                                     | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                                                   |
-| `fetchEventRows` + `toEventView`                  | GET                           | three selects (options, participants, votes joined to participants), then a pure mapping in `worker/lib/eventView.ts` |
-| `insertEventWithOptions`                          | POST events                   | batch: 1 event insert + N option inserts                                                                              |
-| `insertParticipantWithVotes`                      | POST participants             | batch: 1 insert + N vote inserts                                                                                      |
-| `updateParticipantWithVotes`                      | PUT participant               | batch: update, delete votes, insert votes                                                                             |
-| `nicknameTaken`                                   | POST/PUT participant          | `… WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                     |
-| `insertOption` / `deleteOption` / `refreshExpiry` | options routes                | insert or delete, then recompute `expires_at`                                                                         |
-| `deleteExpiredEvents`                             | cron                          | the purge above                                                                                                       |
+| Function                         | Used by                       | Query shape                                                                                                           |
+| -------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `getEventRow`                    | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                                                   |
+| `fetchEventRows` + `toEventView` | GET                           | three selects (options, participants, votes joined to participants), then a pure mapping in `worker/lib/eventView.ts` |
+| `insertEventWithOptions`         | POST events                   | batch: 1 event insert + N option inserts                                                                              |
+| `insertParticipantWithVotes`     | POST participants             | batch: 1 insert + N vote inserts                                                                                      |
+| `updateParticipantWithVotes`     | PUT participant               | batch: update, delete votes, insert votes                                                                             |
+| `nicknameTaken`                  | POST/PUT participant          | `… WHERE event_id = ? AND nickname = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                     |
+| `insertOption` / `deleteOption`  | options routes                | batch: insert or delete, plus the `expires_at` recalculation from the rows in the same transaction                    |
+| `deleteExpiredEvents`            | cron                          | the purge above                                                                                                       |
 
 A poll view costs roughly 3 + participants + options row reads, and creating a poll costs 1 + options row
 writes. See the D1 free-plan limits in [cloudflare.md](cloudflare.md#d1) for why this is comfortable.
