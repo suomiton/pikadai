@@ -7,7 +7,7 @@ pikadai/
 ├── index.html                 SPA entry; loads the font and src/main.tsx
 ├── vite.config.ts             React + Cloudflare plugins, @shared alias, _headers emitter
 ├── vitest.config.ts           Two test projects: `unit` (Node) and `worker` (workerd + local D1)
-├── playwright.config.ts       Browser tests against `npm run dev`
+├── playwright.config.ts       Browser tests: desktop and mobile against `npm run dev`, preview checks against `vite preview`
 ├── eslint.config.js           ESLint flat config: TypeScript rules everywhere, hooks and jsx-a11y rules on src/
 ├── .prettierrc                Prettier: single quotes, trailing commas, 120 columns
 ├── wrangler.jsonc             Worker config: bindings, assets, rate limits, cron, observability
@@ -21,7 +21,7 @@ pikadai/
 ├── .env.development           VITE_TURNSTILE_SITE_KEY = Turnstile test key (public)
 ├── .env.production            VITE_TURNSTILE_SITE_KEY = real site key (public)
 ├── .dev.vars.example          Template for local Worker secrets; copy to .dev.vars (gitignored)
-├── .github/workflows/ci.yml   GitHub Actions: `npm test` on every push to main and every PR into main
+├── .github/workflows/ci.yml   GitHub Actions: lint, format, build, tests with coverage, browser suite; on pushes and PRs to main
 │
 ├── shared/                    Code imported by BOTH client and Worker
 │   ├── limits.ts              Every size, count, and time limit in one object
@@ -119,8 +119,9 @@ pikadai/
 ├── e2e/                       Playwright browser tests
 │   ├── fixtures.ts            Per-test client address, second-person browser, API poll creation
 │   ├── helpers.ts             Calendar picking, vote cycling, waiting for Turnstile
-│   ├── poll.spec.ts           Create, answer, suggest, organise, delete, dead ends
-│   └── dialog.spec.ts         Confirmation keyboard behavior, cancellation, errors and reflow
+│   ├── poll.spec.ts           Create, answer, suggest, organise, delete, blocked storage, changes underneath, dead ends
+│   ├── dialog.spec.ts         Confirmation keyboard behavior, cancellation, errors and reflow
+│   └── preview.spec.ts        Against the production build: SPA fallback, security headers, Turnstile under the CSP
 │
 └── docs/                      You are here
 ```
@@ -136,6 +137,7 @@ Not in the tree because they are generated or local only (all gitignored):
 | `.wrangler/deploy/config.json`        | redirect so `wrangler deploy` finds the built config | `npm run build`                     |
 | `.dev.vars`                           | local Worker secrets                                 | you, from `.dev.vars.example`       |
 | `test-results/`, `playwright-report/` | Playwright traces and reports                        | `npm run test:e2e`                  |
+| `coverage/`                           | Istanbul coverage report: text, HTML and lcov        | `npm run test:coverage`             |
 
 ## The three sides
 
@@ -171,22 +173,23 @@ limits and D1.
 
 ## npm scripts
 
-| Script                      | Does                                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `dev`                       | Vite dev server with the Worker alongside                                                                                 |
-| `build`                     | `tsc -b` then `vite build`                                                                                                |
-| `preview`                   | build, then serve the built output locally                                                                                |
-| `deploy`                    | build, then `wrangler deploy`                                                                                             |
-| `typecheck`                 | `tsc -b` only                                                                                                             |
-| `lint`                      | ESLint over the whole tree: TypeScript rules, rules of hooks and jsx-a11y on `src/`                                       |
-| `test`                      | Vitest, both projects: unit tests under Node and the Worker inside workerd with a local D1                                |
-| `test:unit` / `test:worker` | one Vitest project at a time                                                                                              |
-| `test:e2e`                  | Playwright against `npm run dev` (started for you unless one is already up); needs `npx playwright install chromium` once |
-| `format` / `format:check`   | Prettier over the whole tree: rewrite, or fail when a file is not formatted                                               |
-| `cf-typegen`                | regenerate `worker-configuration.d.ts` from `wrangler.jsonc` and `.dev.vars`                                              |
-| `db:create`                 | create the production D1 database                                                                                         |
-| `db:migrate:local`          | apply `migrations/` to the local D1                                                                                       |
-| `db:migrate:remote`         | apply `migrations/` to production D1                                                                                      |
+| Script                      | Does                                                                                                                                                                                                              |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev`                       | Vite dev server with the Worker alongside                                                                                                                                                                         |
+| `build`                     | `tsc -b` then `vite build`                                                                                                                                                                                        |
+| `preview`                   | build, then serve the built output locally                                                                                                                                                                        |
+| `deploy`                    | build, then `wrangler deploy`                                                                                                                                                                                     |
+| `typecheck`                 | `tsc -b` only                                                                                                                                                                                                     |
+| `lint`                      | ESLint over the whole tree: TypeScript rules, rules of hooks and jsx-a11y on `src/`                                                                                                                               |
+| `test`                      | Vitest, both projects: unit tests under Node and the Worker inside workerd with a local D1                                                                                                                        |
+| `test:unit` / `test:worker` | one Vitest project at a time                                                                                                                                                                                      |
+| `test:coverage`             | both Vitest projects under Istanbul coverage; the thresholds in `vitest.config.ts` fail the run when crossed                                                                                                      |
+| `test:e2e`                  | Playwright: desktop and mobile against `npm run dev`, preview checks against `vite preview` (both started for you unless already up; set `PORT` when 5173 is taken); needs `npx playwright install chromium` once |
+| `format` / `format:check`   | Prettier over the whole tree: rewrite, or fail when a file is not formatted                                                                                                                                       |
+| `cf-typegen`                | regenerate `worker-configuration.d.ts` from `wrangler.jsonc` and `.dev.vars`                                                                                                                                      |
+| `db:create`                 | create the production D1 database                                                                                                                                                                                 |
+| `db:migrate:local`          | apply `migrations/` to the local D1                                                                                                                                                                               |
+| `db:migrate:remote`         | apply `migrations/` to production D1                                                                                                                                                                              |
 
 ## Conventions
 
@@ -210,7 +213,8 @@ limits and D1.
 - **Tests** live next to what they test as `*.test.ts` (pure functions, run under Node), in
   `worker/test/` (the whole API in workerd, Turnstile stubbed, one fresh client address per test) and in
   `e2e/` (browser journeys with the Turnstile test keys). A new behaviour comes with a test at the lowest
-  level that can observe it.
+  level that can observe it. `npm run test:coverage` measures statement and branch coverage with Istanbul;
+  the thresholds in `vitest.config.ts` keep the state, shared and Worker logic from quietly losing coverage.
 
 ## Where to make common changes
 

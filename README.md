@@ -22,6 +22,7 @@ purge.
 | [Project structure](docs/project-structure.md) | directory map, build pipeline, conventions, where to change things                       |
 | [Database](docs/database.md)                   | schema, integrity rules, expiry, migrations, local database                              |
 | [Review findings](docs/review-findings.md)     | open backlog from the 2026-10-03 review: security, accessibility, mobile, code patterns  |
+| [Code review](docs/code-review-2026-10-03.md)  | follow-up review: data-loss races, lost credentials, lost drafts, CI and coverage        |
 
 ## Quick start
 
@@ -39,15 +40,17 @@ The development build uses Cloudflare's public Turnstile test keys, which always
 
 ```sh
 npm test                            # unit tests, then the Worker inside workerd with a local D1
+npm run test:coverage               # the same, with Istanbul coverage and thresholds; report in coverage/
 npx playwright install chromium     # once per machine
-npm run test:e2e                    # browser journeys against the dev server (started if needed)
+npm run test:e2e                    # browser journeys against the dev server and the production preview
 ```
 
-GitHub Actions runs lint, formatting checks, and `npm test` on every push to `main` and every pull
-request into it ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); the badge at the top shows
-`main`. After those checks pass on a push to `main`, [the deployment workflow](.github/workflows/deploy.yml)
-builds the tested commit, applies production database migrations, and publishes to Cloudflare. The
-Deploy badge shows its status. See [the CI token setup](docs/deployment.md#continuous-deployment).
+GitHub Actions runs lint, formatting, the production build (which type-checks), both Vitest projects with
+coverage thresholds, and the browser suite on every push to `main` and every pull request into it
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); the badge at the top shows `main`. After those
+checks pass on a push to `main`, [the deployment workflow](.github/workflows/deploy.yml) builds the tested
+commit, applies production database migrations, and publishes to Cloudflare. The Deploy badge shows its
+status. See [the CI token setup](docs/deployment.md#continuous-deployment).
 
 ## Deploy
 

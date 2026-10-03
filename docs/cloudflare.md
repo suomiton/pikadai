@@ -22,7 +22,9 @@ unless the `nodejs_compat` flag is enabled; this project does not need it. One u
 addition is `crypto.subtle.timingSafeEqual`, which the token checks rely on.
 
 **Compatibility date.** `compatibility_date` in `wrangler.jsonc` pins runtime behaviour to a snapshot.
-Bump it deliberately after reading the changelog, and re-run `npm run cf-typegen`.
+Bump it deliberately after reading the changelog, and re-run `npm run cf-typegen`. The Worker test project
+runs on the newest date the test pool's bundled `workerd` supports, which can trail this one (see
+`vitest.config.ts`); the browser suite's `preview` project runs the built Worker on the deployment date.
 
 **Handlers exported.** `fetch` for HTTP and `scheduled` for the cron trigger. Both are in
 `worker/index.ts`.
@@ -158,8 +160,9 @@ How it behaves:
   IPv6 address, because one subscriber usually owns a whole /64. `X-Forwarded-For` is ignored since a client
   can set it. The key lives only in the limiter's memory; the Worker never stores or logs it.
 - `period` must be 10 or 60 seconds. `namespace_id` is any string that is unique within the account.
-- Counting is per Cloudflare location, not global, and is approximate. Treat it as flood protection, not an
-  exact quota.
+- Counting is per Cloudflare location, not global, and eventually consistent, so it is approximate and
+  cannot enforce a global budget. Treat it as flood protection, not an exact quota; a hard quota would need
+  another mechanism, such as a counter in D1 or a Durable Object.
 - The binding is emulated in local development, so a burst against `npm run dev` does return `429`.
 - Changing limits is a config edit plus redeploy; no code changes.
 
@@ -178,7 +181,9 @@ the response's `hostname` to match the request's hostname and its `action` to be
 rendered with: `create` on the create page, `answer` in the vote grid. A token solved on another site bound
 to the same widget, or for the other form, is refused. Tokens are valid for five minutes and can be verified
 once; the Worker runs its cheaper checks first so a rejected request does not spend the token, and the client
-resets the widget after any failed submit.
+resets the widget after any failed submit. The `siteverify` call is bounded to five seconds: when Cloudflare
+cannot be reached or does not answer in time, the Worker returns `503 verification_unavailable` instead of
+refusing the user, and the client asks them to try again.
 
 **Hostnames.** A widget is bound to a list of hostnames. Add every hostname the site is served from,
 including the `workers.dev` one and any custom domain. A mismatch makes every verification fail with

@@ -77,7 +77,7 @@ it; the merge will conflict in `VoteGrid.tsx` and `AdminPanel.tsx` around `remov
   `deleteOption(db, eventId, optionId, now): Promise<boolean>` (gains `now`).
 - `computeExpiresAt` in `worker/lib/expiry.ts` stays for poll creation; the SQL below is the same rule.
 
-- [ ] **Step 1: Write the failing tests** (`worker/test/queries.test.ts`)
+- [x] **Step 1: Write the failing tests** (`worker/test/queries.test.ts`)
 
 ```ts
 import { env } from 'cloudflare:test';
@@ -149,10 +149,10 @@ it('keeps the expiry right when two dates are added at the same time', async () 
 });
 ```
 
-- [ ] **Step 2: Run them**: `npx vitest run --project worker worker/test/queries.test.ts` — fails: the first
+- [x] **Step 2: Run them**: `npx vitest run --project worker worker/test/queries.test.ts` — fails: the first
       test gets the expiry of the later insert only, `deleteOption` has no `now`.
 
-- [ ] **Step 3: Implement** in `worker/db/queries.ts`
+- [x] **Step 3: Implement** in `worker/db/queries.ts`
 
 ```ts
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -192,11 +192,11 @@ export async function deleteOption(db: D1Database, eventId: string, optionId: st
 Delete `refreshExpiry` and the `computeExpiresAt` import. In `worker/routes/options.ts` remove both
 `refreshExpiry` calls and call `deleteOption(c.env.DB, event.id, c.req.param('optionId'), Date.now())`.
 
-- [ ] **Step 4: Run** `npm run test:worker` — all green, including the existing `date_exists` test (the
+- [x] **Step 4: Run** `npm run test:worker` — all green, including the existing `date_exists` test (the
       UNIQUE violation now surfaces from `db.batch`).
-- [ ] **Step 5: Docs**: `docs/database.md` expiry section says the Worker recomputes the value in SQL in
+- [x] **Step 5: Docs**: `docs/database.md` expiry section says the Worker recomputes the value in SQL in
       the same batch as the option change.
-- [ ] **Step 6: Commit** `fix(worker): compute expires_at in the option batch (review finding 1)`.
+- [x] **Step 6: Commit** `fix(worker): compute expires_at in the option batch (review finding 1)`.
 
 ---
 
@@ -305,12 +305,12 @@ it('drops the event when the refresh says the poll is gone', …);
 it('keeps credentials from the open session when storage has nothing (blocked storage)', …);
 ```
 
-- [ ] Write the tests, run `npx vitest run --project unit src/state` to see them fail.
-- [ ] Implement `app.ts`, `pollActions.ts`, `api.ts` as specified.
-- [ ] Update callers: `refresh(id)`, `setIdentity(id, …)`, `forgetPoll(id)`; `EventPage` adapts to
+- [x] Write the tests, run `npx vitest run --project unit src/state` to see them fail.
+- [x] Implement `app.ts`, `pollActions.ts`, `api.ts` as specified.
+- [x] Update callers: `refresh(id)`, `setIdentity(id, …)`, `forgetPoll(id)`; `EventPage` adapts to
       `error.message` (the banner itself is Task 5).
-- [ ] `npm run lint && npm run typecheck && npm run test:unit` green.
-- [ ] Commit `fix(client): order poll fetches and scope identity writes by poll id (findings 2, 3)`.
+- [x] `npm run lint && npm run typecheck && npm run test:unit` green.
+- [x] Commit `fix(client): order poll fetches and scope identity writes by poll id (findings 2, 3)`.
 
 ---
 
@@ -356,7 +356,7 @@ test('the organiser keeps access when the browser blocks storage', async ({ page
 });
 ```
 
-- [ ] Commit `fix(client): keep organiser access when storage is blocked (finding 4)`.
+- [x] Commit `fix(client): keep organiser access when storage is blocked (finding 4)`.
 
 ---
 
@@ -388,7 +388,7 @@ e2e: organiser opens Ada's row, changes the nickname, removes the date Ada voted
 `window.confirm`), saves; the row shows the new nickname and the vote for the remaining date; the
 request had no removed option.
 
-- [ ] Commit `fix(client): reconcile the answer draft when a date is removed (finding 5)`.
+- [x] Commit `fix(client): reconcile the answer draft when a date is removed (finding 5)`.
 
 ---
 
@@ -411,7 +411,7 @@ e2e: organiser opens "Edit details" and types a title (unsaved draft); adds a da
 `page.route` makes the next `GET /api/events/:id` fail with 503 once; the alert appears, the form still
 holds the typed title, "Try again" clears the alert and shows the new column.
 
-- [ ] Commit `fix(client): keep the poll visible through a refresh failure, with retry (finding 6)`.
+- [x] Commit `fix(client): keep the poll visible through a refresh failure, with retry (finding 6)`.
 
 ---
 
@@ -431,7 +431,7 @@ timeout or network failure is `unavailable` → 503 `verification_unavailable` (
 did not respond. Please try again."); `success:false` or a binding mismatch is `rejected` → 403
 `captcha_failed` as before.
 
-- [ ] Commit `fix(worker): time out Turnstile verification and answer 503 when it is unavailable`.
+- [x] Commit `fix(worker): time out Turnstile verification and answer 503 when it is unavailable`.
 
 ---
 
@@ -458,7 +458,7 @@ Coverage: provider `istanbul` (Workers need instrumentation), `include` the thre
 tests, `src/main.tsx`, `src/router.tsx`, `src/vite-env.d.ts`; `reporter: ['text', 'html', 'lcov']`;
 thresholds for `src/state/**`, `shared/**` and `worker/**` set from the first measurement.
 
-- [ ] Commit `ci: build, browser journeys, production preview checks and coverage (findings 7, 8)`.
+- [x] Commit `ci: build, browser journeys, production preview checks and coverage (findings 7, 8)`.
 
 ---
 
