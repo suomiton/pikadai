@@ -9,6 +9,7 @@ import { formatDateLong } from '../lib/dates';
 import { computeTallies, LABEL } from '../lib/votes';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { EditPanel } from './EditPanel';
+import { ConfirmDialog } from './ConfirmDialog';
 import { FormError } from './FormError';
 import { OptionHeader } from './OptionHeader';
 import { StatusAnnouncer } from './StatusAnnouncer';
@@ -17,6 +18,8 @@ import { VoteEditRow } from './VoteEditRow';
 import { VoteRow } from './VoteRow';
 
 const NICKNAME_REQUIRED = 'Please enter a nickname.';
+
+type Removal = { kind: 'participant'; participant: Participant } | { kind: 'option'; option: EventOption };
 
 /**
  * The participants × dates table. Owns the three mutations and the focus return; the editing
@@ -31,6 +34,7 @@ export function VoteGrid() {
   const { busy, error, setError, run } = useAsyncAction();
   /** Read out by the live region: vote changes, saves and removals that are otherwise silent. */
   const [status, setStatus] = useState('');
+  const [pendingRemoval, setPendingRemoval] = useState<Removal | null>(null);
   const turnstileRef = useRef<TurnstileInstance>(null);
 
   const sectionRef = useRef<HTMLElement>(null);
@@ -141,8 +145,6 @@ export function VoteGrid() {
 
   async function remove(p: Participant) {
     const mine = me?.id === p.id;
-    const question = mine ? 'Remove your answers from this poll?' : `Remove ${p.nickname} from this poll?`;
-    if (!window.confirm(question)) return;
 
     const removed = await run(async () => {
       await api.deleteParticipant(event.id, p.id, { adminToken, participant: mine ? me : null });
@@ -152,13 +154,12 @@ export function VoteGrid() {
     });
     if (removed) {
       setStatus(mine ? 'Your answers were removed.' : `${p.nickname} was removed from the poll.`);
-      returnFocus();
+      setPendingRemoval(null);
     }
   }
 
   async function removeOption(option: EventOption) {
     if (!adminToken) return;
-    if (!window.confirm('Remove this date and every answer for it?')) return;
 
     const removed = await run(async () => {
       await api.deleteOption(event.id, option.id, adminToken);
@@ -166,8 +167,20 @@ export function VoteGrid() {
     });
     if (removed) {
       setStatus(`${formatDateLong(option.date)} was removed from the poll.`);
-      tableRegionRef.current?.focus(); // the button that had focus went with its column
+      setPendingRemoval(null);
     }
+  }
+
+  function requestRemoval(removal: Removal) {
+    if (busy) return;
+    setError(null);
+    setPendingRemoval(removal);
+  }
+
+  function confirmRemoval() {
+    if (!pendingRemoval || busy) return;
+    if (pendingRemoval.kind === 'participant') void remove(pendingRemoval.participant);
+    else void removeOption(pendingRemoval.option);
   }
 
   const errorId = `${id}-error`;
@@ -215,7 +228,7 @@ export function VoteGrid() {
                   isBest={isBest(o.id)}
                   canRemove={isAdmin}
                   disabled={busy}
-                  onRemove={removeOption}
+                  onRemove={(option) => requestRemoval({ kind: 'option', option })}
                 />
               ))}
               <th scope="col" className="actions-col">
@@ -288,17 +301,49 @@ export function VoteGrid() {
           isNew={editing.kind === 'new'}
           busy={busy}
           canSave={editing.kind !== 'new' || turnstileToken !== null}
-          error={error}
+          error={pendingRemoval ? null : error}
           errorId={errorId}
           turnstileRef={turnstileRef}
           onToken={editor.setTurnstileToken}
           onSave={save}
           onCancel={cancel}
-          onRemove={editingParticipant ? () => remove(editingParticipant) : undefined}
+          onRemove={
+            editingParticipant
+              ? () => requestRemoval({ kind: 'participant', participant: editingParticipant })
+              : undefined
+          }
         />
       )}
 
-      {editing === null && <FormError message={error} />}
+      {editing === null && !pendingRemoval && <FormError message={error} />}
+      {pendingRemoval && (
+        <ConfirmDialog
+          title={
+            pendingRemoval.kind === 'option'
+              ? 'Remove this date?'
+              : me?.id === pendingRemoval.participant.id
+                ? 'Remove your answers?'
+                : `Remove ${pendingRemoval.participant.nickname}?`
+          }
+          description={
+            pendingRemoval.kind === 'option'
+              ? `${formatDateLong(pendingRemoval.option.date)} and every answer for it will be removed. This cannot be undone.`
+              : me?.id === pendingRemoval.participant.id
+                ? 'Your answers will be removed from this poll. This cannot be undone.'
+                : `${pendingRemoval.participant.nickname} and all their answers will be removed from this poll. This cannot be undone.`
+          }
+          confirmLabel={pendingRemoval.kind === 'option' ? 'Remove date' : 'Remove answers'}
+          busyLabel={pendingRemoval.kind === 'option' ? 'Removing date…' : 'Removing answers…'}
+          busy={busy}
+          error={error}
+          onConfirm={confirmRemoval}
+          onCancel={() => {
+            setPendingRemoval(null);
+            setError(null);
+          }}
+          returnFocusRef={tableRegionRef}
+        />
+      )}
     </section>
   );
 }

@@ -79,6 +79,8 @@ pikadai/
 │   │   ├── Layout.tsx         Header, footer, <Outlet/>
 │   │   ├── Calendar.tsx       Month grid, multi-select, min date, disabled dates, arrow-key navigation
 │   │   ├── ProgressSteps.tsx  Step list with braille spinner
+│   │   ├── Modal.tsx          Shared modal with keyboard containment, labelling and focus return
+│   │   ├── ConfirmDialog.tsx  Destructive confirmations, Cancel first, busy status and errors
 │   │   ├── TurnstileField.tsx Widget wrapper; handles a missing site key
 │   │   ├── VoteGrid.tsx       The participants × dates table: mutations, tallies, focus return
 │   │   ├── OptionHeader.tsx   One date column header
@@ -117,7 +119,8 @@ pikadai/
 ├── e2e/                       Playwright browser tests
 │   ├── fixtures.ts            Per-test client address, second-person browser, API poll creation
 │   ├── helpers.ts             Calendar picking, vote cycling, waiting for Turnstile
-│   └── poll.spec.ts           Create, answer, suggest, organise, delete, dead ends
+│   ├── poll.spec.ts           Create, answer, suggest, organise, delete, dead ends
+│   └── dialog.spec.ts         Confirmation keyboard behavior, cancellation, errors and reflow
 │
 └── docs/                      You are here
 ```

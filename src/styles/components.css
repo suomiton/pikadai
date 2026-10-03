@@ -508,27 +508,33 @@ thead th.is-best .opt-day {
   min-height: 65px;
 }
 
-/* Creation progress dialog: a native <dialog> opened with showModal() */
-.progress-dialog {
+/* Shared modal: <dialog> opened with showModal() */
+.modal {
   width: min(100% - 2rem, 26rem);
   max-width: none;
+  max-height: calc(100dvh - 2rem);
   margin: auto;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
 }
-.progress-dialog[open] {
+.modal[open] {
   animation: rise-in 220ms ease-out;
 }
-.progress-dialog::backdrop {
+.modal::backdrop {
   background: rgba(28, 25, 57, 0.82);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(3px);
   animation: fade-in 180ms ease-out;
 }
-.progress-card {
+.modal-card {
   box-shadow: var(--shadow);
+  overflow-wrap: anywhere;
+}
+.modal .btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .progress-steps {

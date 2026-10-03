@@ -16,6 +16,11 @@ test.describe('creating a poll', () => {
 
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Creating your poll' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Creating your poll' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('heading', { name: 'Creating your poll' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
     await expect(page).toHaveURL(/\/e\/[A-Za-z0-9_-]{22}$/, { timeout: 20_000 });
 
     await expect(page.getByRole('heading', { level: 1, name: 'Team dinner' })).toBeVisible();
@@ -37,6 +42,39 @@ test.describe('creating a poll', () => {
     await expect(page.getByText('Title is required')).toBeVisible();
     await expect(page.getByText('Pick at least one date')).toBeVisible();
     await expect(page).toHaveURL('/');
+  });
+
+  test('a creation failure focuses the way back and restores focus to the form', async ({ page }) => {
+    await page.route('**/api/tickets', (route) =>
+      route.fulfill({ status: 500, json: { error: 'Creation failed', code: 'internal' } }),
+    );
+    await page.goto('/');
+    const title = page.getByLabel('What are you planning?');
+    await title.fill('Team dinner');
+    await pickDate(page, futureIso(20));
+    const create = page.getByRole('button', { name: 'Create poll' });
+    await waitForTurnstile(create);
+    await create.focus();
+    await page.keyboard.press('Enter');
+
+    const dialog = page.getByRole('dialog', { name: 'Could not create the poll' });
+    const back = dialog.getByRole('button', { name: 'Back to the form' });
+    await expect(dialog.getByRole('alert')).toHaveText('Something went wrong on our side. Please try again.');
+    await expect(back).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(back).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(back).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    // Resetting Turnstile can temporarily disable the submit button; the title is the fallback.
+    await expect
+      .poll(() =>
+        title.or(create).evaluateAll((elements) => elements.some((element) => element === document.activeElement)),
+      )
+      .toBe(true);
+    await expect(title).toHaveValue('Team dinner');
+    await expect(page.getByRole('list', { name: 'Selected dates' }).getByRole('listitem')).toHaveCount(1);
   });
 });
 
@@ -153,15 +191,22 @@ test.describe('organising a poll', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Board game night, round two' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit details' })).toBeFocused();
 
-    page.once('dialog', (d) => d.accept());
     await page
       .getByRole('button', { name: /^Remove .*/ })
       .first()
       .click();
+    await page
+      .getByRole('alertdialog', { name: 'Remove this date?' })
+      .getByRole('button', { name: 'Remove date' })
+      .click();
     await expect(page.locator('thead th.option-col')).toHaveCount(2);
+    await expect(page.getByRole('region', { name: 'Availability table, scrolls sideways' })).toBeFocused();
 
-    page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: 'Delete poll' }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Delete this poll?' })
+      .getByRole('button', { name: 'Delete poll' })
+      .click();
     await expect(page).toHaveURL('/');
 
     await page.goto(poll.participantUrl);

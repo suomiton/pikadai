@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { useAdminToken, usePoll, usePollActions } from '../state/AppStateProvider';
 import { adminFormFromEvent, adminFormReducer, type AdminFieldKey } from '../state/adminForm';
 import { FormError } from './FormError';
+import { ConfirmDialog } from './ConfirmDialog';
 import { StatusAnnouncer } from './StatusAnnouncer';
 import { TextField } from './TextField';
 
@@ -22,6 +23,7 @@ export function AdminPanel() {
   const { open, title, description, allowSuggestions, fieldErrors } = form;
   const { busy, error, setError, run } = useAsyncAction();
   const [status, setStatus] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -77,7 +79,7 @@ export function AdminPanel() {
   }
 
   async function destroy() {
-    if (!window.confirm('Delete this poll and every answer in it? This cannot be undone.')) return;
+    if (busy) return;
     await run(async () => {
       await api.deleteEvent(event.id, adminToken);
       forgetPoll();
@@ -101,7 +103,15 @@ export function AdminPanel() {
               Edit details
             </button>
           )}
-          <button type="button" className="btn btn-ghost danger" onClick={destroy} disabled={busy}>
+          <button
+            type="button"
+            className="btn btn-ghost danger"
+            onClick={() => {
+              setError(null);
+              setConfirmDelete(true);
+            }}
+            disabled={busy}
+          >
             Delete poll
           </button>
         </div>
@@ -138,7 +148,7 @@ export function AdminPanel() {
             />
             <span>Participants may suggest other dates</span>
           </label>
-          <FormError message={error} />
+          <FormError message={confirmDelete ? null : error} />
           <div className="btn-row">
             <button type="submit" className="btn btn-primary" disabled={busy}>
               {busy ? 'Saving' : 'Save'}
@@ -149,7 +159,22 @@ export function AdminPanel() {
           </div>
         </form>
       )}
-      {!open && <FormError message={error} />}
+      {!open && !confirmDelete && <FormError message={error} />}
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete this poll?"
+          description="The poll and every answer in it will be permanently deleted. This cannot be undone."
+          confirmLabel="Delete poll"
+          busyLabel="Deleting poll…"
+          busy={busy}
+          error={error}
+          onConfirm={destroy}
+          onCancel={() => {
+            setConfirmDelete(false);
+            setError(null);
+          }}
+        />
+      )}
     </section>
   );
 }

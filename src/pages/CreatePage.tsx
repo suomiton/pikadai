@@ -5,6 +5,7 @@ import { LIMITS } from '@shared/limits';
 import { eventDraftSchema } from '@shared/schemas';
 import { Calendar } from '../components/Calendar';
 import { FormError } from '../components/FormError';
+import { Modal } from '../components/Modal';
 import { ProgressSteps } from '../components/ProgressSteps';
 import { TextField } from '../components/TextField';
 import { TurnstileField } from '../components/TurnstileField';
@@ -36,7 +37,6 @@ export function CreatePage() {
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const datesRef = useRef<HTMLDivElement>(null);
   const focusAfterErrors = useRef<FieldKey | null>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
 
   const dates = useMemo(() => [...form.dates].sort(), [form.dates]);
 
@@ -47,14 +47,6 @@ export function CreatePage() {
     focusAfterErrors.current = null;
     (key === 'title' ? titleRef : key === 'description' ? descriptionRef : datesRef).current?.focus();
   }, [fieldErrors]);
-
-  // A native <dialog> opened with showModal() moves and traps focus and makes the form behind inert.
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (progress && !dialog.open) dialog.showModal();
-    else if (!progress && dialog.open) dialog.close();
-  }, [progress]);
 
   const toggleDate = (iso: string) => dispatch({ type: 'toggleDate', iso });
 
@@ -197,40 +189,33 @@ export function CreatePage() {
         </div>
       </form>
 
-      <dialog
-        ref={dialogRef}
-        className="progress-dialog"
-        aria-labelledby={`${id}-progress-title`}
-        onCancel={(e) => {
-          // Escape must not dismiss a creation that is still running.
-          if (!progress?.failed) e.preventDefault();
-        }}
-        onClose={() => dispatch({ type: 'progressCleared' })}
-      >
-        {progress && (
-          <div className="card progress-card stack">
-            <h2 id={`${id}-progress-title`}>{progress.failed ? 'Could not create the poll' : 'Creating your poll'}</h2>
-            <ProgressSteps steps={STEPS} current={progress.step} failed={progress.failed} />
-            {progress.failed && (
-              <>
-                <FormError message={progress.message} />
-                <div className="btn-row">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    // Deliberate (review finding A4): the only control in the dialog once creation has failed.
-                    // eslint-disable-next-line jsx-a11y/no-autofocus
-                    autoFocus
-                    onClick={() => dialogRef.current?.close()}
-                  >
-                    Back to the form
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </dialog>
+      {progress && (
+        <Modal
+          title={progress.failed ? 'Could not create the poll' : 'Creating your poll'}
+          dismissible={progress.failed}
+          onDismiss={() => dispatch({ type: 'progressCleared' })}
+          returnFocusRef={titleRef}
+        >
+          <ProgressSteps steps={STEPS} current={progress.step} failed={progress.failed} />
+          {progress.failed && (
+            <>
+              <FormError message={progress.message} />
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  // Deliberate (review finding A4): the only control in the dialog once creation has failed.
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  autoFocus
+                  onClick={() => dispatch({ type: 'progressCleared' })}
+                >
+                  Back to the form
+                </button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
     </>
   );
 }
