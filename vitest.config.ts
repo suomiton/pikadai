@@ -19,7 +19,7 @@ export default defineConfig({
         resolve: { alias },
         test: {
           name: 'unit',
-          include: ['shared/**/*.test.ts', 'worker/**/*.test.ts', 'src/lib/**/*.test.ts'],
+          include: ['shared/**/*.test.ts', 'worker/**/*.test.ts', 'src/**/*.test.ts'],
           exclude: [...configDefaults.exclude, 'worker/test/**'],
           setupFiles: ['./test/setup.ts'],
         },

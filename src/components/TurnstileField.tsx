@@ -1,6 +1,7 @@
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import type { Ref } from 'react';
 import type { TurnstileAction } from '@shared/types';
+import { FormError } from './FormError';
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
@@ -12,13 +13,7 @@ interface Props {
 }
 
 export function TurnstileField({ action, onToken, ref }: Props) {
-  if (!SITE_KEY) {
-    return (
-      <p className="form-error" role="alert">
-        Turnstile is not configured: set VITE_TURNSTILE_SITE_KEY.
-      </p>
-    );
-  }
+  if (!SITE_KEY) return <FormError message="Turnstile is not configured: set VITE_TURNSTILE_SITE_KEY." />;
   return (
     <div className="turnstile">
       <Turnstile
