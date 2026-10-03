@@ -43,7 +43,7 @@ pikadai/
 │   │   ├── ratelimit.ts       clientIp, rateLimitKey (IPv6 by /64), rateLimit middleware factory
 │   │   ├── expiry.ts          computeExpiresAt: when a poll is purged
 │   │   ├── eventView.ts       toEventView: rows → the EventView JSON, pure
-│   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, participantFromToken
+│   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, isParticipantOwner; no Hono inside
 │   ├── db/
 │   │   └── queries.ts         All SQL; row types; fetchEventRows
 │   └── test/                  Integration tests: the whole Worker in workerd with a local D1
@@ -190,7 +190,8 @@ limits and D1.
 1. Add a request schema to `shared/schemas.ts` and, if needed, a response type to `shared/types.ts`.
 2. Add a query function to `worker/db/queries.ts`.
 3. Add the handler in the matching `worker/routes/*.ts`, wrapped in `rateLimit(...)`. Use `loadEvent`,
-   `requireAdmin`, or `participantFromToken` from `worker/lib/auth.ts` for access control.
+   `requireAdmin`, or `isParticipantOwner` from `worker/lib/auth.ts` for access control; routes pass the
+   bearer token and the rows in.
 4. Add a function to `src/lib/api.ts`.
 5. Add any new error codes to `src/lib/errors.ts`; the unit test there checks every Worker code has copy.
 6. Cover the endpoint in `worker/test/` with the helpers already there.

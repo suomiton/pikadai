@@ -1,6 +1,4 @@
-import type { Context } from 'hono';
-import type { AppEnv } from '../env';
-import { getEventRow, getParticipant, type EventRow, type ParticipantRow } from '../db/queries';
+import { getEventRow, type EventRow, type ParticipantRow } from '../db/queries';
 import { safeEqual, sha256Hex } from './crypto';
 import { errors } from './http';
 
@@ -12,42 +10,36 @@ export const PARTICIPANT_ID_HEADER = 'X-Participant-Id';
  * get. A request carries at most one token: the client sends its admin token when
  * it has one and its participant token otherwise, and each check below simply
  * compares the token with the hash it cares about.
+ *
+ * Nothing here knows about Hono: routes read the header and the rows and pass
+ * them in, so every function is a plain async function a unit test can call.
  */
-export function bearerToken(c: Context<AppEnv>): string | null {
-  const match = /^Bearer\s+(\S+)\s*$/i.exec(c.req.header('Authorization') ?? '');
+export function bearerToken(authorization: string | undefined): string | null {
+  const match = /^Bearer\s+(\S+)\s*$/i.exec(authorization ?? '');
   if (!match || match[1].length > 128) return null;
   return match[1];
 }
 
-/** Load the event from the `:id` route param, or fail with 404 / 410. */
-export async function loadEvent(c: Context<AppEnv>): Promise<EventRow> {
-  const id = c.req.param('id');
+/** Load the event a route's `:id` names, or fail with 404 / 410. */
+export async function loadEvent(db: D1Database, id: string | undefined, now = Date.now()): Promise<EventRow> {
   if (!id || id.length > 64) throw errors.notFound();
-  const event = await getEventRow(c.env.DB, id);
+  const event = await getEventRow(db, id);
   if (!event) throw errors.notFound();
-  if (event.expires_at <= Date.now()) throw errors.gone();
+  if (event.expires_at <= now) throw errors.gone();
   return event;
 }
 
-export async function isAdmin(c: Context<AppEnv>, event: EventRow): Promise<boolean> {
-  const token = bearerToken(c);
+export async function isAdmin(token: string | null, event: EventRow): Promise<boolean> {
   if (!token) return false;
   return safeEqual(await sha256Hex(token), event.admin_token_hash);
 }
 
-export async function requireAdmin(c: Context<AppEnv>, event: EventRow): Promise<void> {
-  if (!(await isAdmin(c, event))) throw errors.forbidden('Admin link required', 'admin_required');
+export async function requireAdmin(token: string | null, event: EventRow): Promise<void> {
+  if (!(await isAdmin(token, event))) throw errors.forbidden('Admin link required', 'admin_required');
 }
 
-/** Returns the participant identified by the bearer token, if it is valid for this participant. */
-export async function participantFromToken(
-  c: Context<AppEnv>,
-  event: EventRow,
-  participantId: string,
-): Promise<ParticipantRow | null> {
-  const token = bearerToken(c);
-  if (!token) return null;
-  const participant = await getParticipant(c.env.DB, event.id, participantId);
-  if (!participant) return null;
-  return safeEqual(await sha256Hex(token), participant.edit_token_hash) ? participant : null;
+/** Whether the token is this participant's edit token. */
+export async function isParticipantOwner(token: string | null, participant: ParticipantRow): Promise<boolean> {
+  if (!token) return false;
+  return safeEqual(await sha256Hex(token), participant.edit_token_hash);
 }

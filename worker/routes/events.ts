@@ -4,10 +4,10 @@ import { createEventSchema, updateEventSchema } from '@shared/schemas';
 import type { CreateEventResponse } from '@shared/types';
 import type { AppEnv } from '../env';
 import { deleteEvent, fetchEventRows, insertEventWithOptions, updateEvent } from '../db/queries';
-import { isAdmin, loadEvent, requireAdmin } from '../lib/auth';
+import { bearerToken, isAdmin, loadEvent, requireAdmin } from '../lib/auth';
+import { randomId, randomToken, sha256Hex } from '../lib/crypto';
 import { toEventView } from '../lib/eventView';
 import { computeExpiresAt } from '../lib/expiry';
-import { randomId, randomToken, sha256Hex } from '../lib/crypto';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
 import { clientIp, rateLimit, rateLimitKey } from '../lib/ratelimit';
 import { verifyTicket } from '../lib/tickets';
@@ -70,8 +70,8 @@ events.get(
   '/:id',
   rateLimit((env) => env.READ_LIMITER),
   async (c) => {
-    const event = await loadEvent(c);
-    const admin = await isAdmin(c, event);
+    const event = await loadEvent(c.env.DB, c.req.param('id'));
+    const admin = await isAdmin(bearerToken(c.req.header('Authorization')), event);
     return c.json(toEventView(event, await fetchEventRows(c.env.DB, event.id), admin));
   },
 );
@@ -80,8 +80,8 @@ events.patch(
   '/:id',
   rateLimit((env) => env.WRITE_LIMITER),
   async (c) => {
-    const event = await loadEvent(c);
-    await requireAdmin(c, event);
+    const event = await loadEvent(c.env.DB, c.req.param('id'));
+    await requireAdmin(bearerToken(c.req.header('Authorization')), event);
     const body = parseBody(updateEventSchema, await readJson(c));
     await updateEvent(
       c.env.DB,
@@ -101,8 +101,8 @@ events.delete(
   '/:id',
   rateLimit((env) => env.WRITE_LIMITER),
   async (c) => {
-    const event = await loadEvent(c);
-    await requireAdmin(c, event);
+    const event = await loadEvent(c.env.DB, c.req.param('id'));
+    await requireAdmin(bearerToken(c.req.header('Authorization')), event);
     await deleteEvent(c.env.DB, event.id);
     return c.body(null, 204);
   },
