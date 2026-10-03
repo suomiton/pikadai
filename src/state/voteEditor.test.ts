@@ -48,6 +48,21 @@ describe('voteEditorReducer', () => {
     expect(verified.turnstileToken).toBe('tok');
   });
 
+  it('drops draft votes for dates that are no longer in the poll and keeps the rest', () => {
+    const editing = voteEditorReducer(initialVoteEditor, { type: 'startEdit', participant: ada });
+    const named = voteEditorReducer(editing, { type: 'nickname', value: 'Ada B.' });
+    const pruned = voteEditorReducer(named, { type: 'options', optionIds: ['o2', 'o3'] });
+    expect(pruned.draftVotes).toEqual({ o2: 'no' });
+    expect(pruned.nickname).toBe('Ada B.');
+    expect(pruned.editing).toEqual({ kind: 'existing', participantId: 'p1' });
+  });
+
+  it('returns the same state when every drafted date is still in the poll', () => {
+    const editing = voteEditorReducer(initialVoteEditor, { type: 'startEdit', participant: ada });
+    expect(voteEditorReducer(editing, { type: 'options', optionIds: ['o1', 'o2', 'o3'] })).toBe(editing);
+    expect(voteEditorReducer(initialVoteEditor, { type: 'options', optionIds: [] })).toBe(initialVoteEditor);
+  });
+
   it('closes the editor and drops the token but keeps the opener for the focus return', () => {
     const editing = voteEditorReducer(initialVoteEditor, { type: 'startEdit', participant: ada });
     const verified = voteEditorReducer(editing, { type: 'turnstile', token: 'tok' });

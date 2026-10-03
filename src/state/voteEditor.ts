@@ -25,7 +25,9 @@ export type VoteEditorAction =
   | { type: 'close' }
   | { type: 'toggle'; optionId: string }
   | { type: 'nickname'; value: string }
-  | { type: 'turnstile'; token: string | null };
+  | { type: 'turnstile'; token: string | null }
+  /** The poll's current dates; a draft vote for any other date is dropped (the organiser removed it). */
+  | { type: 'options'; optionIds: readonly string[] };
 
 export const initialVoteEditor: VoteEditorState = {
   editing: null,
@@ -62,5 +64,12 @@ export function voteEditorReducer(state: VoteEditorState, action: VoteEditorActi
       return { ...state, nickname: action.value };
     case 'turnstile':
       return { ...state, turnstileToken: action.token };
+    case 'options': {
+      const stale = Object.keys(state.draftVotes).filter((optionId) => !action.optionIds.includes(optionId));
+      if (stale.length === 0) return state;
+      const draftVotes = { ...state.draftVotes };
+      for (const optionId of stale) delete draftVotes[optionId];
+      return { ...state, draftVotes };
+    }
   }
 }

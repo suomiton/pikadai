@@ -1,4 +1,5 @@
-import { createPollViaApi, expect, futureIso, test } from './fixtures';
+import type { EventView } from '../shared/types';
+import { createPollViaApi, DUMMY_TURNSTILE_TOKEN, expect, futureIso, test } from './fixtures';
 import { answerDate, pickDate, waitForTurnstile } from './helpers';
 
 test.describe('creating a poll', () => {
@@ -250,6 +251,48 @@ test.describe('organising a poll', () => {
 
     await page.goto(poll.adminUrl);
     await expect(page.getByRole('button', { name: 'Add a date' })).toBeVisible();
+  });
+});
+
+test.describe('when the poll changes underneath', () => {
+  test('removing a date under an open answer keeps the rest of the draft saveable', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    const headers = { 'CF-Connecting-IP': clientIp };
+    const view = (await (await request.get(`/api/events/${poll.id}`, { headers })).json()) as EventView;
+    const [first, second] = view.options;
+    const answered = await request.post(`/api/events/${poll.id}/participants`, {
+      headers,
+      data: {
+        nickname: 'Ada',
+        votes: { [first.id]: 'yes', [second.id]: 'yes' },
+        turnstileToken: DUMMY_TURNSTILE_TOKEN,
+      },
+    });
+    expect(answered.status()).toBe(201);
+
+    await page.goto(poll.adminUrl);
+    await page.getByRole('button', { name: 'Edit Ada' }).click();
+    await page.getByLabel('Nickname').fill('Ada B.');
+
+    // The organiser removes the first date while the answer is still open for editing.
+    page.once('dialog', (d) => d.accept());
+    await page
+      .getByRole('button', { name: /^Remove .+/ })
+      .first()
+      .click();
+    await expect(page.locator('thead th.option-col')).toHaveCount(2);
+    await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
+    await expect(page.getByLabel('Nickname')).toHaveValue('Ada B.');
+
+    await page.getByRole('button', { name: 'Save' }).click();
+    const row = page.getByRole('row', { name: /Ada B\./ });
+    await expect(row).toBeVisible();
+    await expect(row.getByRole('img', { name: 'Yes' })).toHaveCount(1);
+    await expect(page.getByRole('alert')).toHaveCount(0);
   });
 });
 

@@ -14,7 +14,7 @@ const MESSAGES: Record<string, string> = {
   event_full: 'This poll has reached its participant limit.',
   too_many_options: 'This poll already has the maximum number of dates.',
   date_exists: 'That date is already in the poll.',
-  unknown_option: 'The poll changed while you were answering. Please reload and try again.',
+  unknown_option: 'The poll changed while you were answering. Check your answers and save again.',
   suggestions_disabled: 'The organiser has turned off date suggestions.',
   not_owner: 'You can only change your own answers.',
   admin_required: 'This action needs the admin link.',
