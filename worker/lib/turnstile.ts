@@ -1,6 +1,13 @@
 import type { TurnstileAction } from '@shared/types';
+import { errors } from './http';
 
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+
+/** How long a siteverify call may take before the submission is refused as retryable. */
+export const SITEVERIFY_TIMEOUT_MS = 5000;
+
+/** The token passed; Cloudflare refused it; or Cloudflare could not be asked (timeout, outage). */
+export type TurnstileOutcome = 'ok' | 'rejected' | 'unavailable';
 
 export interface TurnstileExpectations {
   /** Hostname of the page the challenge must have been solved on. */
@@ -47,17 +54,35 @@ export async function verifyTurnstile(
   token: string,
   remoteIp: string | null,
   expected: TurnstileExpectations,
-): Promise<boolean> {
+  timeoutMs = SITEVERIFY_TIMEOUT_MS,
+): Promise<TurnstileOutcome> {
   const body = new FormData();
   body.set('secret', secret);
   body.set('response', token);
   if (remoteIp) body.set('remoteip', remoteIp);
 
   try {
-    const res = await fetch(SITEVERIFY_URL, { method: 'POST', body });
-    if (!res.ok) return false;
-    return siteverifyPassed(await res.json(), expected);
+    // Bounded: a hung connection to siteverify must not hold the user's submission open indefinitely.
+    const res = await fetch(SITEVERIFY_URL, { method: 'POST', body, signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) return 'unavailable';
+    return siteverifyPassed(await res.json(), expected) ? 'ok' : 'rejected';
   } catch {
-    return false;
+    // Timed out, unreachable or an unreadable body: Cloudflare could not be asked, which is not the user's fault.
+    return 'unavailable';
   }
+}
+
+/**
+ * Verify, and turn anything but a pass into the HTTP error the client knows: 403 `captcha_failed`
+ * for a refused token, 503 `verification_unavailable` when the check itself could not be made.
+ */
+export async function requireHuman(
+  secret: string,
+  token: string,
+  remoteIp: string | null,
+  expected: TurnstileExpectations,
+): Promise<void> {
+  const outcome = await verifyTurnstile(secret, token, remoteIp, expected);
+  if (outcome === 'unavailable') throw errors.unavailable();
+  if (outcome === 'rejected') throw errors.forbidden('Verification failed, please try again', 'captcha_failed');
 }

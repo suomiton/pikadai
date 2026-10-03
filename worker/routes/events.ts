@@ -11,7 +11,7 @@ import { computeExpiresAt } from '../lib/expiry';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
 import { clientIp, rateLimit, rateLimitKey } from '../lib/ratelimit';
 import { verifyTicket } from '../lib/tickets';
-import { turnstileExpectations, verifyTurnstile } from '../lib/turnstile';
+import { requireHuman, turnstileExpectations } from '../lib/turnstile';
 
 export const events = new Hono<AppEnv>();
 
@@ -29,13 +29,12 @@ events.post(
     });
     if (!ticket.ok) throw errors.badRequest('Creation ticket rejected', `ticket_${ticket.reason}`);
 
-    const human = await verifyTurnstile(
+    await requireHuman(
       c.env.TURNSTILE_SECRET_KEY,
       body.turnstileToken,
       clientIp(c),
       turnstileExpectations(c.req.url, 'create'),
     );
-    if (!human) throw errors.forbidden('Verification failed, please try again', 'captcha_failed');
 
     const now = Date.now();
     const dates = [...new Set(body.dates)].sort();

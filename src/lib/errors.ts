@@ -3,6 +3,7 @@ import { ApiRequestError } from './api';
 const MESSAGES: Record<string, string> = {
   invalid_json: 'The request could not be read. Please try again.',
   captcha_failed: 'The verification check failed. Please try again.',
+  verification_unavailable: 'The verification service did not respond. Please try again.',
   rate_limited: 'Too many requests from your connection. Wait a minute and try again.',
   ticket_too_early: 'That was quick. Please wait a moment and try again.',
   ticket_expired: 'The creation step timed out. Please try again.',

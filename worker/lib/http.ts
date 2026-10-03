@@ -24,6 +24,8 @@ export const errors = {
     new HttpError(429, code, message),
   payloadTooLarge: (message = 'Request body too large', code = 'payload_too_large') =>
     new HttpError(413, code, message),
+  unavailable: (message = 'Verification could not be completed, please try again', code = 'verification_unavailable') =>
+    new HttpError(503, code, message),
 };
 
 export async function readJson(c: Context): Promise<unknown> {

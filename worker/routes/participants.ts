@@ -18,7 +18,7 @@ import { bearerToken, isAdmin, isParticipantOwner, loadEvent } from '../lib/auth
 import { randomId, randomToken, sha256Hex } from '../lib/crypto';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
 import { clientIp, rateLimit } from '../lib/ratelimit';
-import { turnstileExpectations, verifyTurnstile } from '../lib/turnstile';
+import { requireHuman, turnstileExpectations } from '../lib/turnstile';
 
 /** Mounted at /api/events/:id/participants */
 export const participants = new Hono<AppEnv>();
@@ -61,13 +61,12 @@ participants.post(
     if (await nicknameTaken(c.env.DB, event.id, body.nickname, null)) throw nicknameTakenError();
     const votes = await assertVotesBelongToEvent(c.env.DB, event.id, body.votes);
 
-    const human = await verifyTurnstile(
+    await requireHuman(
       c.env.TURNSTILE_SECRET_KEY,
       body.turnstileToken,
       clientIp(c),
       turnstileExpectations(c.req.url, 'answer'),
     );
-    if (!human) throw errors.forbidden('Verification failed, please try again', 'captcha_failed');
 
     const now = Date.now();
     const id = randomId();
