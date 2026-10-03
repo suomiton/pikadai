@@ -126,6 +126,11 @@
   align-items: center;
 }
 
+/* The date picker opened from a .btn-row: full width, on its own line below the buttons. */
+.date-picker {
+  flex: 1 1 100%;
+}
+
 .icon-btn {
   background: transparent;
   border: 1px solid transparent;
@@ -338,6 +343,9 @@ textarea.input {
 
 /* Vote table */
 .table-scroll {
+  /* Containing block for the absolutely positioned .visually-hidden text in the table, so it is
+     clipped with the rest of the scrolling content instead of widening the page. */
+  position: relative;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin: -0.25rem;

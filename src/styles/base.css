@@ -33,14 +33,8 @@ h1 {
 }
 h2 {
   font-size: 1.05rem;
-  text-transform: lowercase;
   color: var(--text-muted);
   font-weight: 400;
-}
-h2::before {
-  content: '## ';
-  content: '## ' / ''; /* decorative; the empty alternative text keeps it out of screen readers */
-  color: var(--accent);
 }
 
 p {

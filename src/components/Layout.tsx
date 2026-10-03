@@ -10,13 +10,16 @@ export function Layout() {
           </span>{' '}
           pikadai
         </Link>
-        <span className="tagline">find a date, no strings attached</span>
+        <span className="tagline">pick a date &amp; meet, anonymously</span>
       </header>
       <main className="site-main">
         <Outlet />
       </main>
       <footer className="site-footer">
-        No accounts. No cookies. No tracking. Polls delete themselves after they expire.
+        Copyright Toni Suominen ·{' '}
+        <a href="https://github.com/suomiton" target="_blank" rel="noopener noreferrer">
+          suomiton
+        </a>
       </footer>
     </div>
   );

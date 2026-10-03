@@ -12,6 +12,7 @@ import { EditPanel } from './EditPanel';
 import { FormError } from './FormError';
 import { OptionHeader } from './OptionHeader';
 import { StatusAnnouncer } from './StatusAnnouncer';
+import { SuggestDate } from './SuggestDate';
 import { VoteEditRow } from './VoteEditRow';
 import { VoteRow } from './VoteRow';
 
@@ -42,6 +43,8 @@ export function VoteGrid() {
   const hasAnswered = me !== null && event.participants.some((p) => p.id === me.id);
   const isFull = event.participants.length >= LIMITS.participantsMax;
   const editingId = editing?.kind === 'existing' ? editing.participantId : null;
+  const canAnswer = editing === null && !hasAnswered && !isFull;
+  const canSuggest = isAdmin || event.allowSuggestions;
 
   const tallies = useMemo(() => computeTallies(event.options, event.participants), [event]);
   const bestYes = Math.max(0, ...event.options.map((o) => tallies[o.id]?.yes ?? 0));
@@ -267,17 +270,18 @@ export function VoteGrid() {
         </table>
       </div>
 
-      {editing === null &&
-        !hasAnswered &&
-        (isFull ? (
-          <p className="hint">This poll is full.</p>
-        ) : (
-          <div>
+      {editing === null && !hasAnswered && isFull && <p className="hint">This poll is full.</p>}
+
+      {(canAnswer || canSuggest) && (
+        <div className="btn-row">
+          {canAnswer && (
             <button ref={addButtonRef} type="button" className="btn btn-primary" onClick={startNew} disabled={busy}>
               Add your availability
             </button>
-          </div>
-        ))}
+          )}
+          {canSuggest && <SuggestDate />}
+        </div>
+      )}
 
       {editing !== null && (
         <EditPanel

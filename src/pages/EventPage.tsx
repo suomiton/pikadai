@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Link, useParams } from 'react-router';
 import { AdminPanel } from '../components/AdminPanel';
 import { ShareBox } from '../components/ShareBox';
-import { SuggestDate } from '../components/SuggestDate';
 import { VoteGrid } from '../components/VoteGrid';
 import { formatTimestamp } from '../lib/dates';
 import { useAppState, usePollActions } from '../state/AppStateProvider';
@@ -59,7 +58,6 @@ export function EventPage() {
       </header>
 
       <VoteGrid />
-      <SuggestDate />
       <ShareBox />
       {adminToken && <AdminPanel />}
     </div>

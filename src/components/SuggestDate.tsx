@@ -8,6 +8,12 @@ import { Calendar } from './Calendar';
 import { FormError } from './FormError';
 import { StatusAnnouncer } from './StatusAnnouncer';
 
+/**
+ * The button that adds a date (organiser) or suggests one (participants), and the calendar it
+ * opens. Renders into the `.btn-row` that VoteGrid puts it in, beside "Add your availability";
+ * the picker takes the row's full width and wraps onto its own line. VoteGrid only renders this
+ * when the viewer may add dates.
+ */
 export function SuggestDate() {
   const { event, me, adminToken } = usePoll();
   const { refresh } = usePollActions();
@@ -29,8 +35,8 @@ export function SuggestDate() {
   }, [open]);
 
   const isAdmin = event.viewer.isAdmin;
-  if (!isAdmin && !event.allowSuggestions) return null;
   const isFull = event.options.length >= LIMITS.optionsMax;
+  const label = isAdmin ? 'Add a date' : 'Suggest a date';
 
   function close() {
     returnFocus.current = true;
@@ -51,25 +57,22 @@ export function SuggestDate() {
   }
 
   return (
-    <section className="card stack">
-      <div className="section-head">
-        <h2>{isAdmin ? 'Add a date' : 'Suggest another date'}</h2>
-        {!open && (
-          <button
-            ref={openButtonRef}
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setOpen(true)}
-            disabled={isFull}
-          >
-            {isFull ? 'Date limit reached' : 'Pick a date'}
-          </button>
-        )}
-      </div>
+    <>
+      {!open && (
+        <button
+          ref={openButtonRef}
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setOpen(true)}
+          disabled={isFull}
+        >
+          {isFull ? 'Date limit reached' : label}
+        </button>
+      )}
       <StatusAnnouncer message={status} />
 
       {open && (
-        <>
+        <div className="date-picker stack" role="group" aria-label={label}>
           <Calendar
             selected={selected}
             disabledDates={existing}
@@ -85,8 +88,8 @@ export function SuggestDate() {
               Cancel
             </button>
           </div>
-        </>
+        </div>
       )}
-    </section>
+    </>
   );
 }

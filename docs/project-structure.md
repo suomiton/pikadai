@@ -89,7 +89,7 @@ pikadai/
 │   │   ├── TextField.tsx      Label, input or textarea, error, with the aria wiring
 │   │   ├── FormError.tsx      The role="alert" paragraph
 │   │   ├── StatusAnnouncer.tsx  The visually hidden role="status" paragraph
-│   │   ├── SuggestDate.tsx    Add / suggest a date
+│   │   ├── SuggestDate.tsx    Add / suggest a date: the button beside "Add your availability" and its picker
 │   │   ├── ShareBox.tsx       Participant and admin links
 │   │   ├── CopyField.tsx      Read-only input with Copy button
 │   │   └── AdminPanel.tsx     Edit details, delete poll

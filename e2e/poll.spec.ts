@@ -108,7 +108,7 @@ test.describe('answering a poll', () => {
     await page.goto(poll.participantUrl);
     await expect(page.locator('thead th.option-col')).toHaveCount(3);
 
-    await page.getByRole('button', { name: 'Pick a date' }).click();
+    await page.getByRole('button', { name: 'Suggest a date' }).click();
     await pickDate(page, futureIso(30));
     await page.getByRole('button', { name: /^Add (?!your availability)/ }).click();
 
@@ -179,10 +179,26 @@ test.describe('organising a poll', () => {
     const other = await otherPerson.newPage();
     await other.goto(poll.participantUrl);
     await expect(other.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(other.getByRole('button', { name: 'Pick a date' })).toHaveCount(0);
+    await expect(other.getByRole('button', { name: 'Suggest a date' })).toHaveCount(0);
 
     await page.goto(poll.adminUrl);
-    await expect(page.getByRole('heading', { name: 'Add a date' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add a date' })).toBeVisible();
+  });
+});
+
+test.describe('layout', () => {
+  test('the poll page does not scroll sideways; only the table does', async ({ page, request, clientIp }) => {
+    // Enough dates that the table is wider than a phone.
+    const dates = [14, 15, 16, 17, 18].map(futureIso);
+    const poll = await createPollViaApi(request, clientIp, { dates });
+    await page.goto(poll.adminUrl);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+    const widths = await page.evaluate(() => ({
+      page: document.documentElement.scrollWidth,
+      viewport: document.documentElement.clientWidth,
+    }));
+    expect(widths.page).toBe(widths.viewport);
   });
 });
 
