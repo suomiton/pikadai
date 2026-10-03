@@ -6,27 +6,35 @@ import type { ParticipantIdentity } from '../lib/storage';
  * who the viewer is to it, and whether it has loaded. Form drafts stay in the components that own
  * them. The reducer is pure; `pollActions.ts` does the fetching and the storage writes.
  */
+export interface LoadError {
+  /** User-facing text from `describeError`. */
+  message: string;
+  /** The server said the poll no longer exists (deleted or expired), so a loaded event is dropped. */
+  gone: boolean;
+}
+
 export interface PollSession {
   id: string;
   /** Kept only once the server has confirmed `viewer.isAdmin`, so it is always the effective token. */
   adminToken: string | null;
   me: ParticipantIdentity | null;
-  /** Null while loading or after a failed first load. */
+  /** Null while loading, after a failed first load, or once the poll is gone. */
   event: EventView | null;
-  /** Message from the last failed load. */
-  error: string | null;
+  /** The last failed load; cleared by the next successful one. A loaded event stays through a transient failure. */
+  error: LoadError | null;
 }
 
 export interface AppState {
   poll: PollSession | null;
 }
 
+/** Every action names its poll, so a result or write for a poll the user has left cannot touch the current one. */
 export type AppAction =
   | { type: 'poll/open'; id: string; adminToken: string | null; me: ParticipantIdentity | null }
   | { type: 'poll/loaded'; id: string; event: EventView }
-  | { type: 'poll/failed'; id: string; error: string }
-  | { type: 'poll/identity'; me: ParticipantIdentity | null }
-  | { type: 'poll/close' };
+  | { type: 'poll/failed'; id: string; error: LoadError }
+  | { type: 'poll/identity'; id: string; me: ParticipantIdentity | null }
+  | { type: 'poll/close'; id: string };
 
 export const initialAppState: AppState = { poll: null };
 
@@ -42,14 +50,15 @@ export function parseAdminHash(hash: string): string | null {
 }
 
 export function appReducer(state: AppState, action: AppAction): AppState {
-  switch (action.type) {
-    case 'poll/open':
-      return { poll: { id: action.id, adminToken: action.adminToken, me: action.me, event: null, error: null } };
+  const poll = state.poll;
+  if (action.type === 'poll/open') {
+    return { poll: { id: action.id, adminToken: action.adminToken, me: action.me, event: null, error: null } };
+  }
+  // Everything else is about the poll on screen; anything for another poll is stale and ignored.
+  if (!poll || poll.id !== action.id) return state;
 
-    case 'poll/loaded': {
-      const poll = state.poll;
-      // A response for a poll the user has since left must not overwrite the current one.
-      if (!poll || poll.id !== action.id) return state;
+  switch (action.type) {
+    case 'poll/loaded':
       return {
         poll: {
           ...poll,
@@ -59,17 +68,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           adminToken: action.event.viewer.isAdmin ? poll.adminToken : null,
         },
       };
-    }
 
-    case 'poll/failed': {
-      const poll = state.poll;
-      if (!poll || poll.id !== action.id) return state;
-      return { poll: { ...poll, error: action.error } };
-    }
+    case 'poll/failed':
+      return { poll: { ...poll, error: action.error, event: action.error.gone ? null : poll.event } };
 
     case 'poll/identity':
-      if (!state.poll) return state;
-      return { poll: { ...state.poll, me: action.me } };
+      return { poll: { ...poll, me: action.me } };
 
     case 'poll/close':
       return { poll: null };

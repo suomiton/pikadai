@@ -33,7 +33,7 @@ export function EventPage() {
     return (
       <section className="card stack">
         <h1>Poll unavailable</h1>
-        <p>{current.error ?? 'This poll could not be loaded.'}</p>
+        <p>{current.error?.message ?? 'This poll could not be loaded.'}</p>
         <div className="btn-row">
           <Link to="/" className="btn btn-primary">
             Create a new poll

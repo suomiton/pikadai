@@ -120,7 +120,7 @@ export function VoteGrid() {
           votes: draftVotes,
           turnstileToken: turnstileToken!,
         });
-        setIdentity({ id: res.id, token: res.editToken });
+        setIdentity(event.id, { id: res.id, token: res.editToken });
       } else {
         await api.updateParticipant(
           event.id,
@@ -130,7 +130,7 @@ export function VoteGrid() {
         );
       }
       editor.close();
-      await refresh();
+      await refresh(event.id);
     });
     if (saved) {
       setStatus('Your answers were saved.');
@@ -148,9 +148,9 @@ export function VoteGrid() {
 
     const removed = await run(async () => {
       await api.deleteParticipant(event.id, p.id, { adminToken, participant: mine ? me : null });
-      if (mine) setIdentity(null);
+      if (mine) setIdentity(event.id, null);
       editor.close();
-      await refresh();
+      await refresh(event.id);
     });
     if (removed) {
       setStatus(mine ? 'Your answers were removed.' : `${p.nickname} was removed from the poll.`);
@@ -163,7 +163,7 @@ export function VoteGrid() {
 
     const removed = await run(async () => {
       await api.deleteOption(event.id, option.id, adminToken);
-      await refresh();
+      await refresh(event.id);
     });
     if (removed) {
       setStatus(`${formatDateLong(option.date)} was removed from the poll.`);
