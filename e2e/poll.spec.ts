@@ -352,6 +352,48 @@ test.describe('layout', () => {
     }));
     expect(widths.page).toBe(widths.viewport);
   });
+
+  test('a scrolled table shows only the nickname column at its left edge', async ({ page, request, clientIp }) => {
+    // A phone width, so the table scrolls in both the desktop and the mobile project.
+    await page.setViewportSize({ width: 390, height: 780 });
+    const dates = [14, 15, 16, 17, 18, 19, 20, 21].map(futureIso);
+    const poll = await createPollViaApi(request, clientIp, { dates });
+    const headers = { 'CF-Connecting-IP': clientIp };
+    const view = (await (await request.get(`/api/events/${poll.id}`, { headers })).json()) as EventView;
+    const answered = await request.post(`/api/events/${poll.id}/participants`, {
+      headers,
+      data: {
+        nickname: 'Ada',
+        votes: Object.fromEntries(view.options.map((option) => [option.id, 'yes'])),
+        turnstileToken: DUMMY_TURNSTILE_TOKEN,
+      },
+    });
+    expect(answered.status()).toBe(201);
+
+    await page.goto(poll.participantUrl);
+    await expect(page.getByRole('row', { name: /Ada/ })).toBeVisible();
+
+    // Whatever is painted at the scroller's left edge must be the sticky nickname column, not dates,
+    // answers or tallies that have scrolled underneath it.
+    const scroller = page.locator('.table-scroll');
+    for (const scrollLeft of [150, 300, 'end'] as const) {
+      await scroller.evaluate((el, to) => {
+        el.scrollLeft = to === 'end' ? el.scrollWidth : to;
+      }, scrollLeft);
+      const strayCells = await scroller.evaluate((el) => {
+        const x = el.getBoundingClientRect().left + 1;
+        const stray: string[] = [];
+        for (const row of Array.from(el.querySelectorAll('tr'))) {
+          const { top, height } = row.getBoundingClientRect();
+          const cell = document.elementFromPoint(x, top + height / 2)?.closest('td, th');
+          if (cell && !cell.classList.contains('name-col'))
+            stray.push(`${cell.tagName.toLowerCase()}.${cell.className}`);
+        }
+        return stray;
+      });
+      expect(strayCells, `scrolled to ${scrollLeft}`).toEqual([]);
+    }
+  });
 });
 
 test.describe('dead ends', () => {
