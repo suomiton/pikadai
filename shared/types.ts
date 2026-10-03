@@ -1,4 +1,8 @@
-export type Answer = 'yes' | 'no' | 'maybe';
+import type { z } from 'zod';
+import type { answerSchema } from './schemas';
+
+/** One of yes, no, maybe; the schema is the single definition. */
+export type Answer = z.infer<typeof answerSchema>;
 
 export interface EventOption {
   id: string;

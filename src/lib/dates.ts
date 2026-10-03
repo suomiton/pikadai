@@ -1,3 +1,5 @@
+import { parseIsoParts } from '@shared/dates';
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /** Local calendar date as YYYY-MM-DD. */
@@ -11,7 +13,7 @@ export function todayIso(): string {
 
 /** Parse YYYY-MM-DD as local midnight. */
 export function parseIso(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number);
+  const [y, m, d] = parseIsoParts(iso);
   return new Date(y, m - 1, d);
 }
 
