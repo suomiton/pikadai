@@ -234,7 +234,14 @@ test.describe('answering a poll', () => {
 
     await page.getByRole('button', { name: 'Suggest a date' }).click();
     await pickDate(page, futureIso(30));
-    await page.getByRole('button', { name: /^Add (?!your availability)/ }).click();
+    // On a phone the Add button sits below the fold. A click straight after Playwright's own scroll
+    // can be routed to whatever occupied that screen position before the scroll, here the Turnstile
+    // frame in the join form, because the compositor's hit-test data lags a frame on slow machines.
+    // Bring the button on screen and wait until it is there, so the click itself needs no scroll.
+    const add = page.getByRole('button', { name: /^Add (?!your availability)/ });
+    await add.scrollIntoViewIfNeeded();
+    await expect(add).toBeInViewport();
+    await add.click();
 
     await expect(page.locator('thead th.option-col')).toHaveCount(4);
     await expect(page.getByRole('status').filter({ hasText: 'was added to the poll.' })).toBeAttached();
