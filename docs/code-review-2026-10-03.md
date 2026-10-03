@@ -288,7 +288,7 @@ addressed:
 | Check                                                     | Result                                                             |
 | --------------------------------------------------------- | ------------------------------------------------------------------ |
 | Unit and Worker tests, with coverage (`test:coverage`)    | 206 tests passed across 26 files; every threshold met              |
-| Browser tests (`test:e2e`)                                | 33 passed: 15 desktop, 15 mobile, 3 against the production preview |
+| Browser tests (`test:e2e`)                                | 47 passed: 22 desktop, 22 mobile, 3 against the production preview |
 | ESLint, Prettier, TypeScript (`tsc -b`), production build | Passed                                                             |
 
 ## Validation results
