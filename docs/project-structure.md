@@ -41,10 +41,10 @@ pikadai/
 │   │   ├── tickets.ts         issueTicket / verifyTicket (the enforced, client-bound creation delay)
 │   │   ├── turnstile.ts       siteverify call and the hostname/action check
 │   │   ├── ratelimit.ts       clientIp, rateLimitKey (IPv6 by /64), rateLimit middleware factory
+│   │   ├── expiry.ts          computeExpiresAt: when a poll is purged
 │   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, participantFromToken
 │   ├── db/
-│   │   ├── queries.ts         All SQL; row types; buildEventView; expiry maths
-│   │   └── queries.test.ts    computeExpiresAt
+│   │   └── queries.ts         All SQL; row types; buildEventView
 │   └── test/                  Integration tests: the whole Worker in workerd with a local D1
 │       ├── setup.ts           Applies migrations/ before each file
 │       ├── helpers.ts         API client per address, aged tickets, siteverify stub, D1 helpers

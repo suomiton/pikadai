@@ -1,7 +1,5 @@
-import { LIMITS } from '@shared/limits';
 import type { Answer, EventOption, EventView, Participant } from '@shared/types';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { computeExpiresAt } from '../lib/expiry';
 
 export interface EventRow {
   id: string;
@@ -38,15 +36,6 @@ interface VoteRow {
   answer: Answer;
 }
 
-/** End of the last date option plus a grace period, or a fixed TTL when there are no dates. */
-export function computeExpiresAt(dates: readonly string[], createdAt: number): number {
-  if (dates.length === 0) return createdAt + LIMITS.ttlWithoutDatesDays * DAY_MS;
-  const last = [...dates].sort().at(-1)!;
-  const [y, m, d] = last.split('-').map(Number);
-  const endOfLastDay = Date.UTC(y, m - 1, d + 1); // midnight after the last date, UTC
-  return endOfLastDay + LIMITS.ttlAfterLastDateDays * DAY_MS;
-}
-
 export async function getEventRow(db: D1Database, id: string): Promise<EventRow | null> {
   return db.prepare('SELECT * FROM events WHERE id = ?').bind(id).first<EventRow>();
 }
@@ -74,9 +63,13 @@ export async function insertEventWithOptions(
         event.expires_at,
       ),
     ...options.map((o) =>
-      db
-        .prepare('INSERT INTO options (id, event_id, date, suggested_by, created_at) VALUES (?, ?, ?, NULL, ?)')
-        .bind(o.id, event.id, o.date, event.created_at),
+      optionInsert(db, {
+        id: o.id,
+        event_id: event.id,
+        date: o.date,
+        suggested_by: null,
+        created_at: event.created_at,
+      }),
     ),
   ];
   await db.batch(statements);
@@ -130,11 +123,15 @@ export async function countOptions(db: D1Database, eventId: string): Promise<num
   return row?.n ?? 0;
 }
 
-export async function insertOption(db: D1Database, option: OptionRow): Promise<void> {
-  await db
+/** The one INSERT for an option row, shared by poll creation and later additions. */
+function optionInsert(db: D1Database, option: OptionRow): D1PreparedStatement {
+  return db
     .prepare('INSERT INTO options (id, event_id, date, suggested_by, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(option.id, option.event_id, option.date, option.suggested_by, option.created_at)
-    .run();
+    .bind(option.id, option.event_id, option.date, option.suggested_by, option.created_at);
+}
+
+export async function insertOption(db: D1Database, option: OptionRow): Promise<void> {
+  await optionInsert(db, option).run();
 }
 
 export async function deleteOption(db: D1Database, eventId: string, optionId: string): Promise<boolean> {

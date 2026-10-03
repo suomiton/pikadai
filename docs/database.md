@@ -151,7 +151,7 @@ one batch, so partial updates cannot occur.
 
 ## Expiry
 
-`expires_at` is computed in `computeExpiresAt` in `worker/db/queries.ts`:
+`expires_at` is computed in `computeExpiresAt` in `worker/lib/expiry.ts`:
 
 | Situation                  | `expires_at`                                     |
 | -------------------------- | ------------------------------------------------ |

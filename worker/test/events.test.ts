@@ -2,7 +2,7 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import type { CreateEventResponse, EventView, TicketResponse } from '@shared/types';
 import { LIMITS } from '@shared/limits';
-import { computeExpiresAt } from '../db/queries';
+import { computeExpiresAt } from '../lib/expiry';
 import {
   DUMMY_TOKEN,
   addParticipant,

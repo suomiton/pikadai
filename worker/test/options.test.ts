@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LIMITS } from '@shared/limits';
 import type { EventOption } from '@shared/types';
-import { computeExpiresAt } from '../db/queries';
+import { computeExpiresAt } from '../lib/expiry';
 import { addParticipant, asParticipant, bearer, client, createPoll, futureIso, getView } from './helpers';
 
 describe('POST /api/events/:id/options', () => {
