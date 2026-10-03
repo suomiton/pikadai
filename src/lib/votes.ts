@@ -58,10 +58,13 @@ export interface DateScore {
  * Null until TOP_DATES_MIN_ANSWERS people have answered; before that a single yes would top the table.
  */
 export function topDates(options: readonly EventOption[], participants: readonly Participant[]): DateScore[] | null {
-  const total = participants.length;
+  // Joining creates a row before any date is answered, and someone may join only to comment; they have
+  // not answered, so they count for neither the threshold nor the share.
+  const answered = participants.filter((p) => Object.keys(p.votes).length > 0);
+  const total = answered.length;
   if (total < TOP_DATES_MIN_ANSWERS) return null;
   // computeTallies has an entry for every option, so the lookups below never miss.
-  const tallies = computeTallies(options, participants);
+  const tallies = computeTallies(options, answered);
   return options
     .filter((o) => tallies[o.id].yes > 0)
     .sort(

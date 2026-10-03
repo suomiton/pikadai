@@ -80,7 +80,7 @@ describe('topDates', () => {
     const scores = topDates([...options].reverse(), [
       participant('p1', { a: 'yes', b: 'yes', c: 'yes' }),
       participant('p2', { c: 'maybe' }),
-      participant('p3', {}),
+      participant('p3', { d: 'no' }),
     ]);
     expect(scores?.map((s) => s.option.id)).toEqual(['c', 'a', 'b']);
   });
@@ -98,8 +98,15 @@ describe('topDates', () => {
     const scores = topDates(options, [
       participant('p1', { a: 'no' }),
       participant('p2', { a: 'maybe' }),
-      participant('p3', {}),
+      participant('p3', { b: 'no' }),
     ]);
     expect(scores).toEqual([]);
+  });
+
+  it('ignores someone who joined but has not answered any date', () => {
+    const answered = [participant('p1', { a: 'yes' }), participant('p2', { a: 'yes' })];
+    expect(topDates(options, [...answered, participant('p3', {})])).toBeNull();
+    const scores = topDates(options, [...answered, participant('p3', { a: 'no' }), participant('p4', {})]);
+    expect(scores).toEqual([{ option: options[0], yes: 2, total: 3, percent: 67 }]);
   });
 });
