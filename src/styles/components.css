@@ -220,6 +220,27 @@ textarea.input {
   color: var(--danger);
   font-size: 0.85rem;
 }
+/* Under a field: the error on the left, the hint (a character count, a note) on the right. */
+.field-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+.field-foot .field-error {
+  margin-top: 0;
+}
+.field-hint {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  font-weight: 300;
+  text-align: right;
+}
+.field-counter {
+  font-variant-numeric: tabular-nums;
+}
 .form-error::before {
   content: '! ';
   content: '! ' / '';
@@ -572,6 +593,55 @@ thead th.is-best .opt-day {
 
 .edit-panel {
   padding-top: 0.25rem;
+}
+
+/* The nickname step above the table, before anyone has joined from this browser. */
+.join-form {
+  max-width: 28rem;
+}
+
+/* Comments */
+.comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.comment + .comment {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+.comment-head .tag {
+  margin-left: 0;
+}
+.comment-author {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.comment.is-me .comment-author {
+  color: var(--accent);
+}
+.comment-time {
+  color: var(--text-faint);
+  font-weight: 300;
+}
+.comment-body {
+  margin-top: 0.25rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 70ch;
+}
+/* The textarea is sized from its content by Comments.tsx, so it never scrolls or needs a handle. */
+.comment-form textarea.input {
+  resize: none;
+  overflow: hidden;
 }
 
 .turnstile {

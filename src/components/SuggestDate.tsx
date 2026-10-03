@@ -10,9 +10,9 @@ import { StatusAnnouncer } from './StatusAnnouncer';
 
 /**
  * The button that adds a date (organiser) or suggests one (participants), and the calendar it
- * opens. Renders into the `.btn-row` that VoteGrid puts it in, beside "Add your availability";
- * the picker takes the row's full width and wraps onto its own line. VoteGrid only renders this
- * when the viewer may add dates.
+ * opens. Renders into the `.btn-row` that VoteGrid puts it under the table; the picker takes the
+ * row's full width and wraps onto its own line. VoteGrid only renders this when the viewer may add
+ * dates.
  */
 export function SuggestDate() {
   const { event, me, adminToken } = usePoll();

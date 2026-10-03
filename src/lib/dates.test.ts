@@ -5,6 +5,8 @@ import {
   addDays,
   addMonths,
   formatDateLong,
+  formatDateTime,
+  formatTimestamp,
   monthGrid,
   monthOf,
   parseIso,
@@ -69,5 +71,17 @@ describe('locale labels', () => {
     const text = formatDateLong('2026-10-15');
     expect(text).toContain('2026');
     expect(text).toContain('15');
+  });
+
+  it('formats a timestamp with and without the time of day', () => {
+    const ms = new Date(2026, 9, 3, 14, 2).getTime();
+    const date = formatTimestamp(ms);
+    const dateTime = formatDateTime(ms);
+    expect(date).toContain('2026');
+    expect(date).not.toMatch(/\b02\b/);
+    expect(dateTime).toContain('2026');
+    // Minutes appear whatever the locale's hour format.
+    expect(dateTime).toMatch(/02/);
+    expect(dateTime.length).toBeGreaterThan(date.length);
   });
 });

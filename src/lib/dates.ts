@@ -91,3 +91,8 @@ export function formatMonth({ year, month }: MonthCursor): string {
 export function formatTimestamp(ms: number): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(ms));
 }
+
+/** Date and time in the viewer's locale and zone, e.g. "3 Oct 2026, 14:02"; for comments. */
+export function formatDateTime(ms: number): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(ms));
+}

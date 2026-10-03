@@ -15,12 +15,9 @@ interface Props {
   errorId: string;
   nicknameRef: Ref<HTMLInputElement>;
   isMine: boolean;
-  /** A new answer: move focus into the nickname input so the keyboard user lands where typing starts. */
-  focusOnMount?: boolean;
-  placeholder?: string;
 }
 
-/** The row being edited, for a new answer or an existing one: nickname input and vote buttons. */
+/** A participant's row while it is being edited: nickname input and vote buttons. */
 export function VoteEditRow({
   options,
   isBest,
@@ -32,8 +29,6 @@ export function VoteEditRow({
   errorId,
   nicknameRef,
   isMine,
-  focusOnMount,
-  placeholder,
 }: Props) {
   return (
     <tr className={isMine ? 'is-me is-editing' : 'is-editing'}>
@@ -47,10 +42,6 @@ export function VoteEditRow({
           aria-label="Nickname"
           aria-invalid={nicknameInvalid || undefined}
           aria-describedby={nicknameInvalid ? errorId : undefined}
-          // Deliberate (review finding A13): the row appears on a button press and typing is the next step.
-          // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus={focusOnMount}
-          placeholder={placeholder}
         />
       </th>
       <VoteCells options={options} votes={votes} isBest={isBest} onToggle={onToggle} />

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link, useParams } from 'react-router';
 import { AdminPanel } from '../components/AdminPanel';
+import { Comments } from '../components/Comments';
 import { ShareBox } from '../components/ShareBox';
 import { VoteGrid } from '../components/VoteGrid';
 import { formatTimestamp } from '../lib/dates';
@@ -79,6 +80,7 @@ export function EventPage() {
       )}
 
       <VoteGrid />
+      <Comments />
       <ShareBox />
       {adminToken && <AdminPanel />}
     </div>

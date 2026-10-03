@@ -5,14 +5,12 @@ import { initialVoteEditor, voteEditorReducer, type VoteEditorState } from '../s
 
 export interface VoteEditor {
   state: VoteEditorState;
-  startNew(): void;
   startEdit(participant: Participant): void;
-  /** Close the editor and drop the Turnstile token; the opener is kept for the focus return. */
+  /** Close the editor; whose row it was is kept for the focus return. */
   close(): void;
   /** Cycle a cell and return the answer it now shows, for the live region. */
   toggle(option: EventOption): Answer | undefined;
   setNickname(value: string): void;
-  setTurnstileToken(token: string | null): void;
   /** Drop draft votes for dates no longer in the poll. Stable, so an effect can depend on it. */
   syncOptions(optionIds: readonly string[]): void;
 }
@@ -24,7 +22,6 @@ export function useVoteEditor(): VoteEditor {
   return {
     state,
     syncOptions,
-    startNew: () => dispatch({ type: 'startNew' }),
     startEdit: (participant) => dispatch({ type: 'startEdit', participant }),
     close: () => dispatch({ type: 'close' }),
     toggle: (option) => {
@@ -33,6 +30,5 @@ export function useVoteEditor(): VoteEditor {
       return next;
     },
     setNickname: (value) => dispatch({ type: 'nickname', value }),
-    setTurnstileToken: (token) => dispatch({ type: 'turnstile', token }),
   };
 }

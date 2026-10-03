@@ -24,6 +24,9 @@ const WORKER_CODES = [
   'nickname_taken',
   'unknown_option',
   'not_owner',
+  'not_participant',
+  'too_many_comments',
+  'comment_too_soon',
   'internal',
 ];
 

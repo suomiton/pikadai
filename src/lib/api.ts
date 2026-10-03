@@ -1,5 +1,6 @@
 import type {
   AddOptionInput,
+  CreateCommentInput,
   CreateEventInput,
   CreateParticipantInput,
   UpdateEventInput,
@@ -7,6 +8,7 @@ import type {
 } from '@shared/schemas';
 import type {
   ApiError,
+  Comment,
   CreateEventResponse,
   CreateParticipantResponse,
   EventOption,
@@ -126,5 +128,13 @@ export const api = {
     request<void>(`${eventPath(id)}/participants/${encodeURIComponent(participantId)}`, {
       method: 'DELETE',
       headers: authHeaders(auth),
+    }),
+
+  /** Always as the participant: a comment is posted under a nickname, which the admin token does not have. */
+  addComment: (id: string, input: CreateCommentInput, participant: ParticipantIdentity) =>
+    request<Comment>(`${eventPath(id)}/comments`, {
+      method: 'POST',
+      body: input,
+      headers: authHeaders({ participant }),
     }),
 };

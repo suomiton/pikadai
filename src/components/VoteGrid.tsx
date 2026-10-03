@@ -1,16 +1,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { LIMITS } from '@shared/limits';
 import type { EventOption, Participant } from '@shared/types';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useVoteEditor } from '../hooks/useVoteEditor';
 import { api, ApiRequestError } from '../lib/api';
 import { formatDateLong } from '../lib/dates';
+import type { ParticipantIdentity } from '../lib/storage';
 import { computeTallies, LABEL } from '../lib/votes';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { EditPanel } from './EditPanel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { FormError } from './FormError';
+import { JoinForm } from './JoinForm';
 import { OptionHeader } from './OptionHeader';
 import { StatusAnnouncer } from './StatusAnnouncer';
 import { SuggestDate } from './SuggestDate';
@@ -21,33 +22,35 @@ const NICKNAME_REQUIRED = 'Please enter a nickname.';
 
 type Removal = { kind: 'participant'; participant: Participant } | { kind: 'option'; option: EventOption };
 
+/** Where focus goes once a request has finished: back to the control that opened the editor, or into the row just opened. */
+type FocusTarget = 'return' | 'editor';
+
 /**
- * The participants × dates table. Owns the three mutations and the focus return; the editing
- * state machine is `useVoteEditor`, the rows and the panel are their own components.
+ * The participants × dates table. Owns joining the poll, the three mutations on rows and dates, and
+ * the focus return; the editing state machine is `useVoteEditor`, the rows, the join form and the
+ * panel are their own components.
  */
 export function VoteGrid() {
   const { event, me, adminToken, isAdmin } = usePoll();
   const { refresh, setIdentity } = usePollActions();
   const id = useId();
   const editor = useVoteEditor();
-  const { editing, opener, nickname, draftVotes, turnstileToken } = editor.state;
+  const { editingId, returnTo, nickname, draftVotes } = editor.state;
   const { busy, error, setError, run } = useAsyncAction();
   /** Read out by the live region: vote changes, saves and removals that are otherwise silent. */
   const [status, setStatus] = useState('');
   const [pendingRemoval, setPendingRemoval] = useState<Removal | null>(null);
-  const turnstileRef = useRef<TurnstileInstance>(null);
 
   const sectionRef = useRef<HTMLElement>(null);
   const tableRegionRef = useRef<HTMLDivElement>(null);
-  const addButtonRef = useRef<HTMLButtonElement>(null);
   const nicknameRef = useRef<HTMLInputElement>(null);
-  const [focusRequest, setFocusRequest] = useState(0);
+  const [focusRequest, setFocusRequest] = useState<{ seq: number; target: FocusTarget }>({ seq: 0, target: 'return' });
   const handledFocusRequest = useRef(0);
 
-  const hasAnswered = me !== null && event.participants.some((p) => p.id === me.id);
+  const editing = editingId !== null;
   const isFull = event.participants.length >= LIMITS.participantsMax;
-  const editingId = editing?.kind === 'existing' ? editing.participantId : null;
-  const canAnswer = editing === null && !hasAnswered && !isFull;
+  /** Nobody in this browser has joined yet: the nickname step comes before the dates. */
+  const showJoin = me === null && !isFull;
   const canSuggest = isAdmin || event.allowSuggestions;
 
   const tallies = useMemo(() => computeTallies(event.options, event.participants), [event]);
@@ -63,32 +66,26 @@ export function VoteGrid() {
 
   /*
    * When the editor closes, the row or panel that had focus unmounts and focus would fall to
-   * <body>. Put it back on the control that opened the editor, or on the nearest thing still on
-   * screen: the Add button disappears once you have answered, and an Edit button goes with its row.
+   * <body>. Put it back on the Edit button of the row that was open, or on the nearest thing still
+   * on screen. When the editor opens right after joining, the join form has gone the same way, so
+   * focus moves into the new row, on its first date cell.
    */
   useEffect(() => {
     // Buttons are disabled while a request is in flight and cannot take focus; wait it out.
-    if (focusRequest === handledFocusRequest.current || busy) return;
-    handledFocusRequest.current = focusRequest;
+    if (focusRequest.seq === handledFocusRequest.current || busy) return;
+    handledFocusRequest.current = focusRequest.seq;
     const section = sectionRef.current;
     if (!section) return;
     const editButton = (participantId: string) =>
       section.querySelector<HTMLElement>(`[data-edit-for="${participantId}"]`);
-    const candidates = [
-      opener?.kind === 'edit' ? editButton(opener.participantId) : null,
-      me ? editButton(me.id) : null,
-      addButtonRef.current,
-      tableRegionRef.current,
-    ];
+    const candidates =
+      focusRequest.target === 'editor'
+        ? [section.querySelector<HTMLElement>('tr.is-editing .vote-btn'), nicknameRef.current]
+        : [returnTo ? editButton(returnTo) : null, me ? editButton(me.id) : null, tableRegionRef.current];
     candidates.find((el): el is HTMLElement => el !== null)?.focus();
-  }, [focusRequest, busy, opener, me]);
+  }, [focusRequest, busy, returnTo, me]);
 
-  const returnFocus = () => setFocusRequest((n) => n + 1);
-
-  function startNew() {
-    setError(null);
-    editor.startNew();
-  }
+  const requestFocus = (target: FocusTarget) => setFocusRequest((r) => ({ seq: r.seq + 1, target }));
 
   function startEdit(p: Participant) {
     setError(null);
@@ -98,7 +95,7 @@ export function VoteGrid() {
   function cancel() {
     editor.close();
     setError(null);
-    returnFocus();
+    requestFocus('return');
   }
 
   function toggle(option: EventOption) {
@@ -106,37 +103,52 @@ export function VoteGrid() {
     setStatus(`${formatDateLong(option.date)}: ${LABEL[next ?? 'none']}`);
   }
 
+  /**
+   * Take the nickname: create this browser's participant with no answers yet, then open that row so
+   * the next tap is on a date. Comments use the same identity.
+   */
+  async function join(name: string, turnstileToken: string): Promise<boolean> {
+    setStatus('Joining the poll.');
+    const outcome: { me?: ParticipantIdentity; onScreen?: boolean } = {};
+    const joined = await run(async () => {
+      const res = await api.addParticipant(event.id, { nickname: name, votes: {}, turnstileToken });
+      outcome.me = { id: res.id, token: res.editToken };
+      setIdentity(event.id, outcome.me);
+      // The row has to be on screen before it can be edited; a failed refresh shows its own retry.
+      outcome.onScreen = await refresh(event.id);
+    });
+    if (!joined || !outcome.me) {
+      setStatus('');
+      return false;
+    }
+    if (outcome.onScreen) {
+      editor.startEdit({ id: outcome.me.id, nickname: name, votes: {}, createdAt: Date.now() });
+      requestFocus('editor');
+      setStatus(`You joined as ${name}. Tap a date to add your availability.`);
+    } else {
+      setStatus(`You joined as ${name}.`);
+    }
+    return true;
+  }
+
   async function save() {
-    if (!editing) return;
+    if (editingId === null) return;
     const name = nickname.trim();
     if (!name) {
       setError(NICKNAME_REQUIRED);
       nicknameRef.current?.focus();
       return;
     }
-    if (editing.kind === 'new' && !turnstileToken) {
-      setError('Please complete the verification first.');
-      return;
-    }
 
     setStatus('Saving your answers.');
     const saved = await run(async () => {
       try {
-        if (editing.kind === 'new') {
-          const res = await api.addParticipant(event.id, {
-            nickname: name,
-            votes: draftVotes,
-            turnstileToken: turnstileToken!,
-          });
-          setIdentity(event.id, { id: res.id, token: res.editToken });
-        } else {
-          await api.updateParticipant(
-            event.id,
-            editing.participantId,
-            { nickname: name, votes: draftVotes },
-            { adminToken, participant: me },
-          );
-        }
+        await api.updateParticipant(
+          event.id,
+          editingId,
+          { nickname: name, votes: draftVotes },
+          { adminToken, participant: me },
+        );
       } catch (err) {
         // A date was removed after this page last fetched the poll. Show the current columns, which
         // also prunes the draft, and keep the editor open so the rest can be saved on the next try.
@@ -148,12 +160,10 @@ export function VoteGrid() {
     });
     if (saved) {
       setStatus('Your answers were saved.');
-      returnFocus();
+      requestFocus('return');
     } else {
-      // The editor stays open with the draft; a Turnstile token is single-use, so get a fresh one.
+      // The editor stays open with the draft.
       setStatus('');
-      turnstileRef.current?.reset();
-      editor.setTurnstileToken(null);
     }
   }
 
@@ -199,8 +209,10 @@ export function VoteGrid() {
 
   const errorId = `${id}-error`;
   const nicknameInvalid = error === NICKNAME_REQUIRED;
-  const editingParticipant =
-    editing?.kind === 'existing' ? event.participants.find((p) => p.id === editing.participantId) : undefined;
+  const editingParticipant = event.participants.find((p) => p.id === editingId);
+  // The one place the last failure is shown: the panel while editing, the join form before joining,
+  // and under the table otherwise. The confirmation dialog shows it itself while it is open.
+  const errorHost = pendingRemoval ? 'dialog' : editing ? 'panel' : showJoin ? 'join' : 'table';
 
   const editRowProps = {
     options: event.options,
@@ -218,6 +230,10 @@ export function VoteGrid() {
     <section ref={sectionRef} className="card stack vote-section" aria-labelledby={`${id}-heading`}>
       <h2 id={`${id}-heading`}>Availability</h2>
       <StatusAnnouncer message={status} />
+
+      {showJoin && <JoinForm busy={busy} error={errorHost === 'join' ? error : null} onJoin={join} />}
+      {me === null && isFull && <p className="hint">This poll is full.</p>}
+
       <div
         ref={tableRegionRef}
         className="table-scroll"
@@ -262,18 +278,14 @@ export function VoteGrid() {
                   options={event.options}
                   isBest={isBest}
                   isMine={me?.id === p.id}
-                  canEdit={(isAdmin || me?.id === p.id) && editing === null}
+                  canEdit={(isAdmin || me?.id === p.id) && !editing}
                   disabled={busy}
                   onEdit={startEdit}
                 />
               ),
             )}
 
-            {editing?.kind === 'new' && (
-              <VoteEditRow {...editRowProps} isMine focusOnMount placeholder="Your nickname" />
-            )}
-
-            {event.participants.length === 0 && editing === null && (
+            {event.participants.length === 0 && (
               <tr className="is-empty">
                 <td colSpan={event.options.length + 2}>No answers yet. Be the first.</td>
               </tr>
@@ -297,39 +309,24 @@ export function VoteGrid() {
         </table>
       </div>
 
-      {editing === null && !hasAnswered && isFull && <p className="hint">This poll is full.</p>}
-
-      {(canAnswer || canSuggest) && (
+      {canSuggest && (
         <div className="btn-row">
-          {canAnswer && (
-            <button ref={addButtonRef} type="button" className="btn btn-primary" onClick={startNew} disabled={busy}>
-              Add your availability
-            </button>
-          )}
-          {canSuggest && <SuggestDate />}
+          <SuggestDate />
         </div>
       )}
 
-      {editing !== null && (
+      {editingParticipant && (
         <EditPanel
-          isNew={editing.kind === 'new'}
           busy={busy}
-          canSave={editing.kind !== 'new' || turnstileToken !== null}
-          error={pendingRemoval ? null : error}
+          error={errorHost === 'panel' ? error : null}
           errorId={errorId}
-          turnstileRef={turnstileRef}
-          onToken={editor.setTurnstileToken}
           onSave={save}
           onCancel={cancel}
-          onRemove={
-            editingParticipant
-              ? () => requestRemoval({ kind: 'participant', participant: editingParticipant })
-              : undefined
-          }
+          onRemove={() => requestRemoval({ kind: 'participant', participant: editingParticipant })}
         />
       )}
 
-      {editing === null && !pendingRemoval && <FormError message={error} />}
+      {errorHost === 'table' && <FormError message={error} />}
       {pendingRemoval && (
         <ConfirmDialog
           title={
@@ -343,8 +340,8 @@ export function VoteGrid() {
             pendingRemoval.kind === 'option'
               ? `${formatDateLong(pendingRemoval.option.date)} and every answer for it will be removed. This cannot be undone.`
               : me?.id === pendingRemoval.participant.id
-                ? 'Your answers will be removed from this poll. This cannot be undone.'
-                : `${pendingRemoval.participant.nickname} and all their answers will be removed from this poll. This cannot be undone.`
+                ? 'Your answers and comments will be removed from this poll. This cannot be undone.'
+                : `${pendingRemoval.participant.nickname} and all their answers and comments will be removed from this poll. This cannot be undone.`
           }
           confirmLabel={pendingRemoval.kind === 'option' ? 'Remove date' : 'Remove answers'}
           busyLabel={pendingRemoval.kind === 'option' ? 'Removing date…' : 'Removing answers…'}
