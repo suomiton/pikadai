@@ -279,10 +279,13 @@ test.describe('when the poll changes underneath', () => {
     await page.getByLabel('Nickname').fill('Ada B.');
 
     // The organiser removes the first date while the answer is still open for editing.
-    page.once('dialog', (d) => d.accept());
     await page
       .getByRole('button', { name: /^Remove .+/ })
       .first()
+      .click();
+    await page
+      .getByRole('alertdialog', { name: 'Remove this date?' })
+      .getByRole('button', { name: 'Remove date' })
       .click();
     await expect(page.locator('thead th.option-col')).toHaveCount(2);
     await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
