@@ -40,13 +40,7 @@ export function NameCard() {
           <JoinForm id={id} onCancel={isAdmin ? () => setJoining(false) : undefined} />
         )
       ) : (
-        <RenameForm
-          id={id}
-          participantId={me.id}
-          name={mine?.name ?? null}
-          votes={mine?.votes ?? {}}
-          auth={{ adminToken, participant: me }}
-        />
+        <RenameForm id={id} participantId={me.id} name={mine?.name ?? null} auth={{ adminToken, participant: me }} />
       )}
     </section>
   );
@@ -140,11 +134,10 @@ interface RenameProps {
   participantId: string;
   /** Null while the row has not arrived yet, right after joining or after a failed refresh. */
   name: string | null;
-  votes: Record<string, 'yes' | 'no' | 'maybe'>;
   auth: { adminToken: string | null; participant: { id: string; token: string } };
 }
 
-function RenameForm({ id, participantId, name, votes, auth }: RenameProps) {
+function RenameForm({ id, participantId, name, auth }: RenameProps) {
   const { event } = usePoll();
   const { refresh } = usePollActions();
   const [open, setOpen] = useState(false);
@@ -190,9 +183,9 @@ function RenameForm({ id, participantId, name, votes, auth }: RenameProps) {
       close();
       return;
     }
-    // The save replaces the whole row, so the current answers travel along unchanged.
+    // Name only: an answer saved from the table at the same moment cannot be overwritten by this.
     const saved = await run(async () => {
-      await api.updateParticipant(event.id, participantId, { name: parsed.data, votes }, auth);
+      await api.updateParticipant(event.id, participantId, { name: parsed.data }, auth);
       returnFocus.current = true;
       setOpen(false);
       await refresh(event.id);

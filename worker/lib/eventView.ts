@@ -28,6 +28,7 @@ export function toEventView(
     participants: participants.map((p): Participant => ({
       id: p.id,
       name: p.name,
+      nickname: p.name,
       votes: votesByParticipant.get(p.id) ?? {},
       createdAt: p.created_at,
       isOrganiser: p.is_organiser === 1,

@@ -128,8 +128,10 @@ export function VoteGrid({ showAll }: Props) {
 
   async function save() {
     if (!editingParticipant) return;
-    const name = nameEditable ? draftName.trim() : editingParticipant.name;
-    if (!name) {
+    // One's own save carries only the votes, so a rename from the Name tile that crosses it in
+    // flight is not undone; the organiser's save of someone else's row carries the name too.
+    const name = nameEditable ? draftName.trim() : undefined;
+    if (nameEditable && !name) {
       setError(NAME_REQUIRED);
       nameRef.current?.focus();
       return;
@@ -141,7 +143,7 @@ export function VoteGrid({ showAll }: Props) {
         await api.updateParticipant(
           event.id,
           editingParticipant.id,
-          { name: name, votes: draftVotes },
+          { name, votes: draftVotes },
           { adminToken, participant: me },
         );
       } catch (err) {

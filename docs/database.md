@@ -172,9 +172,9 @@ removal by the organiser) or with the poll.
   by a few rows; accepted at this scale.
 - Votes may only reference options belonging to the same event; others are rejected with `unknown_option`.
 - A name pre-check for the friendly error; the unique index above is the guarantee.
-- At most 200 comments per poll, checked before the insert like the other caps. One comment per 10 seconds
-  per participant, which the insert statement decides itself (`INSERT … SELECT … WHERE NOT EXISTS` a newer
-  comment by that participant), so two simultaneous posts cannot both get in.
+- At most 200 comments per poll and one comment per 10 seconds per participant. Unlike the other caps,
+  both are decided by the insert statement itself (`INSERT … SELECT … WHERE NOT EXISTS` a newer comment by
+  that participant `AND` the poll's count is under the cap), so simultaneous posts cannot overshoot.
 - Expired events (`expires_at <= now`) are treated as gone even before the purge deletes them.
 - Writes that need to be all-or-nothing use `db.batch()`, which D1 runs as one transaction: event plus
   options on creation; participant plus votes on insert; name update plus vote replacement on edit.
@@ -214,17 +214,17 @@ events removed.
 
 All SQL lives in `worker/db/queries.ts`. The main ones:
 
-| Function                         | Used by                       | Query shape                                                                                                                       |
-| -------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `getEventRow`                    | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                                                               |
-| `fetchEventRows` + `toEventView` | GET                           | four selects (options, participants, votes and comments joined to participants), then a pure mapping in `worker/lib/eventView.ts` |
-| `insertEventWithOptions`         | POST events                   | batch: 1 event insert + N option inserts                                                                                          |
-| `insertParticipantWithVotes`     | POST participants             | batch: 1 insert + N vote inserts                                                                                                  |
-| `updateParticipantWithVotes`     | PUT participant               | batch: update, delete votes, insert votes                                                                                         |
-| `nameTaken`                      | POST/PUT participant          | `… WHERE event_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                                     |
-| `insertOption` / `deleteOption`  | options routes                | batch: insert or delete, plus the `expires_at` recalculation from the rows in the same transaction                                |
-| `insertComment`                  | POST comments                 | one `INSERT … SELECT … WHERE NOT EXISTS` carrying the one-per-interval rule; `countComments` runs first for the cap               |
-| `deleteExpiredEvents`            | cron                          | the purge above                                                                                                                   |
+| Function                         | Used by                       | Query shape                                                                                                                                  |
+| -------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getEventRow`                    | every `/api/events/:id` route | `SELECT * FROM events WHERE id = ?`                                                                                                          |
+| `fetchEventRows` + `toEventView` | GET                           | four selects (options, participants, votes and comments joined to participants), then a pure mapping in `worker/lib/eventView.ts`            |
+| `insertEventWithOptions`         | POST events                   | batch: 1 event insert + N option inserts                                                                                                     |
+| `insertParticipantWithVotes`     | POST participants             | batch: 1 insert + N vote inserts                                                                                                             |
+| `updateParticipant`              | PUT participant               | batch: name update, and when votes are sent, delete votes and insert the new set                                                             |
+| `nameTaken`                      | POST/PUT participant          | `… WHERE event_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                                                |
+| `insertOption` / `deleteOption`  | options routes                | batch: insert or delete, plus the `expires_at` recalculation from the rows in the same transaction                                           |
+| `insertComment`                  | POST comments                 | one `INSERT … SELECT … WHERE …` carrying the one-per-interval rule and the per-poll cap; `countComments` names a refusal's reason afterwards |
+| `deleteExpiredEvents`            | cron                          | the purge above                                                                                                                              |
 
 A poll view costs roughly 4 + participants + options + comments row reads, and creating a poll costs
 1 + options row writes. See the D1 free-plan limits in [cloudflare.md](cloudflare.md#d1) for why this is comfortable.

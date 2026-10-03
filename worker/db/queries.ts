@@ -251,18 +251,30 @@ export async function insertParticipantWithVotes(
   await db.batch(statements);
 }
 
-export async function updateParticipantWithVotes(
+/** What a save may change: the name, the whole vote set, or both. An absent field is left as it is. */
+export interface ParticipantPatch {
+  name?: string;
+  votes?: Record<string, Answer>;
+}
+
+/** Apply a patch in one transaction; the vote set, when given, replaces the old one wholesale. */
+export async function updateParticipant(
   db: D1Database,
   participant: ParticipantRow,
-  name: string,
-  votes: Record<string, Answer>,
+  patch: ParticipantPatch,
   now: number,
 ): Promise<void> {
   const statements = [
-    db.prepare('UPDATE participants SET name = ?, updated_at = ? WHERE id = ?').bind(name, now, participant.id),
-    db.prepare('DELETE FROM votes WHERE participant_id = ?').bind(participant.id),
-    ...voteStatements(db, participant.id, votes),
+    db
+      .prepare('UPDATE participants SET name = ?, updated_at = ? WHERE id = ?')
+      .bind(patch.name ?? participant.name, now, participant.id),
   ];
+  if (patch.votes !== undefined) {
+    statements.push(
+      db.prepare('DELETE FROM votes WHERE participant_id = ?').bind(participant.id),
+      ...voteStatements(db, participant.id, patch.votes),
+    );
+  }
   await db.batch(statements);
 }
 
@@ -318,15 +330,23 @@ export async function countComments(db: D1Database, eventId: string): Promise<nu
 }
 
 /**
- * Insert a comment unless the participant has one newer than `quietSince`. The check and the
- * insert are one statement, so two simultaneous posts cannot both get in. False when refused.
+ * Insert a comment unless the participant has one newer than `quietSince` or the poll already holds
+ * `maxPerEvent` comments. Both checks sit in the insert statement itself, so simultaneous posts, by
+ * one participant or by many, cannot slip past them together. False when refused; the caller asks
+ * `countComments` to tell the two reasons apart.
  */
-export async function insertComment(db: D1Database, comment: CommentRow, quietSince: number): Promise<boolean> {
+export async function insertComment(
+  db: D1Database,
+  comment: CommentRow,
+  quietSince: number,
+  maxPerEvent: number,
+): Promise<boolean> {
   const result = await db
     .prepare(
       `INSERT INTO comments (id, event_id, participant_id, body, created_at)
        SELECT ?, ?, ?, ?, ?
-       WHERE NOT EXISTS (SELECT 1 FROM comments WHERE participant_id = ? AND created_at > ?)`,
+       WHERE NOT EXISTS (SELECT 1 FROM comments WHERE participant_id = ? AND created_at > ?)
+         AND (SELECT COUNT(*) FROM comments WHERE event_id = ?) < ?`,
     )
     .bind(
       comment.id,
@@ -336,6 +356,8 @@ export async function insertComment(db: D1Database, comment: CommentRow, quietSi
       comment.created_at,
       comment.participant_id,
       quietSince,
+      comment.event_id,
+      maxPerEvent,
     )
     .run();
   return (result.meta.changes ?? 0) > 0;

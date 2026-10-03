@@ -82,6 +82,7 @@ describe('toEventView', () => {
     expect(ada).toEqual({
       id: 'p1',
       name: 'Ada',
+      nickname: 'Ada',
       votes: { o1: 'yes', o2: 'maybe' },
       createdAt: 1_100,
       isOrganiser: false,

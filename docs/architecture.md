@@ -164,8 +164,13 @@ name or commenting does not count, and the top-dates table counts the same peopl
    and has not answered yet.
 5. Every save of answers, now and later, sends both as headers to
    `PUT /api/events/:id/participants/:participantId`, which also checks that every vote refers to one of the
-   poll's dates. A rename from the Name tile is the same request with the current votes unchanged. The
-   organiser renames other people from their rows; one's own row shows the name as text.
+   poll's dates. The request carries the name, the votes or both, and a field left out stays as it is: a
+   rename from the Name tile sends only the name and one's own answer only the votes, so the two cannot
+   overwrite each other when they cross in flight. The organiser renames other people from their rows;
+   one's own row shows the name as text.
+
+Until 2026-11-04 the participant endpoints also accept `nickname` in place of `name`, and participants in
+the view carry a `nickname` alias, so a tab loaded before the rename keeps working until it is reloaded.
 
 A vote is one of `yes`, `maybe`, `no`. A missing vote means "no answer" and is shown as `·`. Each save
 replaces the participant's whole vote set, which keeps the client logic simple and avoids partial updates.
@@ -177,9 +182,10 @@ Anyone with the link reads the comments; posting one needs the participant token
 comments by joining like everyone else. `POST /api/events/:id/comments` carries the edit token and
 `X-Participant-Id`, and the Worker refuses anything else with `not_participant`. The text is trimmed and
 capped at 512 characters, a poll holds at most 200 comments, and a participant may post one comment every
-10 seconds. That last rule is decided by the insert statement itself (`INSERT … SELECT … WHERE NOT EXISTS`
-a newer comment by the same participant), so simultaneous posts cannot slip through; a refused post is
-`429 comment_too_soon`. The client additionally hides the comment form after one post until the page is
+10 seconds. Both limits are decided by the insert statement itself (`INSERT … SELECT … WHERE NOT EXISTS`
+a newer comment by the same participant `AND` the poll's count is under the cap), so simultaneous posts,
+by one person or by many, cannot slip through; a refused post is `429 comment_too_soon` or
+`409 too_many_comments`, told apart afterwards. The client additionally hides the comment form after one post until the page is
 reloaded. Comments show the participant's current name, cannot be edited or deleted, and go when
 their participant goes: leaving the poll or being removed by the organiser takes the comments along.
 
@@ -257,7 +263,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | POST   | `/api/events/:id/options`                     | anyone while suggestions are on; admin always | Add a date                                       |
 | DELETE | `/api/events/:id/options/:optionId`           | admin                                         | Remove a date and its votes                      |
 | POST   | `/api/events/:id/participants`                | Turnstile; admin token marks the organiser    | Join: add a participant → `{ id, editToken }`    |
-| PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Replace name and votes                           |
+| PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Change the name, replace the votes, or both      |
 | DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
 | POST   | `/api/events/:id/comments`                    | participant token + `X-Participant-Id`        | Post a comment → `Comment`                       |
 

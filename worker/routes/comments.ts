@@ -27,10 +27,6 @@ comments.post(
 
     const body = parseBody(createCommentSchema, await readJson(c));
 
-    if ((await countComments(c.env.DB, event.id)) >= LIMITS.commentsMax) {
-      throw errors.conflict(`This poll already has the maximum of ${LIMITS.commentsMax} comments`, 'too_many_comments');
-    }
-
     const now = Date.now();
     const comment = {
       id: randomId(),
@@ -39,8 +35,15 @@ comments.post(
       body: body.body,
       created_at: now,
     };
-    // One comment per interval per participant, decided by the insert itself so a race cannot slip through.
-    if (!(await insertComment(c.env.DB, comment, now - LIMITS.commentIntervalMs))) {
+    // The per-participant interval and the per-poll cap are both decided by the insert itself, so
+    // simultaneous posts cannot slip past either. Only afterwards is the reason looked up.
+    if (!(await insertComment(c.env.DB, comment, now - LIMITS.commentIntervalMs, LIMITS.commentsMax))) {
+      if ((await countComments(c.env.DB, event.id)) >= LIMITS.commentsMax) {
+        throw errors.conflict(
+          `This poll already has the maximum of ${LIMITS.commentsMax} comments`,
+          'too_many_comments',
+        );
+      }
       throw errors.tooMany('Wait a few seconds before commenting again', 'comment_too_soon');
     }
 

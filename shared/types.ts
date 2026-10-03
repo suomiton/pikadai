@@ -15,6 +15,8 @@ export interface EventOption {
 export interface Participant {
   id: string;
   name: string;
+  /** @deprecated The same value as `name`, for pages loaded before the rename shipped. Remove after 2026-11-04. */
+  nickname?: string;
   votes: Record<string, Answer>;
   createdAt: number;
   /** Joined with the admin token: the organiser's own row. Shown with a pill after the name. */

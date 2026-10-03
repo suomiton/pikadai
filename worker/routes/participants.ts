@@ -10,7 +10,7 @@ import {
   getParticipant,
   insertParticipantWithVotes,
   nameTaken,
-  updateParticipantWithVotes,
+  updateParticipant,
   type EventRow,
   type ParticipantRow,
 } from '../db/queries';
@@ -111,15 +111,14 @@ participants.put(
       throw errors.forbidden('You can only edit your own answers', 'not_owner');
     }
 
+    // A rename carries only the name and an answer only the votes; a field left out stays as it is.
     const body = parseBody(updateParticipantSchema, await readJson(c));
-    const name = body.name ?? participant.name;
-    if (name !== participant.name && (await nameTaken(c.env.DB, event.id, name, participant.id))) {
-      throw nameTakenError();
+    if (body.name !== undefined && body.name !== participant.name) {
+      if (await nameTaken(c.env.DB, event.id, body.name, participant.id)) throw nameTakenError();
     }
-
-    const votes = await assertVotesBelongToEvent(c.env.DB, event.id, body.votes);
+    const votes = body.votes === undefined ? undefined : await assertVotesBelongToEvent(c.env.DB, event.id, body.votes);
     try {
-      await updateParticipantWithVotes(c.env.DB, participant, name, votes, Date.now());
+      await updateParticipant(c.env.DB, participant, { name: body.name, votes }, Date.now());
     } catch (err) {
       if (isUniqueViolation(err)) throw nameTakenError();
       throw err;

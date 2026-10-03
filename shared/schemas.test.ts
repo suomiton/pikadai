@@ -123,6 +123,27 @@ describe('participant schemas', () => {
   });
 });
 
+describe('participant schemas', () => {
+  it('still accepts the old field name and answers with the new one', () => {
+    expect(createParticipantSchema.parse({ nickname: ' Ada ', votes: {}, turnstileToken: 't' })).toEqual({
+      name: 'Ada',
+      votes: {},
+      turnstileToken: 't',
+    });
+    expect(createParticipantSchema.parse({ name: 'Ada', votes: {}, turnstileToken: 't' }).name).toBe('Ada');
+    expect(firstMessage(createParticipantSchema.safeParse({ votes: {}, turnstileToken: 't' }))).toBe(
+      'Name is required',
+    );
+    expect(updateParticipantSchema.parse({ nickname: 'Ada L.' })).toEqual({ name: 'Ada L.' });
+  });
+
+  it('lets a save carry the name, the votes or both, but not nothing', () => {
+    expect(updateParticipantSchema.parse({ name: 'Ada' })).toEqual({ name: 'Ada' });
+    expect(updateParticipantSchema.parse({ votes: { o1: 'yes' } })).toEqual({ name: undefined, votes: { o1: 'yes' } });
+    expect(firstMessage(updateParticipantSchema.safeParse({}))).toBe('Nothing to update');
+  });
+});
+
 describe('createCommentSchema', () => {
   it('trims the text and requires something to be left', () => {
     expect(createCommentSchema.parse({ body: '  Saturday works for me  ' })).toEqual({ body: 'Saturday works for me' });

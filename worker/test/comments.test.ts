@@ -126,6 +126,36 @@ describe('POST /api/events/:id/comments', () => {
     expect(await countRows('comments', poll.id)).toBe(1);
   });
 
+  it('lets exactly one post in when several people race for the last place under the cap', async () => {
+    const poll = await createPoll();
+    const racers = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => addParticipant(client(), poll.id, `Racer ${i}`)),
+    );
+    const now = Date.now();
+    await env.DB.batch(
+      Array.from({ length: LIMITS.commentsMax - 1 }, (_, i) =>
+        env.DB.prepare(
+          'INSERT INTO comments (id, event_id, participant_id, body, created_at) VALUES (?, ?, ?, ?, ?)',
+        ).bind(
+          `filler-${poll.id.slice(0, 8)}-${i}`,
+          poll.id,
+          racers[0].id,
+          `Filler ${i}`,
+          now - LIMITS.commentIntervalMs * 2,
+        ),
+      ),
+    );
+    const attempts = await Promise.all(
+      racers.map((who, i) =>
+        poll.client.post(`/api/events/${poll.id}/comments`, { body: `Last word ${i}` }, asParticipant(who)),
+      ),
+    );
+    expect(attempts.map((r) => r.status).sort()).toEqual([201, 409, 409, 409, 409]);
+    for (const r of attempts.filter((r) => r.status === 409))
+      expect(r.body).toMatchObject({ code: 'too_many_comments' });
+    expect(await countRows('comments', poll.id)).toBe(LIMITS.commentsMax);
+  });
+
   it('refuses a poll that has reached the comment cap', async () => {
     const poll = await createPoll();
     const ada = await addParticipant(poll.client, poll.id, 'Ada');

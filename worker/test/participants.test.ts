@@ -172,6 +172,45 @@ describe('POST /api/events/:id/participants', () => {
 });
 
 describe('PUT /api/events/:id/participants/:participantId', () => {
+  it('changes only what is sent: a name-only save keeps the votes, a votes-only save keeps the name', async () => {
+    const poll = await createPoll();
+    const [a, b] = poll.view.options;
+    const me = await addParticipant(poll.client, poll.id, 'Ada', { [a.id]: 'yes' });
+    const path = `/api/events/${poll.id}/participants/${me.id}`;
+
+    expect((await poll.client.put(path, { name: 'Ada L.' }, asParticipant(me))).status).toBe(204);
+    let [row] = (await getView(poll.client, poll.id)).participants;
+    expect(row).toMatchObject({ name: 'Ada L.', votes: { [a.id]: 'yes' } });
+
+    expect((await poll.client.put(path, { votes: { [b.id]: 'maybe' } }, asParticipant(me))).status).toBe(204);
+    [row] = (await getView(poll.client, poll.id)).participants;
+    expect(row).toMatchObject({ name: 'Ada L.', votes: { [b.id]: 'maybe' } });
+
+    const empty = await poll.client.put(path, {}, asParticipant(me));
+    expect(empty.status).toBe(400);
+    expect(empty.body).toMatchObject({ code: 'validation_failed' });
+  });
+
+  it('keeps a page loaded before the rename working: nickname in, nickname alias out', async () => {
+    const poll = await createPoll();
+    stubSiteverify(siteverifyOk('answer'));
+    const legacy = await poll.client.post<CreateParticipantResponse>(`/api/events/${poll.id}/participants`, {
+      nickname: 'Ada',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
+    expect(legacy.status).toBe(201);
+    const renamed = await poll.client.put(
+      `/api/events/${poll.id}/participants/${legacy.body.id}`,
+      { nickname: 'Ada L.', votes: {} },
+      asParticipant(legacy.body),
+    );
+    expect(renamed.status).toBe(204);
+    const [row] = (await getView(poll.client, poll.id)).participants;
+    expect(row.name).toBe('Ada L.');
+    expect(row.nickname).toBe('Ada L.');
+  });
+
   it('lets the owner replace name and votes as a whole', async () => {
     const poll = await createPoll();
     const [a, b] = poll.view.options;

@@ -30,13 +30,27 @@ export function Comments() {
   const canComment = me !== null && !posted;
 
   // The textarea grows with the text so the whole comment stays in view; it never scrolls inside.
+  // Lines wrap differently when the field gets narrower or wider (a window resized, a phone turned),
+  // so the measurement also reruns when its width changes.
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    el.style.height = 'auto';
-    // scrollHeight leaves the border out, and the box is sized border-box.
-    const border = el.offsetHeight - el.clientHeight;
-    el.style.height = `${el.scrollHeight + border}px`;
+    const fit = () => {
+      el.style.height = 'auto';
+      // scrollHeight leaves the border out, and the box is sized border-box.
+      const border = el.offsetHeight - el.clientHeight;
+      el.style.height = `${el.scrollHeight + border}px`;
+    };
+    fit();
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      // Only a width change matters; the height changes are our own.
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      fit();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [body, canComment]);
 
   // The form unmounts once the comment is posted; focus moves to the note that took its place.

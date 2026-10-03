@@ -239,6 +239,13 @@ test.describe('answering a poll', () => {
     }));
     expect(tall.height).toBeGreaterThan(shortHeight * 2);
     expect(tall.overflow).toBeLessThanOrEqual(1);
+    // A narrower window wraps more lines; the field follows without a further keystroke.
+    const viewport = page.viewportSize()!;
+    await comment.fill('word '.repeat(90).trim());
+    await page.setViewportSize({ width: 320, height: viewport.height });
+    await expect.poll(() => comment.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    await page.setViewportSize(viewport);
+    await expect.poll(() => comment.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
 
     await comment.fill('I can host if Saturday wins.');
     await page.getByRole('button', { name: 'Send' }).click();
