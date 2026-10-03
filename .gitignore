@@ -11,5 +11,6 @@ dist
 
 # test output
 test-results
+coverage
 playwright-report
 blob-report

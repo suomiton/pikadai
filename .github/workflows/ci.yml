@@ -9,11 +9,14 @@ on:
 permissions:
   contents: read
 
+env:
+  WRANGLER_SEND_METRICS: 'false'
+
 jobs:
-  test:
-    name: Lint, format and tests
+  checks:
+    name: Lint, types, build and tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -30,6 +33,48 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
 
-      # Unit tests under Node, then the Worker inside workerd with a local D1.
-      # Playwright browser tests (npm run test:e2e) are not run here.
-      - run: npm test
+      # `tsc -b` over all four projects, then the production bundle. Vitest transpiles without type
+      # checking, so this is the step that fails on a type error or a bundling problem.
+      - run: npm run build
+
+      # Unit tests under Node, then the Worker inside workerd with a local D1, with coverage
+      # thresholds (vitest.config.ts). The report is kept for a fortnight.
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+
+  browser:
+    name: Browser journeys
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # The dev server reads the Worker secrets from .dev.vars. The example holds Cloudflare's
+      # Turnstile test secret, which accepts the test site key the development build renders.
+      - run: cp .dev.vars.example .dev.vars
+      - run: npm run db:migrate:local
+      - run: npx playwright install --with-deps chromium
+
+      # Desktop and mobile journeys against the dev server, then the production preview checks
+      # (SPA fallback, security headers, Turnstile under the CSP); see playwright.config.ts.
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

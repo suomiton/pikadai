@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
-import { configDefaults, defineConfig } from 'vitest/config';
+import { configDefaults, coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 /**
  * Two projects. `unit` runs pure functions under Node; `worker` runs the real
@@ -14,6 +14,28 @@ const alias = { '@shared': fileURLToPath(new URL('./shared', import.meta.url)) }
 
 export default defineConfig({
   test: {
+    coverage: {
+      // Workers need instrumented coverage: workerd has no native V8 coverage.
+      provider: 'istanbul',
+      include: ['src/**/*.{ts,tsx}', 'shared/**/*.ts', 'worker/**/*.ts'],
+      exclude: [
+        ...coverageConfigDefaults.exclude,
+        'worker/test/**',
+        'src/main.tsx',
+        'src/router.tsx',
+        'src/vite-env.d.ts',
+      ],
+      reporter: ['text', 'html', 'lcov'],
+      // Guard the logic the unit and Worker tests own, a few points under what they measure, so a
+      // change that drops coverage fails CI. Components, hooks and the API client are exercised by
+      // the browser suite and stay visible in the report without a threshold.
+      thresholds: {
+        'shared/**/*.ts': { statements: 95, branches: 95 },
+        'src/state/*.ts': { statements: 90, branches: 95 },
+        'src/lib/{dates,errors,storage,timing,votes}.ts': { statements: 90, branches: 90 },
+        'worker/**/*.ts': { statements: 90, branches: 75 },
+      },
+    },
     projects: [
       {
         resolve: { alias },
@@ -30,9 +52,10 @@ export default defineConfig({
           cloudflareTest(async () => ({
             wrangler: { configPath: './wrangler.jsonc' },
             miniflare: {
-              // The pool ships its own workerd, which can trail the compatibility_date in
-              // wrangler.jsonc. Tests run on the newest date that binary supports; bump this
-              // alongside @cloudflare/vitest-pool-workers upgrades.
+              // The pool ships its own workerd, which trails the compatibility_date in wrangler.jsonc
+              // (2026-09-01): the tests run on the newest date that binary supports. Remove this
+              // override once @cloudflare/vitest-pool-workers bundles a workerd that accepts the
+              // deployment date; the browser suite's `preview` project runs the built Worker on it.
               compatibilityDate: '2026-08-22',
               bindings: {
                 TEST_MIGRATIONS: await readD1Migrations('./migrations'),
