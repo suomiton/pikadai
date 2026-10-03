@@ -48,12 +48,12 @@ pikadai/
 │   ├── router.tsx             Routes: / (create), /e/:id (poll), * (not found)
 │   ├── vite-env.d.ts          Types for import.meta.env
 │   ├── pages/
-│   │   ├── CreatePage.tsx     Form, calendar, Turnstile, masked-delay progress overlay
+│   │   ├── CreatePage.tsx     Form, calendar, Turnstile, masked-delay progress dialog
 │   │   ├── EventPage.tsx      Loads EventView, captures admin token from the URL fragment
 │   │   └── NotFoundPage.tsx
 │   ├── components/
 │   │   ├── Layout.tsx         Header, footer, <Outlet/>
-│   │   ├── Calendar.tsx       Month grid, multi-select, min date, disabled dates
+│   │   ├── Calendar.tsx       Month grid, multi-select, min date, disabled dates, arrow-key navigation
 │   │   ├── ProgressSteps.tsx  Step list with braille spinner
 │   │   ├── TurnstileField.tsx Widget wrapper; handles a missing site key
 │   │   ├── VoteGrid.tsx       The participants × dates table, editing, tallies
@@ -74,6 +74,9 @@ pikadai/
 │
 ├── public/
 │   └── favicon.svg
+│
+├── scripts/
+│   └── contrast.mjs           Prints WCAG contrast ratios for the token pairs the UI uses; fails below AA
 │
 └── docs/                      You are here
 ```
@@ -165,7 +168,9 @@ limits and D1.
 **Change a limit**: edit `shared/limits.ts`. Form hints, server checks, and messages follow.
 
 **Change the palette**: edit the six `--gt-*` values at the top of `src/styles/tokens.css`. Semantic tokens
-derive from them; the light theme block has its own overrides.
+derive from them; the light theme block has its own overrides, including darker golds for text so they pass
+AA on cream. Run `node scripts/contrast.mjs` afterwards: it prints every text and boundary pair in both
+themes and exits non-zero if one falls below WCAG AA.
 
 **Change a binding or secret**: edit `wrangler.jsonc` or `.dev.vars`, run `npm run cf-typegen`, and the
 `Env` type updates.

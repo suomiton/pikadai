@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '@shared/limits';
 import type { EventView } from '@shared/types';
 import { api } from '../lib/api';
-import { formatDate, todayIso } from '../lib/dates';
+import { formatDate, formatDateLong, todayIso } from '../lib/dates';
 import { describeError } from '../lib/errors';
 import type { ParticipantIdentity } from '../lib/storage';
 import { Calendar } from './Calendar';
@@ -19,13 +19,30 @@ export function SuggestDate({ event, me, adminToken, onChanged }: Props) {
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState('');
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
 
   const existing = useMemo(() => new Set(event.options.map((o) => o.date)), [event.options]);
   const selected = useMemo(() => new Set(picked ? [picked] : []), [picked]);
 
+  // The picker unmounts when it closes; put focus back on the button that opened it.
+  useEffect(() => {
+    if (open || !returnFocus.current) return;
+    returnFocus.current = false;
+    openButtonRef.current?.focus();
+  }, [open]);
+
   const isAdmin = event.viewer.isAdmin;
   if (!isAdmin && !event.allowSuggestions) return null;
   const isFull = event.options.length >= LIMITS.optionsMax;
+
+  function close() {
+    returnFocus.current = true;
+    setOpen(false);
+    setPicked(null);
+    setError(null);
+  }
 
   async function add() {
     if (!picked) return;
@@ -33,9 +50,9 @@ export function SuggestDate({ event, me, adminToken, onChanged }: Props) {
     setError(null);
     try {
       await api.addOption(event.id, { date: picked }, { adminToken, participant: me });
-      setPicked(null);
-      setOpen(false);
+      close();
       await onChanged();
+      setStatus(`${formatDateLong(picked)} was added to the poll.`);
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -48,11 +65,20 @@ export function SuggestDate({ event, me, adminToken, onChanged }: Props) {
       <div className="section-head">
         <h2>{isAdmin ? 'Add a date' : 'Suggest another date'}</h2>
         {!open && (
-          <button type="button" className="btn btn-secondary" onClick={() => setOpen(true)} disabled={isFull}>
+          <button
+            ref={openButtonRef}
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setOpen(true)}
+            disabled={isFull}
+          >
             {isFull ? 'Date limit reached' : 'Pick a date'}
           </button>
         )}
       </div>
+      <p className="visually-hidden" role="status">
+        {status}
+      </p>
 
       {open && (
         <>
@@ -71,16 +97,7 @@ export function SuggestDate({ event, me, adminToken, onChanged }: Props) {
             <button type="button" className="btn btn-primary" onClick={add} disabled={!picked || busy}>
               {picked ? `Add ${formatDate(picked)}` : 'Select a date'}
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => {
-                setOpen(false);
-                setPicked(null);
-                setError(null);
-              }}
-              disabled={busy}
-            >
+            <button type="button" className="btn btn-ghost" onClick={close} disabled={busy}>
               Cancel
             </button>
           </div>

@@ -1,5 +1,18 @@
-import { useMemo, useState } from 'react';
-import { WEEKDAYS, formatMonth, monthGrid, shiftMonth, todayIso, type MonthCursor } from '../lib/dates';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  WEEKDAYS,
+  WEEKDAYS_LONG,
+  addDays,
+  addMonths,
+  formatDateLong,
+  formatMonth,
+  monthGrid,
+  monthOf,
+  parseIso,
+  shiftMonth,
+  todayIso,
+  type MonthCursor,
+} from '../lib/dates';
 
 interface Props {
   selected: ReadonlySet<string>;
@@ -10,13 +23,77 @@ interface Props {
   disabledDates?: ReadonlySet<string>;
 }
 
+const sameMonth = (a: MonthCursor, b: MonthCursor) => a.year === b.year && a.month === b.month;
+
 export function Calendar({ selected, onToggle, minDate, disabledDates }: Props) {
   const today = todayIso();
-  const [cursor, setCursor] = useState<MonthCursor>(() => {
-    const d = new Date();
-    return { year: d.getFullYear(), month: d.getMonth() };
-  });
+  const id = useId();
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [cursor, setCursor] = useState<MonthCursor>(() => monthOf(today));
   const weeks = useMemo(() => monthGrid(cursor.year, cursor.month), [cursor]);
+  const days = useMemo(() => weeks.flat().filter((d): d is string => d !== null), [weeks]);
+
+  /*
+   * Roving tabindex: one day is in the tab order and the arrow keys move it, so the grid costs
+   * one tab stop instead of thirty. `focusIso` is where the keyboard user last was; when that is
+   * not in the month on screen, fall back to a selected day, today, or the first of the month.
+   */
+  const [focusIso, setFocusIso] = useState<string | null>(null);
+  const pendingFocus = useRef(false);
+  const tabStop =
+    focusIso !== null && sameMonth(monthOf(focusIso), cursor)
+      ? focusIso
+      : (days.find((d) => selected.has(d)) ?? (sameMonth(monthOf(today), cursor) ? today : days[0]));
+
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    pendingFocus.current = false;
+    gridRef.current?.querySelector<HTMLButtonElement>(`[data-iso="${tabStop}"]`)?.focus();
+  }, [tabStop]);
+
+  function moveFocus(iso: string) {
+    pendingFocus.current = true;
+    setFocusIso(iso);
+    const target = monthOf(iso);
+    if (!sameMonth(target, cursor)) setCursor(target);
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const from = (e.target as HTMLElement).dataset.iso;
+    if (!from) return;
+    const weekday = (parseIso(from).getDay() + 6) % 7; // 0 = Monday
+    let to: string;
+    switch (e.key) {
+      case 'ArrowRight':
+        to = addDays(from, 1);
+        break;
+      case 'ArrowLeft':
+        to = addDays(from, -1);
+        break;
+      case 'ArrowDown':
+        to = addDays(from, 7);
+        break;
+      case 'ArrowUp':
+        to = addDays(from, -7);
+        break;
+      case 'Home':
+        to = addDays(from, -weekday);
+        break;
+      case 'End':
+        to = addDays(from, 6 - weekday);
+        break;
+      case 'PageUp':
+        to = addMonths(from, -1);
+        break;
+      case 'PageDown':
+        to = addMonths(from, 1);
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    moveFocus(to);
+  }
 
   return (
     <div className="calendar">
@@ -29,7 +106,9 @@ export function Calendar({ selected, onToggle, minDate, disabledDates }: Props) 
         >
           ‹
         </button>
-        <span className="calendar-title">{formatMonth(cursor)}</span>
+        <span className="calendar-title" id={`${id}-title`} aria-live="polite">
+          {formatMonth(cursor)}
+        </span>
         <button
           type="button"
           className="icon-btn"
@@ -40,16 +119,29 @@ export function Calendar({ selected, onToggle, minDate, disabledDates }: Props) 
         </button>
       </div>
 
-      <div className="calendar-grid">
-        {WEEKDAYS.map((d) => (
-          <span key={d} className="calendar-weekday" aria-hidden="true">
-            {d}
+      <p id={`${id}-help`} className="visually-hidden">
+        Use the arrow keys to move between days, Page Up and Page Down to change month, and Enter or Space
+        to pick a day.
+      </p>
+      <div
+        ref={gridRef}
+        className="calendar-grid"
+        role="group"
+        aria-labelledby={`${id}-title`}
+        aria-describedby={`${id}-help`}
+        onKeyDown={onKeyDown}
+      >
+        {WEEKDAYS.map((short, i) => (
+          <span key={short} className="calendar-weekday">
+            <span aria-hidden="true">{short}</span>
+            <span className="visually-hidden">{WEEKDAYS_LONG[i]}</span>
           </span>
         ))}
         {weeks.flat().map((iso, i) => {
           if (iso === null) return <span key={`pad-${i}`} className="calendar-pad" />;
           const isPast = minDate !== undefined && iso < minDate;
           const isTaken = disabledDates?.has(iso) ?? false;
+          const unavailable = isPast || isTaken;
           const isSelected = selected.has(iso);
           const className = [
             'calendar-day',
@@ -60,15 +152,22 @@ export function Calendar({ selected, onToggle, minDate, disabledDates }: Props) 
           ]
             .filter(Boolean)
             .join(' ');
+          const note = isTaken ? ', already in the poll' : isPast ? ', in the past' : iso === today ? ', today' : '';
           return (
             <button
               key={iso}
               type="button"
               className={className}
-              disabled={isPast || isTaken}
+              data-iso={iso}
+              tabIndex={iso === tabStop ? 0 : -1}
+              aria-disabled={unavailable || undefined}
               aria-pressed={isSelected}
-              aria-label={iso}
-              onClick={() => onToggle(iso)}
+              aria-label={`${formatDateLong(iso)}${note}`}
+              onFocus={() => setFocusIso(iso)}
+              onClick={() => {
+                setFocusIso(iso);
+                if (!unavailable) onToggle(iso);
+              }}
             >
               {Number(iso.slice(8))}
             </button>

@@ -8,15 +8,21 @@ interface Props {
 
 export function CopyField({ label, value, hint }: Props) {
   const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setStatus(`${label} copied to clipboard.`);
+      setTimeout(() => {
+        setCopied(false);
+        setStatus('');
+      }, 1500);
     } catch {
       inputRef.current?.select();
+      setStatus('Could not copy automatically. The link is selected; copy it with your keyboard.');
     }
   }
 
@@ -36,6 +42,10 @@ export function CopyField({ label, value, hint }: Props) {
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
+      {/* Button text alone is not announced when it changes; this is. */}
+      <span className="visually-hidden" role="status">
+        {status}
+      </span>
       {hint && <p className="hint">{hint}</p>}
     </div>
   );

@@ -26,20 +26,20 @@ defect with a workaround or a WCAG AA failure, **low** means hygiene.
 | [ ] | S10 | medium | Google Fonts leaks visitor IPs; CSP justification is wrong |
 | [ ] | S11 | low | Participant and option caps are read-then-write races |
 | [ ] | S12 | low | CI example deploys from the wrong branch |
-| [ ] | A1 | high | Light theme fails AA contrast almost everywhere |
-| [ ] | A2 | high | Vote buttons and status text do not announce changes |
-| [ ] | A3 | high | Creation progress is visual only |
-| [ ] | A4 | medium | Creation overlay is not a working modal |
-| [ ] | A5 | medium | Form errors are not wired to their fields |
-| [ ] | A6 | medium | Focus is lost after Save, Cancel and Remove |
-| [ ] | A7 | medium | Calendar is hard to use with a screen reader |
-| [ ] | A8 | medium | Vote table lacks a caption, heading and keyboard scrolling |
-| [ ] | A9 | low | Reduced motion is only half honoured |
-| [ ] | A10 | low | CSS generated content is read aloud |
-| [ ] | A11 | low | Weekday names are hard-coded English |
-| [ ] | A12 | medium | iOS zooms the page on every input focus |
-| [ ] | A13 | medium | Small tap targets, tiny text and autofocus on mobile |
-| [ ] | A14 | low | Input focus relies on a 1px border change |
+| [x] | A1 | high | Light theme fails AA contrast almost everywhere |
+| [x] | A2 | high | Vote buttons and status text do not announce changes |
+| [x] | A3 | high | Creation progress is visual only |
+| [x] | A4 | medium | Creation overlay is not a working modal |
+| [x] | A5 | medium | Form errors are not wired to their fields |
+| [x] | A6 | medium | Focus is lost after Save, Cancel and Remove |
+| [x] | A7 | medium | Calendar is hard to use with a screen reader |
+| [x] | A8 | medium | Vote table lacks a caption, heading and keyboard scrolling |
+| [x] | A9 | low | Reduced motion is only half honoured |
+| [x] | A10 | low | CSS generated content is read aloud |
+| [x] | A11 | low | Weekday names are hard-coded English |
+| [x] | A12 | medium | iOS zooms the page on every input focus |
+| [x] | A13 | medium | Small tap targets, tiny text and autofocus on mobile |
+| [x] | A14 | low | Input focus relies on a 1px border change |
 | [ ] | C1 | medium | VoteGrid has too many responsibilities |
 | [ ] | C2 | medium | Busy/error handling and form markup are copy-pasted |
 | [ ] | C3 | low | ISO date parsing exists three times |
