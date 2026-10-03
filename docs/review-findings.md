@@ -389,4 +389,5 @@ Turnstile widget are good mobile choices. `cycle`, `monthGrid`, `shiftMonth`, `c
   in the `build` script or a CI job.
 - Partly done 2026-10-03: tests exist at three levels (`npm test`, `npm run test:e2e`; see
   `docs/project-structure.md`), and `cycle` plus the tallies moved to `src/lib/votes.ts` to make that
-  possible, which is a first slice of C1. The linter and formatter are still open.
+  possible, which is a first slice of C1. `.github/workflows/ci.yml` runs `npm test` on every push to
+  main and every PR into main. The linter and formatter are still open.

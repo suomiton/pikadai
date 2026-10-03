@@ -1,5 +1,7 @@
 # pikadai
 
+[![CI](https://github.com/suomiton/pikadai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/suomiton/pikadai/actions/workflows/ci.yml?query=branch%3Amain)
+
 Anonymous, login-free date polls. Create a poll, share one link, people answer with a nickname.
 No accounts, no email, no cookies, no tracking. Polls delete themselves after they expire.
 
@@ -37,6 +39,9 @@ npm test                            # unit tests, then the Worker inside workerd
 npx playwright install chromium     # once per machine
 npm run test:e2e                    # browser journeys against the dev server (started if needed)
 ```
+
+GitHub Actions runs `npm test` on every push to `main` and every pull request into it
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); the badge at the top shows `main`.
 
 ## Deploy
 

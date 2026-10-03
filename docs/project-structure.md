@@ -19,6 +19,7 @@ pikadai/
 ├── .env.development           VITE_TURNSTILE_SITE_KEY = Turnstile test key (public)
 ├── .env.production            VITE_TURNSTILE_SITE_KEY = real site key (public)
 ├── .dev.vars.example          Template for local Worker secrets; copy to .dev.vars (gitignored)
+├── .github/workflows/ci.yml   GitHub Actions: `npm test` on every push to main and every PR into main
 │
 ├── shared/                    Code imported by BOTH client and Worker
 │   ├── limits.ts              Every size, count, and time limit in one object
