@@ -5,6 +5,12 @@ export const LIMITS = {
   nicknameMax: 32,
   optionsMax: 40,
   participantsMax: 100,
+  /** Longest comment, in UTF-16 code units, which is what both the textarea and zod count. */
+  commentMax: 512,
+  /** Comments per poll; bounds storage and the size of the poll view like the other caps. */
+  commentsMax: 200,
+  /** A participant may post one comment per this interval. */
+  commentIntervalMs: 10_000,
   /** Minimum age of a creation ticket before the Worker accepts it; the client learns it from POST /api/tickets. */
   minCreateDelayMs: 5000,
   /** Tickets older than this are rejected. */

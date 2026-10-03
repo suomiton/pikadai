@@ -19,6 +19,15 @@ export interface Participant {
   createdAt: number;
 }
 
+/** A comment, posted under a participant's nickname; the nickname follows the participant's current one. */
+export interface Comment {
+  id: string;
+  participantId: string;
+  nickname: string;
+  body: string;
+  createdAt: number;
+}
+
 export interface EventView {
   id: string;
   title: string;
@@ -28,6 +37,8 @@ export interface EventView {
   expiresAt: number;
   options: EventOption[];
   participants: Participant[];
+  /** Oldest first. */
+  comments: Comment[];
   viewer: { isAdmin: boolean };
 }
 

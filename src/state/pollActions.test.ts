@@ -19,6 +19,7 @@ const event = (overrides: Partial<EventView> = {}): EventView => ({
   expiresAt: 1,
   options: [],
   participants: [{ id: 'p1', nickname: 'Ada', votes: {}, createdAt: 0 }],
+  comments: [],
   viewer: { isAdmin: false },
   ...overrides,
 });

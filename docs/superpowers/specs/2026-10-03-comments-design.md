@@ -63,8 +63,8 @@ CREATE INDEX idx_comments_participant_created ON comments (participant_id, creat
 
 ## API
 
-| Method | Path                       | Auth                                 | Purpose                       |
-| ------ | -------------------------- | ------------------------------------ | ----------------------------- |
+| Method | Path                       | Auth                                        | Purpose                        |
+| ------ | -------------------------- | ------------------------------------------- | ------------------------------ |
 | POST   | `/api/events/:id/comments` | participant edit token + `X-Participant-Id` | Post a comment → 201 `Comment` |
 
 Checks, cheapest first: load event (404/410), participant token (`403 not_participant`), body

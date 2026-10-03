@@ -38,6 +38,19 @@ export interface VoteRow {
   answer: Answer;
 }
 
+export interface CommentRow {
+  id: string;
+  event_id: string;
+  participant_id: string;
+  body: string;
+  created_at: number;
+}
+
+/** A comment as the view reads it: joined to its participant for the current nickname. */
+export interface CommentWithAuthor extends CommentRow {
+  nickname: string;
+}
+
 export async function getEventRow(db: D1Database, id: string): Promise<EventRow | null> {
   return db.prepare('SELECT * FROM events WHERE id = ?').bind(id).first<EventRow>();
 }
@@ -278,20 +291,68 @@ export async function getVotesForEvent(db: D1Database, eventId: string): Promise
   return results;
 }
 
+export async function getCommentsForEvent(db: D1Database, eventId: string): Promise<CommentWithAuthor[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.id, c.event_id, c.participant_id, c.body, c.created_at, p.nickname
+       FROM comments c
+       JOIN participants p ON p.id = c.participant_id
+       WHERE c.event_id = ?
+       ORDER BY c.created_at ASC, c.id ASC`,
+    )
+    .bind(eventId)
+    .all<CommentWithAuthor>();
+  return results;
+}
+
+export async function countComments(db: D1Database, eventId: string): Promise<number> {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM comments WHERE event_id = ?')
+    .bind(eventId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/**
+ * Insert a comment unless the participant has one newer than `quietSince`. The check and the
+ * insert are one statement, so two simultaneous posts cannot both get in. False when refused.
+ */
+export async function insertComment(db: D1Database, comment: CommentRow, quietSince: number): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `INSERT INTO comments (id, event_id, participant_id, body, created_at)
+       SELECT ?, ?, ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM comments WHERE participant_id = ? AND created_at > ?)`,
+    )
+    .bind(
+      comment.id,
+      comment.event_id,
+      comment.participant_id,
+      comment.body,
+      comment.created_at,
+      comment.participant_id,
+      quietSince,
+    )
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
 /** Everything under one event, read in parallel; `toEventView` in worker/lib/eventView.ts shapes it for the client. */
 export interface EventRows {
   options: OptionRow[];
   participants: ParticipantRow[];
   votes: VoteRow[];
+  comments: CommentWithAuthor[];
 }
 
 export async function fetchEventRows(db: D1Database, eventId: string): Promise<EventRows> {
-  const [options, participants, votes] = await Promise.all([
+  const [options, participants, votes, comments] = await Promise.all([
     getOptions(db, eventId),
     getParticipants(db, eventId),
     getVotesForEvent(db, eventId),
+    getCommentsForEvent(db, eventId),
   ]);
-  return { options, participants, votes };
+  return { options, participants, votes, comments };
 }
 
 export async function deleteExpiredEvents(db: D1Database, now: number): Promise<number> {

@@ -194,7 +194,7 @@ export async function insertEventRow(row: { id: string; expires_at: number; crea
 }
 
 export async function countRows(
-  table: 'events' | 'participants' | 'options' | 'votes',
+  table: 'events' | 'participants' | 'options' | 'votes' | 'comments',
   eventId?: string,
 ): Promise<number> {
   const sql =

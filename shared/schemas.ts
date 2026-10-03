@@ -59,9 +59,18 @@ export const updateParticipantSchema = z.object({
   votes: votesSchema,
 });
 
+export const createCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Comment is required')
+    .max(LIMITS.commentMax, `At most ${LIMITS.commentMax} characters`),
+});
+
 export type EventDraft = z.infer<typeof eventDraftSchema>;
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type AddOptionInput = z.infer<typeof addOptionSchema>;
 export type CreateParticipantInput = z.infer<typeof createParticipantSchema>;
 export type UpdateParticipantInput = z.infer<typeof updateParticipantSchema>;
+export type CreateCommentInput = z.infer<typeof createCommentSchema>;

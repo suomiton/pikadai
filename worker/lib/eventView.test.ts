@@ -27,6 +27,9 @@ const rows: EventRows = {
     { participant_id: 'p1', option_id: 'o1', answer: 'yes' },
     { participant_id: 'p1', option_id: 'o2', answer: 'maybe' },
   ],
+  comments: [
+    { id: 'c1', event_id: 'ev1', participant_id: 'p2', body: 'I can host.', created_at: 1_300, nickname: 'Grace' },
+  ],
 };
 
 describe('toEventView', () => {
@@ -54,6 +57,13 @@ describe('toEventView', () => {
     const [ada, grace] = toEventView(event, rows, false).participants;
     expect(ada).toEqual({ id: 'p1', nickname: 'Ada', votes: { o1: 'yes', o2: 'maybe' }, createdAt: 1_100 });
     expect(grace.votes).toEqual({});
+  });
+
+  it('maps comments with the nickname the join supplied', () => {
+    expect(toEventView(event, rows, false).comments).toEqual([
+      { id: 'c1', participantId: 'p2', nickname: 'Grace', body: 'I can host.', createdAt: 1_300 },
+    ]);
+    expect(toEventView(event, { ...rows, comments: [] }, false).comments).toEqual([]);
   });
 
   it('reports the viewer role it is given', () => {

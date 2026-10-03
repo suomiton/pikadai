@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LIMITS } from './limits';
 import {
+  createCommentSchema,
   createEventSchema,
   createParticipantSchema,
   eventDraftSchema,
@@ -119,5 +120,23 @@ describe('participant schemas', () => {
     expect(createParticipantSchema.safeParse({ nickname: 'Ada', votes: {} }).success).toBe(false);
     expect(createParticipantSchema.safeParse({ nickname: 'Ada', votes: {}, turnstileToken: 'x' }).success).toBe(true);
     expect(updateParticipantSchema.safeParse({ votes: {} }).success).toBe(true);
+  });
+});
+
+describe('createCommentSchema', () => {
+  it('trims the text and requires something to be left', () => {
+    expect(createCommentSchema.parse({ body: '  Saturday works for me  ' })).toEqual({ body: 'Saturday works for me' });
+    expect(firstMessage(createCommentSchema.safeParse({ body: '   ' }))).toBe('Comment is required');
+  });
+
+  it('caps the length at the shared limit', () => {
+    expect(createCommentSchema.safeParse({ body: 'x'.repeat(LIMITS.commentMax) }).success).toBe(true);
+    expect(firstMessage(createCommentSchema.safeParse({ body: 'x'.repeat(LIMITS.commentMax + 1) }))).toBe(
+      `At most ${LIMITS.commentMax} characters`,
+    );
+  });
+
+  it('rejects a missing body', () => {
+    expect(createCommentSchema.safeParse({}).success).toBe(false);
   });
 });
