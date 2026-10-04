@@ -987,3 +987,15 @@ describe('a disabled participant', () => {
     expect(h.storage.getParticipant('ev1')).toEqual(me);
   });
 });
+
+describe('setResultsOnly', () => {
+  it('switches the poll on screen to results only and back', async () => {
+    const h = harness();
+    h.getEvent.mockResolvedValue(event({ participants: [] }));
+    await h.actions.openPoll('ev1');
+    h.actions.setResultsOnly('ev1', true);
+    expect(h.state().poll?.resultsOnly).toBe(true);
+    h.actions.setResultsOnly('ev1', false);
+    expect(h.state().poll?.resultsOnly).toBe(false);
+  });
+});

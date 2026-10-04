@@ -88,7 +88,7 @@ const useVoteSaving = (
 
 /** Coordinates the editor, mutations and announcements without rendering the table. */
 export function useVoteGrid(showAll: boolean) {
-  const { event, me, isAdmin } = usePoll();
+  const { event, me, isAdmin, resultsOnly } = usePoll();
   const editor = useVoteEditor();
   const action = useAsyncAction();
   const [status, setStatus] = useState('');
@@ -159,7 +159,7 @@ export function useVoteGrid(showAll: boolean) {
     toggle,
     rows,
     isFull: event.participants.length >= LIMITS.participantsMax,
-    canSuggest: isAdmin || (event.allowSuggestions && !mine?.isDisabled),
+    canSuggest: isAdmin || (event.allowSuggestions && !mine?.isDisabled && !resultsOnly),
     errorHost,
   };
 }

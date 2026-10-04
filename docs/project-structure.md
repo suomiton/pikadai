@@ -70,7 +70,7 @@ pikadai/
 │   ├── router.tsx             Routes: / (create), /e/:id (poll), * (not found)
 │   ├── vite-env.d.ts          Types for import.meta.env
 │   ├── state/                 Pure reducers, each with a *.test.ts, and the root store
-│   │   ├── app.ts             PollSession and appReducer: the poll on screen, the viewer's tokens, load status
+│   │   ├── app.ts             PollSession and appReducer: the poll on screen, the viewer's tokens, load status, results-only mode
 │   │   ├── pollActions.ts     createPollActions: private-link capture, identity verification, loading and storage; dependencies injected
 │   │   ├── AppStateProvider.tsx  Context around the router; usePoll, useAdminToken, usePollActions
 │   │   ├── createForm.ts      CreatePage's draft, errors and progress
@@ -148,6 +148,7 @@ pikadai/
 │   ├── participantLink.spec.ts  Identity recovery, navigation and private-link permissions
 │   ├── reviewRegressions.spec.ts  Removed rows, save announcements and focus after refresh
 │   ├── disable.spec.ts    The organiser disables and enables a participant; what each viewer sees
+│   ├── resultsOnly.spec.ts  "Just take me to results" and back to joining
 │   └── preview.spec.ts        Against the production build: SPA fallback, security headers, Turnstile under the CSP
 │
 └── docs/                      You are here

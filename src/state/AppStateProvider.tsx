@@ -64,6 +64,8 @@ export interface LoadedPoll {
   adminToken: string | null;
   isAdmin: boolean;
   identityError: string | null;
+  /** The visitor chose to see the results without joining; see `PollSession.resultsOnly`. */
+  resultsOnly: boolean;
 }
 
 /** The poll on screen. Only for components EventPage renders once the event has loaded. */
@@ -79,6 +81,7 @@ export function usePoll(): LoadedPoll {
             adminToken: poll.adminToken,
             isAdmin: poll.event.viewer.isAdmin,
             identityError: poll.identityError,
+            resultsOnly: poll.resultsOnly,
           }
         : null,
     [poll],

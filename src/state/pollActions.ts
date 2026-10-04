@@ -32,6 +32,8 @@ export interface PollActions {
   setIdentity(id: string, me: ParticipantIdentity | null): void;
   /** Drop every token for poll `id` and close its session if it is on screen; used after the organiser deletes it. */
   forgetPoll(id: string): void;
+  /** Show poll `id` without joining ("Just take me to results"), or go back to the Name tile. */
+  setResultsOnly(id: string, value: boolean): void;
 }
 
 /** The server says the poll no longer exists: deleted (404) or expired (410). */
@@ -305,6 +307,10 @@ export function createPollActions(deps: PollActionDeps): PollActions {
         replaceHash(location, id, '');
         dispatch({ type: 'poll/close', id });
       }
+    },
+
+    setResultsOnly: (id, value) => {
+      dispatch({ type: 'poll/resultsOnly', id, value });
     },
   };
 }
