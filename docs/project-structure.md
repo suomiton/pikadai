@@ -67,14 +67,21 @@ pikadai/
 │   ├── vite-env.d.ts          Types for import.meta.env
 │   ├── state/                 Pure reducers, each with a *.test.ts, and the root store
 │   │   ├── app.ts             PollSession and appReducer: the poll on screen, the viewer's tokens, load status
-│   │   ├── pollActions.ts     createPollActions: fetch, admin-link capture, storage writes; dependencies injected
+│   │   ├── pollActions.ts     createPollActions: private-link capture, identity verification, loading and storage; dependencies injected
 │   │   ├── AppStateProvider.tsx  Context around the router; usePoll, useAdminToken, usePollActions
 │   │   ├── createForm.ts      CreatePage's draft, errors and progress
 │   │   ├── adminForm.ts       AdminPanel's details form
 │   │   └── voteEditor.ts      The availability table's editing state machine
 │   ├── hooks/
 │   │   ├── useAsyncAction.ts  busy / error / run for one request
-│   │   └── useVoteEditor.ts   voteEditorReducer bound to dispatch
+│   │   ├── useCreateForm.ts   Creation validation, progress and focus
+│   │   ├── useAdminForm.ts    Organiser draft, requests and focus
+│   │   ├── useNameForms.ts    Joining, renaming and focus for the Name tile
+│   │   ├── useComments.ts     Comment submission, textarea sizing and focus
+│   │   ├── useVoteEditor.ts   voteEditorReducer bound to dispatch
+│   │   ├── useVoteGrid.ts     Vote editing, saving and announcements
+│   │   ├── useVoteEditorFocus.ts  Focus when opening or closing a row
+│   │   └── useVoteRemoval.ts  Participant/date removal and confirmation state
 │   ├── pages/
 │   │   ├── CreatePage.tsx     Form, calendar, Turnstile, masked-delay progress dialog
 │   │   ├── EventPage.tsx      Opens the poll in the store (effect keyed on the id); decides which sections show at each step of answering
@@ -86,8 +93,10 @@ pikadai/
 │   │   ├── Modal.tsx          Shared modal with keyboard containment, labelling and focus return
 │   │   ├── ConfirmDialog.tsx  Destructive confirmations, Cancel first, busy status and errors
 │   │   ├── TurnstileField.tsx Widget wrapper; handles a missing site key
-│   │   ├── VoteGrid.tsx       The participants × dates table: joining, mutations, tallies, focus return
-│   │   ├── NameCard.tsx       The first tile: name, Turnstile and Join before joining; the name and a rename afterwards
+│   │   ├── VoteGrid.tsx       Availability section, editing controls and removal confirmation
+│   │   ├── VoteTable.tsx      The participants × dates table, with visibility gated by the answering step
+│   │   ├── VoteRemovalDialog.tsx  Date/participant removal messages and confirmation
+│   │   ├── NameCard.tsx       The first tile: joining, renaming and the private participant link
 │   │   ├── OptionHeader.tsx   One date column header
 │   │   ├── VoteRow.tsx        A saved participant row
 │   │   ├── VoteEditRow.tsx    The row being edited
@@ -105,9 +114,11 @@ pikadai/
 │   ├── lib/                   Each module has a *.test.ts beside it
 │   │   ├── api.ts             Typed fetch wrapper; one function per endpoint; Authorization header
 │   │   ├── storage.ts         localStorage access for admin and participant tokens
+│   │   ├── participantLink.ts  Private-link generation and fragment parsing
 │   │   ├── dates.ts           ISO date helpers, month grid, Intl formatting
 │   │   ├── errors.ts          Error code → user-facing message
 │   │   ├── votes.ts           cycle (tap order), computeTallies and topDates (the organiser's scoreboard)
+│   │   ├── validation.ts      First validation error per field, shared by creation and organiser forms
 │   │   └── timing.ts          sleep, waitUntil
 │   └── styles/
 │       ├── tokens.css         Palette and semantic design tokens; dark default, light via media query
@@ -128,6 +139,8 @@ pikadai/
 │   ├── helpers.ts             Calendar picking, vote cycling, waiting for Turnstile
 │   ├── poll.spec.ts           Create, answer, suggest, organise, delete, blocked storage, changes underneath, dead ends
 │   ├── dialog.spec.ts         Confirmation keyboard behavior, cancellation, errors and reflow
+│   ├── participantLink.spec.ts  Identity recovery, navigation and private-link permissions
+│   ├── reviewRegressions.spec.ts  Removed rows, save announcements and focus after refresh
 │   └── preview.spec.ts        Against the production build: SPA fallback, security headers, Turnstile under the CSP
 │
 └── docs/                      You are here
@@ -212,11 +225,16 @@ limits and D1.
   kebab-case with `is-*` state modifiers.
 - **Formatting** is Prettier (`.prettierrc`: single quotes, trailing commas, 120 columns). `npm run format`
   rewrites the tree and `npm run format:check` is what CI runs.
+- **Functions.** Module-local functions, including React components, use arrows. Exported functions and
+  components may use declarations. Generators are exempt because they have no arrow form.
+  ESLint caps production functions at 100 lines, excluding blank lines and comments;
+  split components by UI responsibility and request handlers by validation, persistence and completion.
+  Keep effects focused on one synchronisation task, with helpers or hooks for longer workflows.
 - **State.** What the poll page's sections share, the loaded poll, the viewer's tokens and the load status,
   lives in the root `useReducer` store in `src/state/app.ts` and reaches components through the hooks in
   `src/state/AppStateProvider.tsx`; nothing is handed through a component that does not use it. Form drafts
   stay local, as reducers in `src/state/` once they have more than a couple of fields. Reducers are pure and
-  tested; side effects live in `pollActions.ts` or in the component that owns the button.
+  tested; side effects live in `pollActions.ts` or in the hook used by the component that owns the button.
 - **Tests** live next to what they test as `*.test.ts` (pure functions, run under Node), in
   `worker/test/` (the whole API in workerd, Turnstile stubbed, one fresh client address per test) and in
   `e2e/` (browser journeys with the Turnstile test keys). A new behaviour comes with a test at the lowest

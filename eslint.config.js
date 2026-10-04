@@ -8,12 +8,13 @@ import tseslint from 'typescript-eslint';
 
 /**
  * ESLint for the three sides of the codebase. TypeScript rules everywhere; the React hooks and
- * accessibility rules on the client only. Formatting is Prettier's job, so no style rules here.
+ * accessibility rules on the client only. Prettier owns formatting; function structure is checked here.
  */
 export default defineConfig([
   globalIgnores([
     'dist',
     '.wrangler',
+    '.worktrees',
     '.superpowers',
     'node_modules',
     'test-results',
@@ -25,6 +26,31 @@ export default defineConfig([
 
   js.configs.recommended,
   tseslint.configs.recommended,
+
+  {
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'FunctionDeclaration:not([generator=true]):not(ExportNamedDeclaration > FunctionDeclaration):not(ExportDefaultDeclaration > FunctionDeclaration)',
+          message: 'Use an arrow function for local helpers and handlers.',
+        },
+        {
+          selector: 'VariableDeclarator > FunctionExpression:not([generator=true])',
+          message: 'Use an arrow function for local helpers and handlers.',
+        },
+      ],
+    },
+  },
+
+  {
+    files: ['src/**/*.{ts,tsx}', 'shared/**/*.ts', 'worker/**/*.ts'],
+    ignores: ['**/*.test.ts', 'worker/test/**'],
+    rules: {
+      'max-lines-per-function': ['error', { max: 100, skipBlankLines: true, skipComments: true }],
+    },
+  },
 
   {
     // Build, test and tooling scripts run under Node.

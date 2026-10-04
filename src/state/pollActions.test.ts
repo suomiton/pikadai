@@ -28,7 +28,7 @@ const event = (overrides: Partial<EventView> = {}): EventView => ({
 type Storage = PollActionDeps['storage'];
 
 /** A Map-backed stand-in for localStorage access, keyed the way the real module keys it. */
-function fakeStorage() {
+const fakeStorage = () => {
   const admin = new Map<string, string>();
   const participants = new Map<string, ParticipantIdentity>();
   const storage: Storage = {
@@ -40,10 +40,10 @@ function fakeStorage() {
       void (identity === null ? participants.delete(id) : participants.set(id, identity)),
   };
   return storage;
-}
+};
 
 /** A browser that refuses site data: every write is lost and every read comes back empty. */
-function blockedStorage(): Storage {
+const blockedStorage = (): Storage => {
   return {
     available: () => false,
     getAdminToken: () => null,
@@ -51,10 +51,10 @@ function blockedStorage(): Storage {
     getParticipant: () => null,
     setParticipant: () => undefined,
   };
-}
+};
 
 /** A fetch the test resolves or rejects by hand, to control the order responses arrive in. */
-function deferred<T>() {
+const deferred = <T>() => {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
   const promise = new Promise<T>((res, rej) => {
@@ -62,14 +62,14 @@ function deferred<T>() {
     reject = rej;
   });
   return { promise, resolve, reject };
-}
+};
 
 /**
  * The actions under test with every dependency faked. Dispatched actions are run through the real
  * reducer so `getState` returns what the provider would hold after each one. With `deferred`, they
  * queue until `flush()`, the way React commits a dispatch only after the current effects have run.
  */
-function harness(hash = '', storage: Storage = fakeStorage(), { deferred = false } = {}) {
+const harness = (hash = '', storage: Storage = fakeStorage(), { deferred = false } = {}) => {
   let state: AppState = initialAppState;
   const getEvent = vi.fn<PollActionDeps['api']['getEvent']>();
   const verifyParticipant = vi.fn<PollActionDeps['api']['verifyParticipant']>().mockResolvedValue(undefined);
@@ -92,7 +92,7 @@ function harness(hash = '', storage: Storage = fakeStorage(), { deferred = false
   });
   const flush = () => queue.splice(0).forEach(apply);
   return { actions, storage, getEvent, verifyParticipant, dispatched, location, flush, state: () => state };
-}
+};
 
 describe('openPoll', () => {
   let h: ReturnType<typeof harness>;

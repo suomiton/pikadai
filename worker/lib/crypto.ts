@@ -6,9 +6,9 @@ export function base64url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function hex(bytes: Uint8Array): string {
+const hex = (bytes: Uint8Array): string => {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
+};
 
 /** URL-safe random identifier. 16 bytes = 128 bits of entropy = 22 characters. */
 export function randomId(bytes = 16): string {

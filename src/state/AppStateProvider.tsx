@@ -42,11 +42,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   return <AppContext value={value}>{children}</AppContext>;
 }
 
-function useAppContext(): AppContextValue {
+const useAppContext = (): AppContextValue => {
   const value = useContext(AppContext);
   if (!value) throw new Error('AppStateProvider is missing above this component');
   return value;
-}
+};
 
 export function useAppState(): AppState {
   return useAppContext().state;

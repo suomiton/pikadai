@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 
 interface Props {
   title: string;
@@ -11,6 +11,43 @@ interface Props {
   /** Used when the opener has been removed or disabled by the completed action. */
   returnFocusRef?: RefObject<HTMLElement | null>;
 }
+
+const focusableControls = (dialog: HTMLDialogElement) =>
+  Array.from(
+    dialog.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, summary, [tabindex], [contenteditable="true"]',
+    ),
+  ).filter((element) => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0);
+
+const trapTabKey = (e: KeyboardEvent<HTMLDialogElement>, fallback: HTMLElement | null) => {
+  if (e.key !== 'Tab' || e.defaultPrevented) return;
+  const controls = focusableControls(e.currentTarget);
+  const first = controls[0];
+  const last = controls.at(-1);
+  const active = document.activeElement;
+  const onControl = controls.some((element) => element === active);
+  if (!first) {
+    e.preventDefault();
+    fallback?.focus();
+  } else if (e.shiftKey && (active === first || !onControl)) {
+    e.preventDefault();
+    last?.focus();
+  } else if (!e.shiftKey && (active === last || !onControl)) {
+    e.preventDefault();
+    first.focus();
+  }
+};
+
+const showDialog = (dialog: HTMLDialogElement, initialFocus: HTMLElement | null, fallback?: HTMLElement | null) => {
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  dialog.showModal();
+  initialFocus?.focus();
+  return () => {
+    dialog.close();
+    const target = opener?.isConnected && !opener.matches(':disabled') ? opener : fallback;
+    if (target?.isConnected) target.focus();
+  };
+};
 
 /** Mount to open, unmount to close. showModal() makes the rest of the page inert. */
 export function Modal({
@@ -30,16 +67,7 @@ export function Modal({
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const fallback = returnFocusRef?.current;
-    dialog.showModal();
-    (initialFocusRef?.current ?? titleRef.current)?.focus();
-
-    return () => {
-      dialog.close();
-      const target = opener?.isConnected && !opener.matches(':disabled') ? opener : fallback;
-      if (target?.isConnected) target.focus();
-    };
+    return showDialog(dialog, initialFocusRef?.current ?? titleRef.current, returnFocusRef?.current);
   }, [initialFocusRef, returnFocusRef]);
 
   return (
@@ -50,31 +78,7 @@ export function Modal({
       aria-modal="true"
       aria-labelledby={`${id}-title`}
       aria-describedby={description ? `${id}-description` : undefined}
-      onKeyDown={(e) => {
-        if (e.key !== 'Tab' || e.defaultPrevented) return;
-        const controls = Array.from(
-          e.currentTarget.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, summary, [tabindex], [contenteditable="true"]',
-          ),
-        ).filter(
-          (element) => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0,
-        );
-        const first = controls[0];
-        const last = controls.at(-1);
-        const active = document.activeElement;
-        const onControl = controls.some((element) => element === active);
-
-        if (!first) {
-          e.preventDefault();
-          titleRef.current?.focus();
-        } else if (e.shiftKey && (active === first || !onControl)) {
-          e.preventDefault();
-          last?.focus();
-        } else if (!e.shiftKey && (active === last || !onControl)) {
-          e.preventDefault();
-          first.focus();
-        }
-      }}
+      onKeyDown={(e) => trapTabKey(e, titleRef.current)}
       onCancel={(e) => {
         e.preventDefault();
         if (dismissible) onDismiss();

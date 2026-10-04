@@ -1,6 +1,7 @@
 node_modules
 dist
 .wrangler
+.worktrees
 .superpowers
 worker-configuration.d.ts
 package-lock.json

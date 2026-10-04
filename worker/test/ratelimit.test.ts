@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { client } from './helpers';
 
 /** The create limiter allows five per minute; the sixth attempt from the same client is refused. */
-async function sixCreates(ips: string[], extraHeaders: (i: number) => Record<string, string> = () => ({})) {
+const sixCreates = async (ips: string[], extraHeaders: (i: number) => Record<string, string> = () => ({})) => {
   const statuses: number[] = [];
   for (let i = 0; i < 6; i++) {
     const c = client(ips[i % ips.length]);
     statuses.push((await c.post('/api/events', {}, extraHeaders(i))).status);
   }
   return statuses;
-}
+};
 
 describe('rate limiting', () => {
   it('limits poll creation per client and answers 429 with the usual headers', async () => {

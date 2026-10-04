@@ -142,11 +142,11 @@ export async function countOptions(db: D1Database, eventId: string): Promise<num
 }
 
 /** The one INSERT for an option row, shared by poll creation and later additions. */
-function optionInsert(db: D1Database, option: OptionRow): D1PreparedStatement {
+const optionInsert = (db: D1Database, option: OptionRow): D1PreparedStatement => {
   return db
     .prepare('INSERT INTO options (id, event_id, date, suggested_by, created_at) VALUES (?, ?, ?, ?, ?)')
     .bind(option.id, option.event_id, option.date, option.suggested_by, option.created_at);
-}
+};
 
 /**
  * Recompute expires_at from the option rows as this transaction sees them. Same rule as
@@ -154,7 +154,7 @@ function optionInsert(db: D1Database, option: OptionRow): D1PreparedStatement {
  * a batch can apply it to the rows it has just changed. A value computed in JavaScript from an earlier
  * read could be written after a concurrent request's and pull the expiry back (review finding 1).
  */
-function expiryUpdate(db: D1Database, eventId: string, now: number): D1PreparedStatement {
+const expiryUpdate = (db: D1Database, eventId: string, now: number): D1PreparedStatement => {
   return db
     .prepare(
       `UPDATE events SET
@@ -166,7 +166,7 @@ function expiryUpdate(db: D1Database, eventId: string, now: number): D1PreparedS
        WHERE id = ?`,
     )
     .bind(LIMITS.ttlAfterLastDateDays * DAY_MS, LIMITS.ttlWithoutDatesDays * DAY_MS, now, eventId);
-}
+};
 
 /** Add a date and move the expiry in one transaction. */
 export async function insertOption(db: D1Database, option: OptionRow): Promise<void> {
@@ -278,13 +278,13 @@ export async function updateParticipant(
   await db.batch(statements);
 }
 
-function voteStatements(db: D1Database, participantId: string, votes: Record<string, Answer>) {
+const voteStatements = (db: D1Database, participantId: string, votes: Record<string, Answer>) => {
   return Object.entries(votes).map(([optionId, answer]) =>
     db
       .prepare('INSERT INTO votes (participant_id, option_id, answer) VALUES (?, ?, ?)')
       .bind(participantId, optionId, answer),
   );
-}
+};
 
 export async function deleteParticipant(db: D1Database, eventId: string, participantId: string): Promise<boolean> {
   const result = await db

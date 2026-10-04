@@ -30,7 +30,7 @@ interface CallInit {
 
 /** A minimal API client bound to one client address. */
 export function client(ip = freshIp()) {
-  async function call<T = unknown>(method: string, path: string, init: CallInit = {}): Promise<ApiResponse<T>> {
+  const call = async <T = unknown>(method: string, path: string, init: CallInit = {}): Promise<ApiResponse<T>> => {
     const headers: Record<string, string> = { 'CF-Connecting-IP': ip, ...init.headers };
     let body = init.raw;
     if (init.body !== undefined) {
@@ -46,7 +46,7 @@ export function client(ip = freshIp()) {
       parsed = text;
     }
     return { status: res.status, body: parsed as T, headers: res.headers };
-  }
+  };
   return {
     ip,
     call,

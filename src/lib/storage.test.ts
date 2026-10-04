@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { storage } from './storage';
 
-function fakeLocalStorage(store = new Map<string, string>()) {
+const fakeLocalStorage = (store = new Map<string, string>()) => {
   return {
     getItem: (k: string) => store.get(k) ?? null,
     setItem: (k: string, v: string) => void store.set(k, v),
     removeItem: (k: string) => void store.delete(k),
     store,
   };
-}
+};
 
 describe('storage', () => {
   let ls: ReturnType<typeof fakeLocalStorage>;

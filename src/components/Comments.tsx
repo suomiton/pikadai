@@ -1,10 +1,7 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useId } from 'react';
 import { LIMITS } from '@shared/limits';
-import { createCommentSchema } from '@shared/schemas';
-import { useAsyncAction } from '../hooks/useAsyncAction';
-import { api } from '../lib/api';
+import { useComments } from '../hooks/useComments';
 import { formatDateTime } from '../lib/dates';
-import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { FormError } from './FormError';
 import { StatusAnnouncer } from './StatusAnnouncer';
 import { TextField } from './TextField';
@@ -16,66 +13,22 @@ import { TextField } from './TextField';
  * their participant.
  */
 export function Comments() {
-  const { event, me } = usePoll();
-  const { refresh } = usePollActions();
   const id = useId();
-  const [body, setBody] = useState('');
-  const [bodyError, setBodyError] = useState<string | undefined>();
-  const [posted, setPosted] = useState(false);
-  const [status, setStatus] = useState('');
-  const { busy, error, run } = useAsyncAction();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const postedNoteRef = useRef<HTMLParagraphElement>(null);
-
-  const canComment = me !== null && !posted;
-
-  // The textarea grows with the text so the whole comment stays in view; it never scrolls inside.
-  // Lines wrap differently when the field gets narrower or wider (a window resized, a phone turned),
-  // so the measurement also reruns when its width changes.
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const fit = () => {
-      el.style.height = 'auto';
-      // scrollHeight leaves the border out, and the box is sized border-box.
-      const border = el.offsetHeight - el.clientHeight;
-      el.style.height = `${el.scrollHeight + border}px`;
-    };
-    fit();
-    let width = el.clientWidth;
-    const observer = new ResizeObserver(() => {
-      // Only a width change matters; the height changes are our own.
-      if (el.clientWidth === width) return;
-      width = el.clientWidth;
-      fit();
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [body, canComment]);
-
-  // The form unmounts once the comment is posted; focus moves to the note that took its place.
-  useEffect(() => {
-    if (posted && !busy) postedNoteRef.current?.focus();
-  }, [posted, busy]);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!me || busy) return;
-    const parsed = createCommentSchema.safeParse({ body });
-    if (!parsed.success) {
-      setBodyError(parsed.error.issues[0].message);
-      textareaRef.current?.focus();
-      return;
-    }
-    setBodyError(undefined);
-    const sent = await run(async () => {
-      await api.addComment(event.id, parsed.data, me);
-      setPosted(true);
-      await refresh(event.id);
-    });
-    if (sent) setStatus('Your comment was posted.');
-  }
-
+  const {
+    event,
+    me,
+    body,
+    onBodyChange,
+    bodyError,
+    posted,
+    status,
+    busy,
+    error,
+    textareaRef,
+    postedNoteRef,
+    canComment,
+    submit,
+  } = useComments();
   return (
     <section className="card stack" aria-labelledby={`${id}-heading`}>
       <h2 id={`${id}-heading`}>Comments</h2>
@@ -108,10 +61,7 @@ export function Comments() {
             ref={textareaRef}
             label="Add a comment"
             value={body}
-            onChange={(value) => {
-              setBody(value);
-              setBodyError(undefined);
-            }}
+            onChange={onBodyChange}
             error={bodyError}
             hint={
               <span className="field-counter">

@@ -38,14 +38,14 @@ export function SuggestDate() {
   const isFull = event.options.length >= LIMITS.optionsMax;
   const label = isAdmin ? 'Add a date' : 'Suggest a date';
 
-  function close() {
+  const close = () => {
     returnFocus.current = true;
     setOpen(false);
     setPicked(null);
     setError(null);
-  }
+  };
 
-  async function add() {
+  const add = async () => {
     if (!picked) return;
     const date = picked;
     const added = await run(async () => {
@@ -54,7 +54,7 @@ export function SuggestDate() {
       await refresh(event.id);
     });
     if (added) setStatus(`${formatDateLong(date)} was added to the poll.`);
-  }
+  };
 
   return (
     <>
