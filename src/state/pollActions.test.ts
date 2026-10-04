@@ -663,6 +663,33 @@ describe('private links', () => {
     expect(h.location.readHash()).toBe('');
   });
 
+  it.each([
+    ['in the link', participantHash(me, 'wrong-token'), null],
+    ['saved in the browser', participantHash(me), 'stale-admin-token'],
+  ])(
+    'fetches again as the participant when a bad admin token %s hides their own disabled row',
+    async (_where, hash, savedAdmin) => {
+      const h = harness(hash);
+      h.storage.setAdminToken('ev1', savedAdmin);
+      const disabledMe = { ...event().participants[0], isDisabled: true };
+      // With the admin token in Authorization the server cannot see who the participant is.
+      h.getEvent.mockImplementation(async (_id, auth) =>
+        auth.adminToken ? event({ participants: [] }) : event({ participants: [disabledMe] }),
+      );
+      await h.actions.openPoll('ev1');
+      expect(h.getEvent).toHaveBeenLastCalledWith(
+        'ev1',
+        { adminToken: null, participant: me },
+        expect.any(AbortSignal),
+      );
+      expect(h.state().poll?.me).toEqual(me);
+      expect(h.state().poll?.event?.participants).toEqual([disabledMe]);
+      expect(h.state().poll?.identityNotice).toBeNull();
+      expect(h.state().poll?.adminToken).toBeNull();
+      expect(h.storage.getParticipant('ev1')).toEqual(me);
+    },
+  );
+
   it('keeps organiser recovery in memory and storage after removing its participant identity', async () => {
     const h = harness(participantHash(me, 'admin-token'));
     h.getEvent.mockResolvedValue(event({ viewer: { isAdmin: true } }));

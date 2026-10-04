@@ -245,7 +245,9 @@ needs the admin token and sets `participants.is_disabled`; nothing is deleted.
   the organiser and the participant themselves, so the hiding is not just cosmetic. The client sends its
   saved participant identity (`Authorization` plus `X-Participant-Id`) with the fetch; the Worker gives a
   disabled row back only when that token opens it. Without that, the disabled person's browser would see
-  its identity missing from the poll and forget it, and re-enabling could not bring them back.
+  its identity missing from the poll and forget it, and re-enabling could not bring them back. The admin
+  token takes the header when the browser has one; if the server refuses it, the client fetches again as
+  the verified participant before deciding their row is gone.
 - **Counts.** `isDisabled` rows are left out of the tallies, the best-date highlight, the answer count
   and the top dates (`counted` in `src/lib/votes.ts`). The organiser sees the row struck through with a
   "disabled" pill.

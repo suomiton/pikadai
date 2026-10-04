@@ -1,4 +1,4 @@
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 import type { CreateParticipantResponse, EventView } from '../shared/types';
 import { createPollViaApi, DUMMY_TURNSTILE_TOKEN, expect, test, type CreatedPoll } from './fixtures';
 
@@ -38,6 +38,8 @@ const setDisabled = async (
   });
   expect(res.status()).toBe(204);
 };
+
+const nameFieldLabel = (page: Page) => page.getByLabel('Your name');
 
 const privateLink = (poll: CreatedPoll, p: CreateParticipantResponse) =>
   `${poll.participantUrl}#participant=${p.id}&token=${p.editToken}`;
@@ -143,5 +145,18 @@ test.describe('disabling a participant', () => {
     );
     await expect(page.getByRole('region', { name: 'Name' })).toContainText('the organiser has disabled you');
     await expect(page.getByLabel('Add a comment')).toHaveCount(0);
+  });
+
+  test("a disabled participant's link with a wrong admin token still opens as them", async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const { poll, ada, headers } = await seed(request, clientIp);
+    await setDisabled(request, poll, ada, true, headers);
+    await page.goto(`${privateLink(poll, ada)}&admin=${'x'.repeat(43)}`);
+    await expect(page.getByRole('region', { name: 'Name' })).toContainText('the organiser has disabled you');
+    await expect(page.getByText('This private link is no longer valid.')).toHaveCount(0);
+    await expect(nameFieldLabel(page)).toHaveCount(0);
   });
 });
