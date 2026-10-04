@@ -117,6 +117,16 @@ export function useVoteGrid(showAll: boolean) {
     requestFocus('return');
   }, [editingId, editingParticipant, close, setError, requestFocus]);
 
+  // The organiser disabled the viewer while their own row was open: close it, keeping the refusal that
+  // revealed it under the table. A confirmation dialog that is still open keeps the focus.
+  const lockedOut = !isAdmin && editingParticipant?.isDisabled === true;
+  const removalOpen = removal.pendingRemoval !== null;
+  useEffect(() => {
+    if (!lockedOut) return;
+    close();
+    if (!removalOpen) requestFocus('return');
+  }, [lockedOut, removalOpen, close, requestFocus]);
+
   useEffect(() => {
     if (!mine || mine.isDisabled || hasAnswered(mine) || editingId !== null || openedFor.current === mine.id) return;
     openedFor.current = mine.id;

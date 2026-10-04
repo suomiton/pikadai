@@ -141,11 +141,16 @@ test.describe('disabling a participant', () => {
     await page.getByRole('button', { name: 'Edit your answers' }).click();
     await setDisabled(request, poll, ada, true, headers);
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('alert')).toHaveText(
-      'The organiser has disabled you in this poll, so you can no longer change anything.',
-    );
     await expect(page.getByRole('region', { name: 'Name' })).toContainText('the organiser has disabled you');
     await expect(page.getByLabel('Add a comment')).toHaveCount(0);
+    // The open row closes; the refusal stays on screen under the table.
+    const availability = page.getByRole('region', { name: 'Availability' });
+    await expect(availability.locator('tr.is-editing')).toHaveCount(0);
+    await expect(availability.locator('.vote-btn')).toHaveCount(0);
+    await expect(availability.getByRole('button', { name: /^(Save|Remove|Cancel)$/ })).toHaveCount(0);
+    await expect(availability.getByRole('alert')).toHaveText(
+      'The organiser has disabled you in this poll, so you can no longer change anything.',
+    );
   });
 
   test("a disabled participant's link with a wrong admin token still opens as them", async ({
