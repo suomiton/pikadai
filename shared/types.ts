@@ -21,6 +21,11 @@ export interface Participant {
   createdAt: number;
   /** Joined with the admin token: the organiser's own row. Shown with a pill after the name. */
   isOrganiser: boolean;
+  /**
+   * The organiser has disabled this participant. Only the organiser and the participant themselves
+   * receive such a row; it is left out of every count.
+   */
+  isDisabled: boolean;
 }
 
 /** A comment, posted under a participant's name; the name follows the participant's current one. */
@@ -30,6 +35,8 @@ export interface Comment {
   name: string;
   /** The author is the organiser's row; see `Participant.isOrganiser`. */
   isOrganiser: boolean;
+  /** The author is disabled; their comments stay visible to everyone with a pill. */
+  isDisabled: boolean;
   body: string;
   createdAt: number;
 }

@@ -44,6 +44,7 @@ erDiagram
         text name_key
         text edit_token_hash
         int  is_organiser
+        int  is_disabled
         int  created_at
         int  updated_at
     }
@@ -120,6 +121,7 @@ One row per answer in a poll.
 | `name_key`        | TEXT, nullable                        | the name as `nameKey` in `worker/lib/names.ts` folds it (migration 0006); unique per poll, see below |
 | `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                              |
 | `is_organiser`    | INTEGER                               | 1 when the join request carried the admin token (migration 0004); shown as an "organiser" pill       |
+| `is_disabled`     | INTEGER                               | 1 while the organiser has disabled the participant (migration 0007): hidden from others, not counted |
 | `created_at`      | INTEGER                               |                                                                                                      |
 | `updated_at`      | INTEGER                               |                                                                                                      |
 

@@ -32,6 +32,8 @@ export interface ParticipantRow {
   edit_token_hash: string;
   /** 1 when the join request carried the admin token. */
   is_organiser: number;
+  /** 1 while the organiser has disabled the participant: hidden from others, read-only for themselves. */
+  is_disabled: number;
   created_at: number;
   updated_at: number;
 }
@@ -50,10 +52,11 @@ export interface CommentRow {
   created_at: number;
 }
 
-/** A comment as the view reads it: joined to its participant for the current name and role. */
+/** A comment as the view reads it: joined to its participant for the current name, role and state. */
 export interface CommentWithAuthor extends CommentRow {
   name: string;
   is_organiser: number;
+  is_disabled: number;
 }
 
 export async function getEventRow(db: D1Database, id: string): Promise<EventRow | null> {
@@ -230,9 +233,10 @@ export async function nameTaken(
   return results.some((p) => p.id !== excludeParticipantId && nameKey(p.name) === key);
 }
 
+/** A new row is never disabled; the column default applies. */
 export async function insertParticipantWithVotes(
   db: D1Database,
-  participant: ParticipantRow,
+  participant: Omit<ParticipantRow, 'is_disabled'>,
   votes: Record<string, Answer>,
 ): Promise<void> {
   const statements = [
@@ -292,6 +296,21 @@ const voteStatements = (db: D1Database, participantId: string, votes: Record<str
   );
 };
 
+/** Disable or enable a participant; false when it was not in this poll. */
+export async function setParticipantDisabled(
+  db: D1Database,
+  eventId: string,
+  participantId: string,
+  disabled: boolean,
+  now: number,
+): Promise<boolean> {
+  const result = await db
+    .prepare('UPDATE participants SET is_disabled = ?, updated_at = ? WHERE id = ? AND event_id = ?')
+    .bind(disabled ? 1 : 0, now, participantId, eventId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
 export async function deleteParticipant(db: D1Database, eventId: string, participantId: string): Promise<boolean> {
   const result = await db
     .prepare('DELETE FROM participants WHERE id = ? AND event_id = ?')
@@ -316,7 +335,7 @@ export async function getVotesForEvent(db: D1Database, eventId: string): Promise
 export async function getCommentsForEvent(db: D1Database, eventId: string): Promise<CommentWithAuthor[]> {
   const { results } = await db
     .prepare(
-      `SELECT c.id, c.event_id, c.participant_id, c.body, c.created_at, p.name, p.is_organiser
+      `SELECT c.id, c.event_id, c.participant_id, c.body, c.created_at, p.name, p.is_organiser, p.is_disabled
        FROM comments c
        JOIN participants p ON p.id = c.participant_id
        WHERE c.event_id = ?

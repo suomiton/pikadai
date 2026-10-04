@@ -192,7 +192,7 @@ const createPollLoader = (deps: PollActionDeps, state: RequestState) => {
     try {
       const candidate = session.me;
       const [event, initialVerification] = await Promise.all([
-        api.getEvent(id, adminToken, controller.signal),
+        api.getEvent(id, { adminToken, participant: candidate }, controller.signal),
         candidate && !session.verified
           ? validIdentity(api, id, candidate, controller.signal)
           : Promise.resolve<Verification>({ status: candidate ? 'valid' : 'invalid' }),

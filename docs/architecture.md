@@ -228,6 +228,27 @@ by one person or by many, cannot slip through; a refused post is `429 comment_to
 reloaded. Comments show the participant's current name, cannot be edited or deleted, and go when
 their participant goes: leaving the poll or being removed by the organiser takes the comments along.
 
+### Disabling a participant
+
+The organiser can disable anyone else in the poll from that person's row: Edit, then **Disable**, and
+**Enable** to undo it. `PUT /api/events/:id/participants/:participantId/disabled` with `{ disabled }`
+needs the admin token and sets `participants.is_disabled`; nothing is deleted.
+
+- **Who sees the row.** `GET /api/events/:id` leaves a disabled row and its answers out for everyone but
+  the organiser and the participant themselves, so the hiding is not just cosmetic. The client sends its
+  saved participant identity (`Authorization` plus `X-Participant-Id`) with the fetch; the Worker gives a
+  disabled row back only when that token opens it. Without that, the disabled person's browser would see
+  its identity missing from the poll and forget it, and re-enabling could not bring them back.
+- **Counts.** `isDisabled` rows are left out of the tallies, the best-date highlight, the answer count
+  and the top dates (`counted` in `src/lib/votes.ts`). The organiser sees the row struck through with a
+  "disabled" pill.
+- **Comments** stay visible to everyone with the same pill.
+- **What the participant can still do.** Read the poll. Their own token can no longer save answers,
+  rename, leave, comment or suggest a date: each answers `403 participant_disabled`. The organiser can
+  still change or remove the row.
+- **What it is not.** A ban: in an anonymous poll anyone can join again under another name. The row
+  still counts toward the 100-participant cap and keeps its name reserved.
+
 ### Suggesting a date
 
 Any reader may `POST /api/events/:id/options` while `allow_suggestions` is on. If the request carries a
@@ -296,7 +317,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | ------ | --------------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
 | POST   | `/api/tickets`                                | none                                          | Issue a creation ticket → `{ ticket, minAgeMs }` |
 | POST   | `/api/events`                                 | Turnstile + ticket                            | Create a poll → `{ id, adminToken }`             |
-| GET    | `/api/events/:id`                             | optional admin bearer token                   | Full poll view with `viewer.isAdmin`             |
+| GET    | `/api/events/:id`                             | optional admin or own token                   | Full poll view with `viewer.isAdmin`             |
 | PATCH  | `/api/events/:id`                             | admin                                         | Change title, description, `allowSuggestions`    |
 | DELETE | `/api/events/:id`                             | admin                                         | Delete poll and everything in it                 |
 | POST   | `/api/events/:id/options`                     | anyone while suggestions are on; admin always | Add a date                                       |
@@ -305,6 +326,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | GET    | `/api/events/:id/participants/:participantId` | own token                                     | Validate a private link → 204                    |
 | PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Change the name, replace the votes, or both      |
 | DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
+| PUT    | `/api/events/:id/participants/:id/disabled`   | admin                                         | Disable or enable a participant                  |
 | POST   | `/api/events/:id/comments`                    | participant token + `X-Participant-Id`        | Post a comment → `Comment`                       |
 
 Error codes the client maps to messages (`src/lib/errors.ts`):
@@ -313,7 +335,7 @@ Error codes the client maps to messages (`src/lib/errors.ts`):
 `ticket_invalid`, `ticket_too_early`,
 `ticket_expired`, `ticket_used`, `rate_limited`, `not_found`, `expired`, `admin_required`,
 `suggestions_disabled`, `too_many_options`, `date_exists`, `event_full`, `name_taken`,
-`unknown_option`, `not_owner`, `not_participant`, `too_many_comments`, `comment_too_soon`, `internal`.
+`unknown_option`, `not_owner`, `not_participant`, `participant_disabled`, `too_many_comments`, `comment_too_soon`, `internal`.
 
 ## Key decisions and trade-offs
 

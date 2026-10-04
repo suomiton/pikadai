@@ -69,6 +69,9 @@ export const updateParticipantSchema = z
   .transform(({ name, nickname, ...rest }) => ({ ...rest, name: name ?? nickname }))
   .refine((v) => v.name !== undefined || v.votes !== undefined, 'Nothing to update');
 
+/** The organiser disables a participant, or enables them again. */
+export const setParticipantDisabledSchema = z.object({ disabled: z.boolean() });
+
 export const createCommentSchema = z.object({
   body: z
     .string()
@@ -83,4 +86,5 @@ export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type AddOptionInput = z.infer<typeof addOptionSchema>;
 export type CreateParticipantInput = z.infer<typeof createParticipantSchema>;
 export type UpdateParticipantInput = z.infer<typeof updateParticipantSchema>;
+export type SetParticipantDisabledInput = z.infer<typeof setParticipantDisabledSchema>;
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;

@@ -6,6 +6,7 @@ import { formatDateLong } from '../lib/dates';
 import { computeTallies, hasAnswered, LABEL } from '../lib/votes';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { useAsyncAction, type AsyncAction } from './useAsyncAction';
+import { useParticipantDisabling } from './useParticipantDisabling';
 import { useVoteEditor, type VoteEditor } from './useVoteEditor';
 import { useVoteEditorFocus, type VoteEditorFocus } from './useVoteEditorFocus';
 import { useVoteRemoval } from './useVoteRemoval';
@@ -94,6 +95,7 @@ export function useVoteGrid(showAll: boolean) {
   const focus = useVoteEditorFocus(editor.state.returnTo, me?.id, action.busy);
   const saving = useVoteSaving(editor, action, focus, setStatus, showAll);
   const removal = useVoteRemoval(editor, action, setStatus);
+  const setDisabled = useParticipantDisabling(editor, action, focus, setStatus);
   const { editingId } = editor.state;
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
 
@@ -116,7 +118,7 @@ export function useVoteGrid(showAll: boolean) {
   }, [editingId, editingParticipant, close, setError, requestFocus]);
 
   useEffect(() => {
-    if (!mine || hasAnswered(mine) || editingId !== null || openedFor.current === mine.id) return;
+    if (!mine || mine.isDisabled || hasAnswered(mine) || editingId !== null || openedFor.current === mine.id) return;
     openedFor.current = mine.id;
     startEdit(mine);
     requestFocus('editor');
@@ -148,6 +150,7 @@ export function useVoteGrid(showAll: boolean) {
     focus,
     saving,
     removal,
+    setDisabled,
     status,
     tallies,
     isBest,
@@ -156,7 +159,7 @@ export function useVoteGrid(showAll: boolean) {
     toggle,
     rows,
     isFull: event.participants.length >= LIMITS.participantsMax,
-    canSuggest: isAdmin || event.allowSuggestions,
+    canSuggest: isAdmin || (event.allowSuggestions && !mine?.isDisabled),
     errorHost,
   };
 }

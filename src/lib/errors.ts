@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   suggestions_disabled: 'The organiser has turned off date suggestions.',
   not_owner: 'You can only change your own answers.',
   not_participant: 'Join the poll with your name before commenting.',
+  participant_disabled: 'The organiser has disabled you in this poll, so you can no longer change anything.',
   too_many_comments: 'This poll has reached its comment limit.',
   comment_too_soon: 'You commented a moment ago. Wait ten seconds and try again.',
   admin_required: 'This action needs the admin link.',

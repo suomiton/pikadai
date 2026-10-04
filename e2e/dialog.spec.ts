@@ -15,7 +15,14 @@ const openPoll = async (page: Page, { mine = false, name = 'Ada' } = {}) => {
     options: [14, 15, 16].map((days, i) => ({ id: String(i).repeat(22), date: futureIso(days), suggestedBy: null })),
     // Ada has answered a date, so her own browser sees the whole table rather than her row alone.
     participants: [
-      { id: 'p'.repeat(22), name, votes: { ['0'.repeat(22)]: 'yes' }, createdAt: Date.now(), isOrganiser: false },
+      {
+        id: 'p'.repeat(22),
+        name,
+        votes: { ['0'.repeat(22)]: 'yes' },
+        createdAt: Date.now(),
+        isOrganiser: false,
+        isDisabled: false,
+      },
     ],
     comments: [],
     viewer: { isAdmin: !mine },

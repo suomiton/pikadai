@@ -43,3 +43,23 @@ export async function isParticipantOwner(token: string | null, participant: Part
   if (!token) return false;
   return safeEqual(await sha256Hex(token), participant.edit_token_hash);
 }
+
+/** A disabled participant's own token may read the poll but change nothing; the organiser still may. */
+export function assertNotDisabled(participant: ParticipantRow): void {
+  if (participant.is_disabled === 1) {
+    throw errors.forbidden('The organiser has disabled you in this poll', 'participant_disabled');
+  }
+}
+
+/**
+ * The row among `participants` that the request's `X-Participant-Id` names and its token opens, or null.
+ * The poll view uses it so a disabled participant still receives their own row.
+ */
+export async function provenParticipant(
+  token: string | null,
+  participantId: string | undefined,
+  participants: readonly ParticipantRow[],
+): Promise<ParticipantRow | null> {
+  const claimed = participantId ? participants.find((p) => p.id === participantId) : undefined;
+  return claimed && (await isParticipantOwner(token, claimed)) ? claimed : null;
+}

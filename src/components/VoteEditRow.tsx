@@ -1,6 +1,7 @@
 import type { Ref } from 'react';
 import { LIMITS } from '@shared/limits';
 import type { Answer, EventOption, Participant } from '@shared/types';
+import { ParticipantTags } from './ParticipantTags';
 import { VoteCells } from './VoteCells';
 
 interface Props {
@@ -55,8 +56,7 @@ export function VoteEditRow({
         ) : (
           <>
             <span className="participant-name">{p.name}</span>
-            {isMine && <span className="tag">you</span>}
-            {p.isOrganiser && <span className="tag tag-accent">organiser</span>}
+            <ParticipantTags isMine={isMine} isOrganiser={p.isOrganiser} isDisabled={p.isDisabled} />
           </>
         )}
       </th>

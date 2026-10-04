@@ -42,6 +42,11 @@ export function NameCard() {
         ) : (
           <JoinForm id={id} onCancel={isAdmin ? () => setJoining(false) : undefined} />
         )
+      ) : mine?.isDisabled ? (
+        <p>
+          You are in this poll as <strong className="participant-name">{mine.name}</strong>, but the organiser has
+          disabled you. Your answers no longer count and only the organiser sees them. You can still follow the poll.
+        </p>
       ) : (
         <RenameForm id={id} participantId={me.id} name={mine?.name ?? null} auth={{ adminToken, participant: me }} />
       )}

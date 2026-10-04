@@ -62,6 +62,10 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+.tag-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
 
 /* Buttons */
 .btn {
@@ -456,6 +460,11 @@ textarea.input {
 }
 .vote-table tr.is-me .name-col {
   color: var(--accent);
+}
+/* A disabled row, which only the organiser and that participant see: the name struck through, out of the counts. */
+.vote-table tr.is-disabled .participant-name {
+  color: var(--text-muted);
+  text-decoration: line-through;
 }
 .vote-table tr.is-editing td,
 .vote-table tr.is-editing th {

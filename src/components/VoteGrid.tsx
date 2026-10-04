@@ -11,7 +11,7 @@ import { VoteTable } from './VoteTable';
 /** The availability section composes the table, editing controls and removal confirmation. */
 export function VoteGrid({ showAll }: { showAll: boolean }) {
   const id = useId();
-  const { event, me } = usePoll();
+  const { event, me, isAdmin } = usePoll();
   const grid = useVoteGrid(showAll);
   const {
     editor,
@@ -19,6 +19,7 @@ export function VoteGrid({ showAll }: { showAll: boolean }) {
     focus,
     saving,
     removal,
+    setDisabled,
     status,
     tallies,
     isBest,
@@ -77,6 +78,14 @@ export function VoteGrid({ showAll }: { showAll: boolean }) {
           onSave={save}
           onCancel={cancel}
           onRemove={() => requestRemoval({ kind: 'participant', participant: editingParticipant })}
+          disabling={
+            isAdmin && editingParticipant.id !== me?.id
+              ? {
+                  disabled: editingParticipant.isDisabled,
+                  onToggle: () => void setDisabled(editingParticipant, !editingParticipant.isDisabled),
+                }
+              : undefined
+          }
         />
       )}
       {errorHost === 'table' && <FormError message={error} />}

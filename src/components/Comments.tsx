@@ -3,6 +3,7 @@ import { LIMITS } from '@shared/limits';
 import { useComments } from '../hooks/useComments';
 import { formatDateTime } from '../lib/dates';
 import { FormError } from './FormError';
+import { ParticipantTags } from './ParticipantTags';
 import { StatusAnnouncer } from './StatusAnnouncer';
 import { TextField } from './TextField';
 
@@ -26,6 +27,7 @@ export function Comments() {
     error,
     textareaRef,
     postedNoteRef,
+    isDisabled,
     canComment,
     submit,
   } = useComments();
@@ -42,8 +44,11 @@ export function Comments() {
             <li key={c.id} className={me?.id === c.participantId ? 'comment is-me' : 'comment'}>
               <p className="comment-head">
                 <span className="comment-author">{c.name}</span>
-                {me?.id === c.participantId && <span className="tag">you</span>}
-                {c.isOrganiser && <span className="tag tag-accent">organiser</span>}
+                <ParticipantTags
+                  isMine={me?.id === c.participantId}
+                  isOrganiser={c.isOrganiser}
+                  isDisabled={c.isDisabled}
+                />
                 <time className="comment-time" dateTime={new Date(c.createdAt).toISOString()}>
                   {formatDateTime(c.createdAt)}
                 </time>
@@ -88,6 +93,7 @@ export function Comments() {
         </p>
       )}
       {me === null && !posted && <p className="hint">Join the poll with your name above to comment.</p>}
+      {isDisabled && <p className="hint">The organiser has disabled you in this poll, so you can no longer comment.</p>}
     </section>
   );
 }

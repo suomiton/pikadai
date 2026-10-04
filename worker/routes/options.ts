@@ -4,7 +4,15 @@ import { addOptionSchema } from '@shared/schemas';
 import type { EventOption } from '@shared/types';
 import type { AppEnv } from '../env';
 import { countOptions, deleteOption, getParticipant, insertOption } from '../db/queries';
-import { bearerToken, isAdmin, isParticipantOwner, loadEvent, PARTICIPANT_ID_HEADER, requireAdmin } from '../lib/auth';
+import {
+  assertNotDisabled,
+  bearerToken,
+  isAdmin,
+  isParticipantOwner,
+  loadEvent,
+  PARTICIPANT_ID_HEADER,
+  requireAdmin,
+} from '../lib/auth';
 import { randomId } from '../lib/crypto';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
 import { rateLimit } from '../lib/ratelimit';
@@ -33,6 +41,7 @@ options.post(
     const participantId = c.req.header(PARTICIPANT_ID_HEADER);
     const claimed = !admin && participantId ? await getParticipant(c.env.DB, event.id, participantId) : null;
     const suggester = claimed && (await isParticipantOwner(token, claimed)) ? claimed : null;
+    if (suggester) assertNotDisabled(suggester);
 
     const option = {
       id: randomId(),

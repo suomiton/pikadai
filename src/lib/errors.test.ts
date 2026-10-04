@@ -25,6 +25,7 @@ const WORKER_CODES = [
   'unknown_option',
   'not_owner',
   'not_participant',
+  'participant_disabled',
   'too_many_comments',
   'comment_too_soon',
   'internal',

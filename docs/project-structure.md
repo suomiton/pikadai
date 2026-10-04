@@ -47,7 +47,8 @@ pikadai/
 │   │   ├── expiry.ts          computeExpiresAt: when a poll is purged
 │   │   ├── eventView.ts       toEventView: rows → the EventView JSON, pure
 │   │   ├── names.ts           nameKey: the folded form names are compared in for uniqueness
-│   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, isParticipantOwner; no Hono inside
+│   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, isParticipantOwner,
+│   │                          provenParticipant, assertNotDisabled; no Hono inside
 │   ├── db/
 │   │   └── queries.ts         All SQL; row types; fetchEventRows
 │   └── test/                  Integration tests: the whole Worker in workerd with a local D1
@@ -61,7 +62,8 @@ pikadai/
 │   ├── 0003_comments.sql
 │   ├── 0004_participants_is_organiser.sql
 │   ├── 0005_participants_name.sql
-│   └── 0006_participants_name_key.sql
+│   ├── 0006_participants_name_key.sql
+│   └── 0007_participants_is_disabled.sql
 │
 ├── src/                       React application
 │   ├── main.tsx               Mounts the router, imports global CSS
@@ -83,7 +85,8 @@ pikadai/
 │   │   ├── useVoteEditor.ts   voteEditorReducer bound to dispatch
 │   │   ├── useVoteGrid.ts     Vote editing, saving and announcements
 │   │   ├── useVoteEditorFocus.ts  Focus when opening or closing a row
-│   │   └── useVoteRemoval.ts  Participant/date removal and confirmation state
+│   │   ├── useVoteRemoval.ts  Participant/date removal and confirmation state
+│   │   └── useParticipantDisabling.ts  The organiser's Disable / Enable on someone else's row
 │   ├── pages/
 │   │   ├── CreatePage.tsx     Form, calendar, Turnstile, masked-delay progress dialog
 │   │   ├── EventPage.tsx      Opens the poll in the store (effect keyed on the id); decides which sections show at each step of answering
@@ -101,9 +104,10 @@ pikadai/
 │   │   ├── NameCard.tsx       The first tile: joining, renaming and the private participant link
 │   │   ├── OptionHeader.tsx   One date column header
 │   │   ├── VoteRow.tsx        A saved participant row
+│   │   ├── ParticipantTags.tsx  The "you", "organiser" and "disabled" pills after a name
 │   │   ├── VoteEditRow.tsx    The row being edited
 │   │   ├── VoteCells.tsx      The answer cells both rows share
-│   │   ├── EditPanel.tsx      Save / Cancel / Remove under the table
+│   │   ├── EditPanel.tsx      Save / Cancel / Disable / Remove under the table
 │   │   ├── Comments.tsx       The comments tile: list, and the once-per-page-load form with its counter and growing textarea
 │   │   ├── TextField.tsx      Label, input or textarea, error and hint, with the aria wiring
 │   │   ├── FormError.tsx      The role="alert" paragraph
@@ -143,6 +147,7 @@ pikadai/
 │   ├── dialog.spec.ts         Confirmation keyboard behavior, cancellation, errors and reflow
 │   ├── participantLink.spec.ts  Identity recovery, navigation and private-link permissions
 │   ├── reviewRegressions.spec.ts  Removed rows, save announcements and focus after refresh
+│   ├── disable.spec.ts    The organiser disables and enables a participant; what each viewer sees
 │   └── preview.spec.ts        Against the production build: SPA fallback, security headers, Turnstile under the CSP
 │
 └── docs/                      You are here

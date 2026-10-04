@@ -9,7 +9,7 @@ import { browserLocation, createPollActions, type PollActionDeps, type PollActio
 const me: ParticipantIdentity = { id: 'p'.repeat(22), token: 't'.repeat(43) };
 const meA: ParticipantIdentity = { id: 'a'.repeat(22), token: 'a'.repeat(43) };
 const meB: ParticipantIdentity = { id: 'b'.repeat(22), token: 'b'.repeat(43) };
-const bea = { id: meB.id, name: 'Bea', votes: {}, createdAt: 0, isOrganiser: false };
+const bea = { id: meB.id, name: 'Bea', votes: {}, createdAt: 0, isOrganiser: false, isDisabled: false };
 
 const event = (overrides: Partial<EventView> = {}): EventView => ({
   id: 'ev1',
@@ -19,7 +19,7 @@ const event = (overrides: Partial<EventView> = {}): EventView => ({
   createdAt: 0,
   expiresAt: 1,
   options: [],
-  participants: [{ id: me.id, name: 'Ada', votes: {}, createdAt: 0, isOrganiser: false }],
+  participants: [{ id: me.id, name: 'Ada', votes: {}, createdAt: 0, isOrganiser: false, isDisabled: false }],
   comments: [],
   viewer: { isAdmin: false },
   ...overrides,
@@ -110,7 +110,11 @@ describe('openPoll', () => {
 
   it('fetches with that token and reports the loaded event', async () => {
     await h.actions.openPoll('ev1');
-    expect(h.getEvent).toHaveBeenCalledWith('ev1', 'tok-from-hash', expect.any(AbortSignal));
+    expect(h.getEvent).toHaveBeenCalledWith(
+      'ev1',
+      { adminToken: 'tok-from-hash', participant: null },
+      expect.any(AbortSignal),
+    );
     expect(h.dispatched[1]).toMatchObject({ type: 'poll/loaded', id: 'ev1' });
     expect(h.state().poll?.event?.title).toBe('Dinner');
   });
@@ -173,7 +177,11 @@ describe('refresh', () => {
     h.getEvent.mockResolvedValue(event({ viewer: { isAdmin: true } }));
     await h.actions.openPoll('ev1');
     await expect(h.actions.refresh('ev1')).resolves.toBe(true);
-    expect(h.getEvent).toHaveBeenLastCalledWith('ev1', 'stored-tok', expect.any(AbortSignal));
+    expect(h.getEvent).toHaveBeenLastCalledWith(
+      'ev1',
+      { adminToken: 'stored-tok', participant: null },
+      expect.any(AbortSignal),
+    );
     expect(h.dispatched.at(-1)).toMatchObject({ type: 'poll/loaded', id: 'ev1' });
   });
 
@@ -342,7 +350,11 @@ describe('openPoll under real-world timing', () => {
     h.flush();
     await Promise.all([first, second]);
     h.flush();
-    expect(h.getEvent).toHaveBeenCalledExactlyOnceWith('ev1', 'tok-from-hash', expect.any(AbortSignal));
+    expect(h.getEvent).toHaveBeenCalledExactlyOnceWith(
+      'ev1',
+      { adminToken: 'tok-from-hash', participant: null },
+      expect.any(AbortSignal),
+    );
     expect(h.state().poll?.adminToken).toBe('tok-from-hash');
     expect(h.state().poll?.event?.viewer.isAdmin).toBe(true);
 
@@ -492,7 +504,7 @@ describe('private links', () => {
         event({ participants: [...event().participants, bea], viewer: { isAdmin: adminToken !== null } }),
       );
       await h.actions.openPoll('ev1');
-      expect(h.getEvent).toHaveBeenCalledWith('ev1', adminToken, expect.any(AbortSignal));
+      expect(h.getEvent).toHaveBeenCalledWith('ev1', expect.objectContaining({ adminToken }), expect.any(AbortSignal));
       expect(h.state().poll?.me).toEqual(meB);
       expect(h.state().poll?.adminToken).toBe(adminToken);
       expect(h.storage.getAdminToken('ev1')).toBe(adminToken);
@@ -620,7 +632,11 @@ describe('private links', () => {
     h.getEvent.mockResolvedValue(event({ viewer: { isAdmin: true } }));
     await h.actions.openPoll('ev1');
     await h.actions.openPoll('ev1');
-    expect(h.getEvent).toHaveBeenLastCalledWith('ev1', 'admin-token', expect.any(AbortSignal));
+    expect(h.getEvent).toHaveBeenLastCalledWith(
+      'ev1',
+      { adminToken: 'admin-token', participant: me },
+      expect.any(AbortSignal),
+    );
     expect(h.state().poll?.adminToken).toBe('admin-token');
     expect(h.state().poll?.me).toEqual(me);
     expect(h.location.readHash()).toBe('');
@@ -957,5 +973,17 @@ describe('browserLocation', () => {
     });
     const key = browserLocation.replaceHash('poll', '');
     expect(replaceState).toHaveBeenCalledExactlyOnceWith({ key }, '', '/e/poll/');
+  });
+});
+
+describe('a disabled participant', () => {
+  it('fetches with the saved identity, so the server returns their own hidden row and they stay themselves', async () => {
+    const h = harness();
+    h.storage.setParticipant('ev1', me);
+    h.getEvent.mockResolvedValue(event({ participants: [{ ...event().participants[0], isDisabled: true }] }));
+    await h.actions.openPoll('ev1');
+    expect(h.getEvent).toHaveBeenCalledWith('ev1', { adminToken: null, participant: me }, expect.any(AbortSignal));
+    expect(h.state().poll?.me).toEqual(me);
+    expect(h.storage.getParticipant('ev1')).toEqual(me);
   });
 });

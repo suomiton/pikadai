@@ -12,6 +12,7 @@ import {
   countRows,
   createPoll,
   forbidOutboundFetch,
+  futureIso,
   getView,
   siteverifyOk,
   stubSiteverify,
@@ -470,5 +471,103 @@ describe('DELETE /api/events/:id/participants/:participantId', () => {
     const res = await poll.client.delete(`/api/events/${poll.id}/participants/${ada.id}`, asParticipant(grace));
     expect(res.status).toBe(403);
     expect(res.body).toMatchObject({ code: 'not_owner' });
+  });
+});
+
+describe('PUT /api/events/:id/participants/:participantId/disabled', () => {
+  const disabledPath = (eventId: string, participantId: string) =>
+    `/api/events/${eventId}/participants/${participantId}/disabled`;
+
+  it('lets only the organiser disable and enable a participant', async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    const grace = await addParticipant(client(), poll.id, 'Grace');
+    const path = disabledPath(poll.id, ada.id);
+
+    for (const headers of [{}, asParticipant(ada), asParticipant(grace)]) {
+      const res = await poll.client.put(path, { disabled: true }, headers);
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({ code: 'admin_required' });
+    }
+    expect((await poll.client.put(path, { disabled: 'yes' }, bearer(poll.adminToken))).status).toBe(400);
+    expect(
+      (await poll.client.put(disabledPath(poll.id, 'nobody'), { disabled: true }, bearer(poll.adminToken))).status,
+    ).toBe(404);
+
+    expect((await poll.client.put(path, { disabled: true }, bearer(poll.adminToken))).status).toBe(204);
+    expect((await getView(poll.client, poll.id, bearer(poll.adminToken))).participants[0].isDisabled).toBe(true);
+    expect((await poll.client.put(path, { disabled: false }, bearer(poll.adminToken))).status).toBe(204);
+    expect((await getView(poll.client, poll.id, bearer(poll.adminToken))).participants[0].isDisabled).toBe(false);
+  });
+
+  it('hides a disabled participant from everyone but the organiser and themselves, until enabled again', async () => {
+    const poll = await createPoll();
+    const [a] = poll.view.options;
+    const ada = await addParticipant(poll.client, poll.id, 'Ada', { [a.id]: 'yes' });
+    const grace = await addParticipant(client(), poll.id, 'Grace', { [a.id]: 'maybe' });
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: true }, bearer(poll.adminToken));
+
+    const names = async (headers?: Record<string, string>) =>
+      (await getView(poll.client, poll.id, headers)).participants.map((p) => `${p.name}${p.isDisabled ? '!' : ''}`);
+    expect(await names()).toEqual(['Grace']);
+    expect(await names(asParticipant(grace))).toEqual(['Grace']);
+    // Ada's id with someone else's token proves nothing.
+    expect(await names({ ...asParticipant(grace), 'X-Participant-Id': ada.id })).toEqual(['Grace']);
+    expect(await names(asParticipant(ada))).toEqual(['Ada!', 'Grace']);
+    expect(await names(bearer(poll.adminToken))).toEqual(['Ada!', 'Grace']);
+
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: false }, bearer(poll.adminToken));
+    const view = await getView(poll.client, poll.id);
+    expect(view.participants.map((p) => p.name)).toEqual(['Ada', 'Grace']);
+    expect(view.participants[0].votes).toEqual({ [a.id]: 'yes' });
+  });
+
+  it("keeps a disabled participant's comments visible to everyone, marked", async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    expect((await poll.client.post(`/api/events/${poll.id}/comments`, { body: 'Hi' }, asParticipant(ada))).status).toBe(
+      201,
+    );
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: true }, bearer(poll.adminToken));
+    expect((await getView(poll.client, poll.id)).comments).toEqual([
+      expect.objectContaining({ name: 'Ada', body: 'Hi', isDisabled: true }),
+    ]);
+  });
+
+  it("refuses a disabled participant's own writes but lets the organiser change their row", async () => {
+    const poll = await createPoll();
+    const [a] = poll.view.options;
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: true }, bearer(poll.adminToken));
+    const path = `/api/events/${poll.id}/participants/${ada.id}`;
+
+    const refused = [
+      await poll.client.put(path, { name: 'Ada B' }, asParticipant(ada)),
+      await poll.client.put(path, { votes: { [a.id]: 'yes' } }, asParticipant(ada)),
+      await poll.client.delete(path, asParticipant(ada)),
+      await poll.client.post(`/api/events/${poll.id}/comments`, { body: 'Let me in' }, asParticipant(ada)),
+      await poll.client.post(`/api/events/${poll.id}/options`, { date: futureIso(20) }, asParticipant(ada)),
+    ];
+    for (const res of refused) {
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({ code: 'participant_disabled' });
+    }
+
+    expect((await poll.client.put(path, { votes: { [a.id]: 'no' } }, bearer(poll.adminToken))).status).toBe(204);
+    expect((await poll.client.delete(path, bearer(poll.adminToken))).status).toBe(204);
+  });
+
+  it("keeps a disabled participant's name reserved", async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: true }, bearer(poll.adminToken));
+    forbidOutboundFetch();
+    const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      name: 'ada',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'name_taken' });
   });
 });

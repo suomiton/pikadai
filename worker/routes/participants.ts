@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { LIMITS } from '@shared/limits';
-import { createParticipantSchema, updateParticipantSchema } from '@shared/schemas';
+import { createParticipantSchema, setParticipantDisabledSchema, updateParticipantSchema } from '@shared/schemas';
 import type { Answer, CreateParticipantResponse } from '@shared/types';
 import type { AppEnv } from '../env';
 import {
@@ -10,11 +10,12 @@ import {
   getParticipant,
   insertParticipantWithVotes,
   nameTaken,
+  setParticipantDisabled,
   updateParticipant,
   type EventRow,
   type ParticipantRow,
 } from '../db/queries';
-import { bearerToken, isAdmin, isParticipantOwner, loadEvent } from '../lib/auth';
+import { assertNotDisabled, bearerToken, isAdmin, isParticipantOwner, loadEvent, requireAdmin } from '../lib/auth';
 import { randomId, randomToken, sha256Hex } from '../lib/crypto';
 import { errors, isUniqueViolation, parseBody, readJson } from '../lib/http';
 import { clientIp, rateLimit } from '../lib/ratelimit';
@@ -37,14 +38,19 @@ const assertVotesBelongToEvent = async (
   return votes;
 };
 
-/** A participant may be changed by whoever holds its edit token, and by the organiser. */
-const ownerOrAdmin = async (
+/**
+ * A participant may be changed by the organiser, and by whoever holds its edit token unless the organiser
+ * has disabled it. The organiser may act without the row in hand, so a vanished one can still answer 404.
+ */
+const assertMayChange = async (
   token: string | null,
   event: EventRow,
   participant: ParticipantRow | null,
-): Promise<boolean> => {
-  if (participant && (await isParticipantOwner(token, participant))) return true;
-  return isAdmin(token, event);
+  refusal: string,
+): Promise<void> => {
+  if (await isAdmin(token, event)) return;
+  if (!participant || !(await isParticipantOwner(token, participant))) throw errors.forbidden(refusal, 'not_owner');
+  assertNotDisabled(participant);
 };
 
 participants.post(
@@ -123,9 +129,8 @@ participants.put(
     const token = bearerToken(c.req.header('Authorization'));
 
     const participant = await getParticipant(c.env.DB, event.id, participantId);
-    if (!participant || !(await ownerOrAdmin(token, event, participant))) {
-      throw errors.forbidden('You can only edit your own answers', 'not_owner');
-    }
+    await assertMayChange(token, event, participant, 'You can only edit your own answers');
+    if (!participant) throw errors.notFound('Participant not found');
 
     // A rename carries only the name and an answer only the votes; a field left out stays as it is.
     const body = parseBody(updateParticipantSchema, await readJson(c));
@@ -151,14 +156,31 @@ participants.delete(
     const participantId = c.req.param('participantId');
     const token = bearerToken(c.req.header('Authorization'));
 
-    // The organiser may remove a participant without the row in hand, so a vanished one still answers 404.
     const participant = await getParticipant(c.env.DB, event.id, participantId);
-    if (!(await ownerOrAdmin(token, event, participant))) {
-      throw errors.forbidden('You can only remove your own answers', 'not_owner');
-    }
+    await assertMayChange(token, event, participant, 'You can only remove your own answers');
 
     const removed = await deleteParticipant(c.env.DB, event.id, participantId);
     if (!removed) throw errors.notFound('Participant not found');
+    return c.body(null, 204);
+  },
+);
+
+/** The organiser disables a participant, hiding them from everyone else and out of the counts, or enables them. */
+participants.put(
+  '/:participantId/disabled',
+  rateLimit((env) => env.WRITE_LIMITER),
+  async (c) => {
+    const event = await loadEvent(c.env.DB, c.req.param('id'));
+    await requireAdmin(bearerToken(c.req.header('Authorization')), event);
+    const body = parseBody(setParticipantDisabledSchema, await readJson(c));
+    const changed = await setParticipantDisabled(
+      c.env.DB,
+      event.id,
+      c.req.param('participantId'),
+      body.disabled,
+      Date.now(),
+    );
+    if (!changed) throw errors.notFound('Participant not found');
     return c.body(null, 204);
   },
 );

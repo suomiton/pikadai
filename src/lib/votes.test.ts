@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EventOption, Participant } from '@shared/types';
-import { computeTallies, cycle, hasAnswered, topDates } from './votes';
+import { computeTallies, counted, cycle, hasAnswered, topDates } from './votes';
 
 const option = (id: string, date: string): EventOption => ({ id, date, suggestedBy: null });
 const participant = (id: string, votes: Participant['votes']): Participant => ({
@@ -9,6 +9,7 @@ const participant = (id: string, votes: Participant['votes']): Participant => ({
   votes,
   createdAt: 0,
   isOrganiser: false,
+  isDisabled: false,
 });
 
 describe('cycle', () => {
@@ -37,6 +38,22 @@ describe('computeTallies', () => {
       a: { yes: 0, maybe: 0 },
       b: { yes: 0, maybe: 0 },
     });
+  });
+
+  it('leaves out disabled participants', () => {
+    const tallies = computeTallies(options, [
+      participant('p1', { a: 'yes', b: 'maybe' }),
+      { ...participant('p2', { a: 'yes', b: 'maybe' }), isDisabled: true },
+    ]);
+    expect(tallies).toEqual({ a: { yes: 1, maybe: 0 }, b: { yes: 0, maybe: 1 } });
+  });
+});
+
+describe('counted', () => {
+  it('keeps everyone the organiser has not disabled', () => {
+    const ada = participant('p1', {});
+    const bea = { ...participant('p2', {}), isDisabled: true };
+    expect(counted([ada, bea])).toEqual([ada]);
   });
 });
 
@@ -116,5 +133,19 @@ describe('topDates', () => {
     expect(topDates(options, [...answered, participant('p3', {})])).toBeNull();
     const scores = topDates(options, [...answered, participant('p3', { a: 'no' }), participant('p4', {})]);
     expect(scores).toEqual([{ option: options[0], yes: 2, total: 3, percent: 67 }]);
+  });
+
+  it('leaves out disabled participants, both from the dates and from the total', () => {
+    const answered = [
+      participant('p1', { a: 'yes' }),
+      participant('p2', { a: 'yes' }),
+      participant('p3', { b: 'yes' }),
+    ];
+    const disabled = { ...participant('p4', { b: 'yes' }), isDisabled: true };
+    expect(topDates(options, [...answered.slice(0, 2), disabled])).toBeNull();
+    expect(topDates(options, [...answered, disabled])).toEqual([
+      { option: options[0], yes: 2, total: 3, percent: 67 },
+      { option: options[1], yes: 1, total: 3, percent: 33 },
+    ]);
   });
 });

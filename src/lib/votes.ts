@@ -16,11 +16,19 @@ export function cycle(answer: Answer | undefined): Answer | undefined {
   }
 }
 
-/** Yes and if-need-be counts per option; votes for options no longer in the poll are ignored. */
+/**
+ * The participants whose answers count: everyone the organiser has not disabled. Only the organiser and
+ * the disabled participant themselves ever receive a disabled row.
+ */
+export function counted<T extends Pick<Participant, 'isDisabled'>>(participants: readonly T[]): T[] {
+  return participants.filter((p) => !p.isDisabled);
+}
+
+/** Yes and if-need-be counts per option, from counted participants; votes for options no longer in the poll are ignored. */
 export function computeTallies(options: readonly EventOption[], participants: readonly Participant[]): Tallies {
   const tallies: Tallies = {};
   for (const o of options) tallies[o.id] = { yes: 0, maybe: 0 };
-  for (const p of participants) {
+  for (const p of counted(participants)) {
     for (const [optionId, answer] of Object.entries(p.votes)) {
       const bucket = tallies[optionId];
       if (!bucket) continue;
@@ -53,11 +61,6 @@ export interface DateScore {
 }
 
 /**
- * The dates most people can make, best first: by yes answers, then if-need-be answers, then the
- * earlier date. Dates nobody said yes to are left out, so a 0-of-3 row never reads as a top date.
- * Null until TOP_DATES_MIN_ANSWERS people have answered; before that a single yes would top the table.
- */
-/**
  * Whether a participant has saved an answer for at least one date. Joining creates the row before any
  * date is answered, and someone may join only to comment or change their name; until they answer, the
  * page shows them only their own row and the top dates leave them out.
@@ -66,8 +69,13 @@ export function hasAnswered(participant: Pick<Participant, 'votes'>): boolean {
   return Object.keys(participant.votes).length > 0;
 }
 
+/**
+ * The dates most people can make, best first: by yes answers, then if-need-be answers, then the
+ * earlier date. Dates nobody said yes to are left out, so a 0-of-3 row never reads as a top date.
+ * Null until TOP_DATES_MIN_ANSWERS counted people have answered; before that a single yes would top the table.
+ */
 export function topDates(options: readonly EventOption[], participants: readonly Participant[]): DateScore[] | null {
-  const answered = participants.filter(hasAnswered);
+  const answered = counted(participants).filter(hasAnswered);
   const total = answered.length;
   if (total < TOP_DATES_MIN_ANSWERS) return null;
   // computeTallies has an entry for every option, so the lookups below never miss.

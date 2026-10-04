@@ -1,6 +1,6 @@
 import type { ComponentProps, Ref } from 'react';
 import type { EventOption, Participant } from '@shared/types';
-import type { Tallies } from '../lib/votes';
+import { counted, type Tallies } from '../lib/votes';
 import { usePoll } from '../state/AppStateProvider';
 import { OptionHeader } from './OptionHeader';
 import { VoteEditRow } from './VoteEditRow';
@@ -26,11 +26,12 @@ const VoteTableHead = ({
   onRemoveOption,
 }: Pick<Props, 'showAll' | 'busy' | 'isBest' | 'onRemoveOption'>) => {
   const { event, isAdmin } = usePoll();
+  const answers = counted(event.participants).length;
   return (
     <thead>
       <tr>
         <th scope="col" className="name-col">
-          {showAll ? `${event.participants.length} ${event.participants.length === 1 ? 'answer' : 'answers'}` : 'You'}
+          {showAll ? `${answers} ${answers === 1 ? 'answer' : 'answers'}` : 'You'}
         </th>
         {event.options.map((option) => (
           <OptionHeader
@@ -77,7 +78,7 @@ const VoteTableBody = ({
             options={event.options}
             isBest={isBest}
             isMine={me?.id === participant.id}
-            canEdit={(isAdmin || me?.id === participant.id) && editingId === null}
+            canEdit={(isAdmin || (me?.id === participant.id && !participant.isDisabled)) && editingId === null}
             disabled={busy}
             onEdit={onEdit}
           />
