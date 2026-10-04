@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LIMITS } from '@shared/limits';
 import type { EventOption, Participant } from '@shared/types';
 import { api, ApiRequestError } from '../lib/api';
 import { formatDateLong } from '../lib/dates';
@@ -164,7 +163,7 @@ export function useVoteGrid(showAll: boolean) {
     rows,
     /** The viewer's own row is disabled: they can no longer answer. */
     isDisabled: mine?.isDisabled ?? false,
-    isFull: event.participants.length >= LIMITS.participantsMax,
+    isFull: event.isFull,
     canSuggest: isAdmin || (event.allowSuggestions && !mine?.isDisabled && !resultsOnly),
     errorHost,
   };

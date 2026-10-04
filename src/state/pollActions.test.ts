@@ -20,6 +20,7 @@ const event = (overrides: Partial<EventView> = {}): EventView => ({
   expiresAt: 1,
   options: [],
   participants: [{ id: me.id, name: 'Ada', votes: {}, createdAt: 0, isOrganiser: false, isDisabled: false }],
+  isFull: false,
   comments: [],
   viewer: { isAdmin: false },
   ...overrides,

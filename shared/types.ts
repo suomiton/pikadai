@@ -50,6 +50,11 @@ export interface EventView {
   expiresAt: number;
   options: EventOption[];
   participants: Participant[];
+  /**
+   * The poll has reached its participant limit. Counted over every row, including disabled ones that this
+   * viewer does not receive, so `participants.length` cannot tell.
+   */
+  isFull: boolean;
   /** Oldest first. */
   comments: Comment[];
   viewer: { isAdmin: boolean };

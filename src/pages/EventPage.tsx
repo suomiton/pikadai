@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
-import { LIMITS } from '@shared/limits';
 import type { EventView } from '@shared/types';
 import { AdminPanel } from '../components/AdminPanel';
 import { Comments } from '../components/Comments';
@@ -107,7 +106,8 @@ export function EventPage() {
    * answers and the results, read-only, in place of the Name tile.
    */
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
-  const isFull = event.participants.length >= LIMITS.participantsMax;
+  // From the server: disabled rows count toward the limit but are not in `participants`.
+  const isFull = event.isFull;
   const viewingResults = resultsOnly && me === null && !isAdmin;
   const showAll =
     isAdmin ||

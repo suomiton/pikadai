@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LIMITS } from '@shared/limits';
 import type { EventRow, EventRows } from '../db/queries';
 import { toEventView } from './eventView';
 
@@ -142,6 +143,17 @@ describe('toEventView', () => {
         ['p1', true],
         ['p2', false],
       ]);
+    });
+
+    it('still counts toward a full poll, though the viewer does not receive the row', () => {
+      const crowd = (n: number) =>
+        Array.from({ length: n }, (_, i) => ({ ...rows.participants[0], id: `p${i}`, is_disabled: i === 0 ? 1 : 0 }));
+      const full = toEventView(event, { ...rows, participants: crowd(LIMITS.participantsMax) }, guest);
+      expect(full.participants).toHaveLength(LIMITS.participantsMax - 1);
+      expect(full.isFull).toBe(true);
+      expect(toEventView(event, { ...rows, participants: crowd(LIMITS.participantsMax - 1) }, guest).isFull).toBe(
+        false,
+      );
     });
 
     it('keeps their comments visible to everyone, marked', () => {

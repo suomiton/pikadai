@@ -256,7 +256,9 @@ needs the admin token and sets `participants.is_disabled`; nothing is deleted.
   rename, leave, comment or suggest a date: each answers `403 participant_disabled`. The organiser can
   still change or remove the row.
 - **What it is not.** A ban: in an anonymous poll anyone can join again under another name. The row
-  still counts toward the 100-participant cap and keeps its name reserved.
+  still counts toward the 100-participant cap and keeps its name reserved. Since other people do not
+  receive the row, the view carries `isFull`, counted over every row, and the client asks that rather than
+  counting `participants`.
 
 ### Suggesting a date
 

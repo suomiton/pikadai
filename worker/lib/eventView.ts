@@ -1,3 +1,4 @@
+import { LIMITS } from '@shared/limits';
 import type { Answer, Comment, EventOption, EventView, Participant } from '@shared/types';
 import type { EventRow, EventRows } from '../db/queries';
 
@@ -46,6 +47,7 @@ export function toEventView(
         isOrganiser: p.is_organiser === 1,
         isDisabled: p.is_disabled === 1,
       })),
+    isFull: participants.length >= LIMITS.participantsMax,
     comments: comments.map((c): Comment => ({
       id: c.id,
       participantId: c.participant_id,

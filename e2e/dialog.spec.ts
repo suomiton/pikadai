@@ -24,6 +24,7 @@ const openPoll = async (page: Page, { mine = false, name = 'Ada' } = {}) => {
         isDisabled: false,
       },
     ],
+    isFull: false,
     comments: [],
     viewer: { isAdmin: !mine },
   };
