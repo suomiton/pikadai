@@ -46,6 +46,7 @@ pikadai/
 │   │   ├── ratelimit.ts       clientIp, rateLimitKey (IPv6 by /64), rateLimit middleware factory
 │   │   ├── expiry.ts          computeExpiresAt: when a poll is purged
 │   │   ├── eventView.ts       toEventView: rows → the EventView JSON, pure
+│   │   ├── names.ts           nameKey: the folded form names are compared in for uniqueness
 │   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, isParticipantOwner; no Hono inside
 │   ├── db/
 │   │   └── queries.ts         All SQL; row types; fetchEventRows
@@ -59,7 +60,8 @@ pikadai/
 │   ├── 0002_participants_nickname_unique.sql
 │   ├── 0003_comments.sql
 │   ├── 0004_participants_is_organiser.sql
-│   └── 0005_participants_name.sql
+│   ├── 0005_participants_name.sql
+│   └── 0006_participants_name_key.sql
 │
 ├── src/                       React application
 │   ├── main.tsx               Mounts the router, imports global CSS

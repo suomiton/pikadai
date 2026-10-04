@@ -190,9 +190,11 @@ name or commenting does not count, and the top-dates table counts the same peopl
 2. A visitor without an identity for this poll types a name into the Name tile (`NameCard`); the
    Turnstile widget produces a token.
 3. `POST /api/events/:id/participants` with an empty vote set checks the participant cap and name
-   uniqueness (case-insensitive within the poll), then verifies Turnstile and inserts the row. A unique
-   index on `(event_id, name COLLATE NOCASE)` backs the name check, so two simultaneous joins with the
-   same name cannot both get in. When the request carries the admin token, the row is marked
+   uniqueness within the poll, then verifies Turnstile and inserts the row. Names are compared by
+   `nameKey` (`worker/lib/names.ts`): Unicode-normalised, lowercased beyond A–Z, invisible characters
+   dropped and spaces collapsed, so "Äiti", "äiti" and "Äiti " are one name. A unique index on the
+   stored key, `(event_id, name_key)`, backs the check, so two simultaneous joins with the same name cannot
+   both get in. When the request carries the admin token, the row is marked
    `is_organiser`, and the organiser's name is shown with an outlined "organiser" pill on their answer
    row and on their comments. The client sends the token whenever it has one; the server decides.
 4. The response `{ id, editToken }` is stored in `localStorage` under the poll id and offered as
@@ -251,7 +253,7 @@ The controls are layered so no single one has to be perfect.
 | Creation tickets: 5 s minimum age, single use, bound to the requesting client                                                                   | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts`                                                                |
 | Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char name, 512-char comment, 40 dates, 100 participants, 200 comments | oversized requests, storage abuse and spam text                        | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
 | Comments need the participant token; one per 10 s per participant, decided by the insert statement                                              | anonymous or scripted comment floods                                   | `comments` route, `insertComment` in `worker/db/queries.ts`                            |
-| Unique name per poll                                                                                                                            | impersonation within a poll                                            | unique index from `migrations/0002`, pre-check in the `participants` route             |
+| Unique name per poll                                                                                                                            | impersonation within a poll                                            | pre-check by `nameKey`, unique indexes from `migrations/0002` and `0006`               |
 | Vote set replaced per save, unknown option ids rejected                                                                                         | orphan or forged votes                                                 | `participants` route                                                                   |
 | Expiry plus nightly purge                                                                                                                       | indefinite hosting of junk                                             | `worker/index.ts` `scheduled` handler                                                  |
 

@@ -1,5 +1,6 @@
 import { LIMITS } from '@shared/limits';
 import type { Answer } from '@shared/types';
+import { nameKey } from '../lib/names';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -23,6 +24,7 @@ export interface OptionRow {
   created_at: number;
 }
 
+/** The `name_key` column is left out: it is derived from `name` by the functions below and only SQL reads it. */
 export interface ParticipantRow {
   id: string;
   event_id: string;
@@ -209,21 +211,23 @@ export async function countParticipants(db: D1Database, eventId: string): Promis
   return row?.n ?? 0;
 }
 
+/**
+ * Whether someone else in the poll has a name with the same `nameKey`. The keys are derived here from the
+ * stored names rather than read from `name_key`, so rows from before migration 0006, whose keys SQL could
+ * only lowercase A–Z, or which have none, compare like new ones. A poll holds at most 100 participants.
+ */
 export async function nameTaken(
   db: D1Database,
   eventId: string,
   name: string,
   excludeParticipantId: string | null,
 ): Promise<boolean> {
-  const row = await db
-    .prepare(
-      `SELECT 1 AS hit FROM participants
-       WHERE event_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)
-       LIMIT 1`,
-    )
-    .bind(eventId, name, excludeParticipantId, excludeParticipantId)
-    .first<{ hit: number }>();
-  return row !== null;
+  const { results } = await db
+    .prepare('SELECT id, name FROM participants WHERE event_id = ?')
+    .bind(eventId)
+    .all<Pick<ParticipantRow, 'id' | 'name'>>();
+  const key = nameKey(name);
+  return results.some((p) => p.id !== excludeParticipantId && nameKey(p.name) === key);
 }
 
 export async function insertParticipantWithVotes(
@@ -234,13 +238,14 @@ export async function insertParticipantWithVotes(
   const statements = [
     db
       .prepare(
-        `INSERT INTO participants (id, event_id, name, edit_token_hash, is_organiser, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO participants (id, event_id, name, name_key, edit_token_hash, is_organiser, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         participant.id,
         participant.event_id,
         participant.name,
+        nameKey(participant.name),
         participant.edit_token_hash,
         participant.is_organiser,
         participant.created_at,
@@ -264,10 +269,11 @@ export async function updateParticipant(
   patch: ParticipantPatch,
   now: number,
 ): Promise<void> {
+  const name = patch.name ?? participant.name;
   const statements = [
     db
-      .prepare('UPDATE participants SET name = ?, updated_at = ? WHERE id = ?')
-      .bind(patch.name ?? participant.name, now, participant.id),
+      .prepare('UPDATE participants SET name = ?, name_key = ?, updated_at = ? WHERE id = ?')
+      .bind(name, nameKey(name), now, participant.id),
   ];
   if (patch.votes !== undefined) {
     statements.push(

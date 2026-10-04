@@ -121,6 +121,21 @@ describe('POST /api/events/:id/participants', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('rejects a name that differs only in non-ASCII case, Unicode spelling or spacing', async () => {
+    const poll = await createPoll();
+    await addParticipant(poll.client, poll.id, 'Äiti Öberg');
+    forbidOutboundFetch();
+    for (const name of ['äiti öberg', 'Äiti Öberg', 'Äiti   Öberg', 'Äi​ti Öberg']) {
+      const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+        name,
+        votes: {},
+        turnstileToken: DUMMY_TOKEN,
+      });
+      expect(res.status, name).toBe(409);
+      expect(res.body).toMatchObject({ code: 'name_taken' });
+    }
+  });
+
   it('lets exactly one of several simultaneous answers with the same name in', async () => {
     const poll = await createPoll();
     stubSiteverify(siteverifyOk('answer'));
@@ -136,6 +151,51 @@ describe('POST /api/events/:id/participants', () => {
     const statuses = attempts.map((r) => r.status).sort();
     expect(statuses).toEqual([201, 409, 409, 409, 409]);
     expect((await getView(poll.client, poll.id)).participants.filter((p) => p.name === 'Racer')).toHaveLength(1);
+  });
+
+  it('compares names with rows from before migration 0006, whose keys are ASCII-only or missing', async () => {
+    const poll = await createPoll();
+    const now = Date.now();
+    const legacy = (id: string, name: string, key: string | null) =>
+      env.DB.prepare(
+        'INSERT INTO participants (id, event_id, name, name_key, edit_token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).bind(`${id}-${poll.id.slice(0, 8)}`, poll.id, name, key, 'nohash', now, now);
+    // What the migration's lower() backfill gives "Äiti", and a row an older Worker inserted without a key.
+    await env.DB.batch([legacy('backfilled', 'Äiti', 'Äiti'), legacy('keyless', 'Ada', null)]);
+    forbidOutboundFetch();
+    for (const name of ['äiti', 'ADA']) {
+      const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+        name,
+        votes: {},
+        turnstileToken: DUMMY_TOKEN,
+      });
+      expect(res.status, name).toBe(409);
+      expect(res.body).toMatchObject({ code: 'name_taken' });
+    }
+  });
+
+  it('keeps the case-insensitive index as a backstop for rows without a key', async () => {
+    const poll = await createPoll();
+    const now = Date.now();
+    const insert = (id: string, name: string) =>
+      env.DB.prepare(
+        'INSERT INTO participants (id, event_id, name, edit_token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+        .bind(`${id}-${poll.id.slice(0, 8)}`, poll.id, name, 'nohash', now, now)
+        .run();
+    await insert('first', 'Ada');
+    await expect(insert('second', 'ADA')).rejects.toThrow(/UNIQUE/);
+  });
+
+  it('lets only one of two simultaneous answers in when the names differ only in non-ASCII case', async () => {
+    const poll = await createPoll();
+    stubSiteverify(siteverifyOk('answer'));
+    const attempts = await Promise.all(
+      ['Äiti', 'äiti'].map((name) =>
+        poll.client.post(`/api/events/${poll.id}/participants`, { name, votes: {}, turnstileToken: DUMMY_TOKEN }),
+      ),
+    );
+    expect(attempts.map((r) => r.status).sort()).toEqual([201, 409]);
   });
 
   it('refuses a full poll before contacting Turnstile', async () => {
@@ -360,6 +420,28 @@ describe('PUT /api/events/:id/participants/:participantId', () => {
       asParticipant(ada),
     );
     expect(same.status).toBe(204);
+  });
+
+  it('refuses a rename onto a name that differs only in non-ASCII case or spacing, but allows restyling your own', async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    await addParticipant(client(), poll.id, 'Örjan Ström');
+    const path = `/api/events/${poll.id}/participants/${ada.id}`;
+    for (const name of ['örjan ström', 'Örjan  Ström']) {
+      const res = await poll.client.put(path, { name }, asParticipant(ada));
+      expect(res.status, name).toBe(409);
+      expect(res.body).toMatchObject({ code: 'name_taken' });
+    }
+    expect((await poll.client.put(path, { name: 'Äda' }, asParticipant(ada))).status).toBe(204);
+    // The new name's key replaced the old one: a newcomer may take "Ada" now, but not "äda".
+    expect((await addParticipant(client(), poll.id, 'Ada')).id).toBeTruthy();
+    stubSiteverify(siteverifyOk('answer'));
+    const taken = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      name: 'äda',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
+    expect(taken.status).toBe(409);
   });
 });
 
