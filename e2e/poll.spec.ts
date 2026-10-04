@@ -104,6 +104,8 @@ test.describe('answering a poll', () => {
     await expect(editing).toHaveCount(1);
     await expect(editing.locator('.participant-name')).toHaveText('Ada');
     await expect(editing.locator('button.vote-btn').first()).toBeFocused();
+    await expect(page).toHaveURL(/#participant=[A-Za-z0-9_-]{22}&token=[A-Za-z0-9_-]{43}$/);
+    await expect(page.getByLabel('Your private link')).toHaveValue(page.url());
     await expect(page.getByText('You are in this poll as')).toContainText('Ada');
     await expect(page.getByRole('button', { name: 'Join' })).toHaveCount(0);
     await expect(page.getByText('Answer at least one date and save to see what others have answered.')).toBeVisible();
@@ -125,6 +127,7 @@ test.describe('answering a poll', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Your answers were saved.' })).toBeAttached();
     await expect(page.locator('tfoot')).toHaveCount(1);
     await expect(page.getByLabel('Participant link')).toBeVisible();
+    await expect(page.getByLabel('Participant link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
 
     // The identity survives the re-fetch, so this browser can still edit the answer after a reload.
     await page.reload();

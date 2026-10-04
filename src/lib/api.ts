@@ -122,6 +122,13 @@ export const api = {
       headers: authHeaders({ adminToken }),
     }),
 
+  /** Check a private link with its own edit token, even when this browser also has organiser access. */
+  verifyParticipant: (id: string, participant: ParticipantIdentity, signal?: AbortSignal) =>
+    request<void>(`${eventPath(id)}/participants/${encodeURIComponent(participant.id)}`, {
+      headers: authHeaders({ participant }),
+      signal,
+    }),
+
   updateParticipant: (id: string, participantId: string, input: UpdateParticipantInput, auth: Auth) =>
     request<void>(`${eventPath(id)}/participants/${encodeURIComponent(participantId)}`, {
       method: 'PUT',

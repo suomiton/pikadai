@@ -4,8 +4,10 @@ import { LIMITS } from '@shared/limits';
 import { nameSchema } from '@shared/schemas';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { api } from '../lib/api';
+import { participantLink } from '../lib/participantLink';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { FormError } from './FormError';
+import { CopyField } from './CopyField';
 import { StatusAnnouncer } from './StatusAnnouncer';
 import { StorageNotice } from './StorageNotice';
 import { TextField } from './TextField';
@@ -41,6 +43,17 @@ export function NameCard() {
         )
       ) : (
         <RenameForm id={id} participantId={me.id} name={mine?.name ?? null} auth={{ adminToken, participant: me }} />
+      )}
+      {me && (
+        <CopyField
+          label="Your private link"
+          value={participantLink(window.location.origin, event.id, me, adminToken)}
+          hint={
+            adminToken
+              ? 'Save this link to return on any device with your organiser access. Keep it private: anyone with it can edit or delete the poll and comment as you.'
+              : 'Save this link to return on any device, even after clearing browser data. Keep it private: anyone with it can change your answers and comment as you.'
+          }
+        />
       )}
     </section>
   );
@@ -108,11 +121,11 @@ function JoinForm({ id, onCancel }: JoinFormProps) {
           setNameError(undefined);
         }}
         error={nameError}
-        hint="Shown with your answers and comments."
+        hint="Shown with your answers and comments. After joining, save your private link to return on another device."
         maxLength={LIMITS.nameMax}
         required
       />
-      <StorageNotice consequence="you will not be able to change your answers or comment under this name later from this browser." />
+      <StorageNotice consequence="save your private link after joining to change your answers or comment under this name later." />
       <TurnstileField action="answer" ref={turnstileRef} onToken={setToken} />
       <FormError message={error} />
       <div className="btn-row">

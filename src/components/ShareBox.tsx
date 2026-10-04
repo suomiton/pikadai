@@ -15,9 +15,9 @@ export function ShareBox() {
           <CopyField
             label="Admin link"
             value={`${participantLink}#admin=${adminToken}`}
-            hint="Keep this private. It is the only way to edit or delete the poll; there is no account to recover it from."
+            hint="Keep this private. It grants access to edit or delete the poll; there is no account to recover it from."
           />
-          <StorageNotice consequence="it will not remember your organiser link. Keep the admin link somewhere safe." />
+          <StorageNotice consequence="save your organiser link somewhere safe to keep access after this tab closes." />
         </>
       )}
     </section>

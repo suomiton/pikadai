@@ -69,25 +69,49 @@ at once.
 There are no users, only three kinds of capability tokens. None is stored in plaintext; the database holds
 SHA-256 digests, and comparisons use `crypto.subtle.timingSafeEqual`.
 
-| Token       | Bits | Who holds it         | Where it travels                                                                 | What it allows                                 |
-| ----------- | ---- | -------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Poll id     | 128  | anyone with the link | URL path `/e/:id`                                                                | read the poll, add an answer, suggest a date   |
-| Admin token | 256  | the creator          | URL fragment on first visit, then `localStorage`; header `Authorization: Bearer` | edit or delete the poll, any answer, any date  |
-| Edit token  | 256  | each participant     | `localStorage`; header `Authorization: Bearer` plus `X-Participant-Id`           | edit or remove their own answer, post comments |
+| Token       | Bits | Who holds it         | Where it travels                                                                                            | What it allows                                 |
+| ----------- | ---- | -------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Poll id     | 128  | anyone with the link | URL path `/e/:id`                                                                                           | read the poll, add an answer, suggest a date   |
+| Admin token | 256  | the creator          | admin URL fragment, combined private link after joining, and `localStorage`; header `Authorization: Bearer` | edit or delete the poll, any answer, any date  |
+| Edit token  | 256  | each participant     | private URL fragment and `localStorage`; header `Authorization: Bearer` plus `X-Participant-Id`             | edit or remove their own answer, post comments |
 
 **Why the fragment.** The admin link is `/e/:id#admin=TOKEN`. Browsers never send the fragment to the
-server, so the token does not appear in edge logs or referrers. On first load the page copies it into
-`localStorage` and rewrites the address bar without it, so a screenshot or a copied URL afterwards does
-not leak it. Creation hands the new token to the poll page the same way, so the organiser view opens even
+server, so the token does not appear in edge logs or referrers. On first load of a standalone admin link,
+the page copies it into `localStorage` and rewrites the address bar without it. Creation hands the new
+token to the poll page the same way, so the organiser view opens even
 when the browser blocks `localStorage`; the page then warns that the link will not be remembered. There is
 no recovery path if the admin link is lost; that is the price of having no accounts, and the UI says so
 next to the link.
+
+**Private participant links.** After joining, the address bar becomes
+`/e/:id#participant=PARTICIPANT_ID&token=EDIT_TOKEN`, and the Name tile offers a copyable "Your private
+link". The token is the existing cryptographically random 256-bit edit token, not a value derived from
+the participant's name or public id. It stays in the fragment so a saved link can restore access on
+another device, after site data is cleared, or when storage is blocked. Anyone holding the private
+link can edit that person's answers and comment as them; the public share link remains `/e/:id`.
+
+For an organiser who joins, the private link also includes `&admin=ADMIN_TOKEN`. Both secrets stay in
+the fragment so opening the link on another device or after clearing site data restores their name
+and organiser permissions together. The Name tile warns that this link also grants access to edit
+or delete the poll. A returning organiser's saved admin token is added to their private link after
+the server confirms it; participant-only links continue to grant only participant access.
+
+On opening or refreshing a poll, the client validates the participant token with
+`GET /api/events/:id/participants/:participantId`, in parallel with fetching the poll. That endpoint
+accepts only the participant's own token, including when the browser also holds the admin token. A
+private link takes precedence over a different identity saved for the same poll. Invalid or deleted
+identities are dropped from the session and their participant fragment is removed, preserving a valid
+admin credential in the URL; a network failure preserves
+the link for retry. A returning participant with only the old `localStorage` identity gets the same
+private link after verification, with no token rotation or database migration. Keep the link somewhere
+safe: a closed incognito session cannot restore access if both the link and its storage are lost.
 
 **Why `Authorization`.** A request carries at most one token, in the standard header: the admin token when
 the browser has one, otherwise the participant's edit token, since everything a participant may do the admin
 may do too. Cloudflare's log pipeline redacts request headers it recognises as credentials, and that
 recognition is heuristic; the standard header is the case it is built for, a custom `X-*` header is a
-gamble. The participant id travels separately because it is public anyway.
+gamble. The participant id travels separately because it is public anyway. Participant-link validation
+and posting comments always send the participant token, since these require that specific identity.
 
 **Why hashes.** A database leak would expose nothing usable: poll ids are public anyway, and the hashes
 cannot be inverted into tokens.
@@ -159,7 +183,8 @@ name or commenting does not count, and the top-dates table counts the same peopl
    same name cannot both get in. When the request carries the admin token, the row is marked
    `is_organiser`, and the organiser's name is shown with an outlined "organiser" pill on their answer
    row and on their comments. The client sends the token whenever it has one; the server decides.
-4. The response `{ id, editToken }` is stored in `localStorage` under the poll id. The new row opens for
+4. The response `{ id, editToken }` is stored in `localStorage` under the poll id and used to replace
+   the address bar's fragment with the private participant link. The new row opens for
    editing by itself with focus on its first date cell; so does the row of someone who joined earlier
    and has not answered yet.
 5. Every save of answers, now and later, sends both as headers to
@@ -257,12 +282,13 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | ------ | --------------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
 | POST   | `/api/tickets`                                | none                                          | Issue a creation ticket → `{ ticket, minAgeMs }` |
 | POST   | `/api/events`                                 | Turnstile + ticket                            | Create a poll → `{ id, adminToken }`             |
-| GET    | `/api/events/:id`                             | optional `X-Admin-Token`                      | Full poll view with `viewer.isAdmin`             |
+| GET    | `/api/events/:id`                             | optional admin bearer token                   | Full poll view with `viewer.isAdmin`             |
 | PATCH  | `/api/events/:id`                             | admin                                         | Change title, description, `allowSuggestions`    |
 | DELETE | `/api/events/:id`                             | admin                                         | Delete poll and everything in it                 |
 | POST   | `/api/events/:id/options`                     | anyone while suggestions are on; admin always | Add a date                                       |
 | DELETE | `/api/events/:id/options/:optionId`           | admin                                         | Remove a date and its votes                      |
 | POST   | `/api/events/:id/participants`                | Turnstile; admin token marks the organiser    | Join: add a participant → `{ id, editToken }`    |
+| GET    | `/api/events/:id/participants/:participantId` | own token                                     | Validate a private participant link → 204        |
 | PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Change the name, replace the votes, or both      |
 | DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
 | POST   | `/api/events/:id/comments`                    | participant token + `X-Participant-Id`        | Post a comment → `Comment`                       |

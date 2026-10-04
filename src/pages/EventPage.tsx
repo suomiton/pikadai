@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { LIMITS } from '@shared/limits';
 import { AdminPanel } from '../components/AdminPanel';
 import { Comments } from '../components/Comments';
@@ -12,14 +12,15 @@ import { useAppState, usePollActions } from '../state/AppStateProvider';
 
 export function EventPage() {
   const { id = '' } = useParams();
+  const { hash } = useLocation();
   const { openPoll, refresh } = usePollActions();
   const { poll } = useAppState();
 
-  // Capturing the admin link, reading storage and the first fetch all happen here, once per route
-  // id, so they repeat if the id changes while this page stays mounted. Nothing runs during render.
+  // Also repeat for explicit navigation to another identity in the same poll. Replacing the address
+  // bar with a private link does not navigate or reset a draft.
   useEffect(() => {
     void openPoll(id);
-  }, [id, openPoll]);
+  }, [id, hash, openPoll]);
 
   // Until the effect has dispatched, the store may still hold another poll or nothing at all.
   const current = poll?.id === id ? poll : null;

@@ -98,6 +98,22 @@ participants.post(
   },
 );
 
+/** Validate the identity carried by a private participant link without returning or changing any secrets. */
+participants.get(
+  '/:participantId',
+  rateLimit((env) => env.READ_LIMITER),
+  async (c) => {
+    const event = await loadEvent(c.env.DB, c.req.param('id'));
+    const participant = await getParticipant(c.env.DB, event.id, c.req.param('participantId'));
+    const token = bearerToken(c.req.header('Authorization'));
+    // Admin access must not authenticate a participant link: comments need the participant's own token.
+    if (!participant || !(await isParticipantOwner(token, participant))) {
+      throw errors.forbidden('This private participant link is no longer valid', 'not_owner');
+    }
+    return c.body(null, 204);
+  },
+);
+
 participants.put(
   '/:participantId',
   rateLimit((env) => env.WRITE_LIMITER),

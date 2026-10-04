@@ -8,6 +8,12 @@ Live app: [pikadai.suomiton.workers.dev](https://pikadai.suomiton.workers.dev)
 Anonymous, login-free date polls. Create a poll, share one link, people answer and comment under a name they pick.
 No accounts, no email, no cookies, no tracking. Polls delete themselves after they expire.
 
+After joining, save your private participant link to return on another device or after clearing browser
+data. Existing participants receive the same link when they return with their saved browser identity.
+The organiser's private link also restores their poll-management permissions. Keep it private: anyone
+with that link can use the permissions it carries, including editing or deleting the poll for an organiser. Use the separate
+participant link in Share to invite other people.
+
 Runs entirely on Cloudflare's free plan: a Worker (TypeScript, Hono) serves both the React app and the
 API from one origin, with D1 for storage, Turnstile and rate limiting against abuse, and a nightly cron
 purge.

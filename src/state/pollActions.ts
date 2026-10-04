@@ -1,19 +1,20 @@
 import { ApiRequestError, type api as apiModule } from '../lib/api';
 import { describeError } from '../lib/errors';
+import { hasParticipantHash, parseParticipantHash, participantHash } from '../lib/participantLink';
 import type { ParticipantIdentity, storage as storageModule } from '../lib/storage';
 import { hasParticipant, parseAdminHash, type AppAction, type AppState } from './app';
 
 /**
  * The side effects around the poll session: fetching, reading and writing the tokens in
- * localStorage, and the admin-link fragment. Every dependency is injected so the module runs under
+ * localStorage, and private-link fragments. Every dependency is injected so the module runs under
  * Node with fakes; the provider wires in the real ones.
  */
 export interface PollActionDeps {
-  api: Pick<typeof apiModule, 'getEvent'>;
+  api: Pick<typeof apiModule, 'getEvent' | 'verifyParticipant'>;
   storage: typeof storageModule;
   dispatch: (action: AppAction) => void;
   getState: () => AppState;
-  location: { readHash(): string; clearHash(): void };
+  location: { readHash(): string; replaceHash(id: string, hash: string): void };
 }
 
 /**
@@ -22,7 +23,7 @@ export interface PollActionDeps {
  * the poll they belong to, and the poll now on screen must be left alone.
  */
 export interface PollActions {
-  /** Start viewing a poll: pick up the admin token and identity, then fetch. Runs once per route id. */
+  /** Start viewing a poll: pick up private-link or stored credentials, validate the identity, then fetch. */
   openPoll(id: string): Promise<void>;
   /** Re-fetch poll `id` if it is the one on screen. Resolves to whether the fetch succeeded. */
   refresh(id: string): Promise<boolean>;
@@ -57,22 +58,61 @@ export function createPollActions({ api, storage, dispatch, getState, location }
    */
   let held: { id: string; adminToken: string | null; me: ParticipantIdentity | null } | null = null;
 
+  function replaceHash(id: string, hash: string) {
+    if (location.readHash() !== hash) location.replaceHash(id, hash);
+  }
+
+  async function validIdentity(id: string, me: ParticipantIdentity | null, signal: AbortSignal): Promise<boolean> {
+    if (!me) return false;
+    try {
+      await api.verifyParticipant(id, me, signal);
+      return true;
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 403 && err.code === 'not_owner') return false;
+      // An outage must not erase a valid private link or the stored identity; the user can retry.
+      throw err;
+    }
+  }
+
   async function load(id: string, adminToken: string | null): Promise<boolean> {
     inFlight?.abort();
     const controller = new AbortController();
     inFlight = controller;
     const seq = ++issued;
+    const me = held?.id === id ? held.me : null;
+    const hash = location.readHash();
     try {
-      const event = await api.getEvent(id, adminToken, controller.signal);
-      if (seq <= applied) return false;
+      const [event, verified] = await Promise.all([
+        api.getEvent(id, adminToken, controller.signal),
+        validIdentity(id, me, controller.signal),
+      ]);
+      if (
+        controller.signal.aborted ||
+        seq !== issued ||
+        held?.id !== id ||
+        held.me !== me ||
+        location.readHash() !== hash
+      )
+        return false;
       applied = seq;
-      // The reducer drops an identity the poll no longer lists; mirror that in storage.
-      const poll = getState().poll;
-      if (poll?.id === id && poll.me && !hasParticipant(event, poll.me)) storage.setParticipant(id, null);
+      const effective = verified && hasParticipant(event, me) ? me : null;
+      if (effective) {
+        storage.setParticipant(id, effective);
+      } else if (me) {
+        // A bad link must not erase a different, valid identity already saved in this browser.
+        const saved = storage.getParticipant(id);
+        if (saved?.id === me.id && saved.token === me.token) storage.setParticipant(id, null);
+        dispatch({ type: 'poll/identity', id, me: null });
+      }
+      held = { id, adminToken: event.viewer.isAdmin ? adminToken : null, me: effective };
+      if (effective) replaceHash(id, participantHash(effective, held.adminToken));
+      else if (hasParticipantHash(location.readHash())) {
+        replaceHash(id, held.adminToken ? `#admin=${encodeURIComponent(held.adminToken)}` : '');
+      }
       dispatch({ type: 'poll/loaded', id, event });
       return true;
     } catch (err) {
-      if (controller.signal.aborted || seq <= applied) return false;
+      if (controller.signal.aborted || seq <= applied || seq !== issued || location.readHash() !== hash) return false;
       applied = seq;
       dispatch({ type: 'poll/failed', id, error: { message: describeError(err), gone: isGone(err) } });
       return false;
@@ -85,17 +125,20 @@ export function createPollActions({ api, storage, dispatch, getState, location }
     async openPoll(id) {
       /*
        * The admin link carries its token in the URL fragment, which browsers never send to the
-       * server. Move it into storage first and strip it from the address bar so a copied URL or a
-       * screenshot does not leak it.
+       * server. Standalone admin links move into storage and are stripped. Combined private links
+       * retain both credentials so the organiser can restore their identity and permissions elsewhere.
        */
-      const fromHash = parseAdminHash(location.readHash());
+      const hash = location.readHash();
+      const fromHash = parseAdminHash(hash);
       if (fromHash !== null) {
         storage.setAdminToken(id, fromHash);
-        location.clearHash();
+        if (!hasParticipantHash(hash)) replaceHash(id, '');
       }
       const kept = held?.id === id ? held : null;
       const adminToken = fromHash ?? storage.getAdminToken(id) ?? kept?.adminToken ?? null;
-      const me = storage.getParticipant(id) ?? kept?.me ?? null;
+      const me = hasParticipantHash(hash)
+        ? parseParticipantHash(hash)
+        : (storage.getParticipant(id) ?? kept?.me ?? null);
       held = { id, adminToken, me };
       dispatch({ type: 'poll/open', id, adminToken, me });
       await load(id, adminToken);
@@ -110,14 +153,28 @@ export function createPollActions({ api, storage, dispatch, getState, location }
     setIdentity(id, me) {
       storage.setParticipant(id, me);
       if (held?.id === id) held = { ...held, me };
-      if (getState().poll?.id === id) dispatch({ type: 'poll/identity', id, me });
+      const poll = getState().poll;
+      if (poll?.id === id) {
+        dispatch({ type: 'poll/identity', id, me });
+        replaceHash(
+          id,
+          me
+            ? participantHash(me, poll.adminToken)
+            : poll.adminToken
+              ? `#admin=${encodeURIComponent(poll.adminToken)}`
+              : '',
+        );
+      }
     },
 
     forgetPoll(id) {
       storage.setAdminToken(id, null);
       storage.setParticipant(id, null);
       if (held?.id === id) held = null;
-      if (getState().poll?.id === id) dispatch({ type: 'poll/close', id });
+      if (getState().poll?.id === id) {
+        replaceHash(id, '');
+        dispatch({ type: 'poll/close', id });
+      }
     },
   };
 }
@@ -125,5 +182,10 @@ export function createPollActions({ api, storage, dispatch, getState, location }
 /** The real browser location for the provider; tests pass a fake. */
 export const browserLocation: PollActionDeps['location'] = {
   readHash: () => window.location.hash,
-  clearHash: () => window.history.replaceState(null, '', window.location.pathname + window.location.search),
+  replaceHash: (id, hash) => {
+    // The store can still hold the last poll after EventPage unmounts. A late response must not
+    // attach its private link to the home page or another route.
+    if (window.location.pathname.replace(/\/$/, '') !== `/e/${encodeURIComponent(id)}`) return;
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search + hash);
+  },
 };
