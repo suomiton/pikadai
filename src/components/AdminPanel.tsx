@@ -7,11 +7,14 @@ import { StatusAnnouncer } from './StatusAnnouncer';
 import { TextField } from './TextField';
 import { TopDates } from './TopDates';
 
-const AdminDetailsForm = ({ controller }: { controller: AdminFormController }) => {
+type DetailsFormProps = Pick<AdminFormController, 'dispatch' | 'busy' | 'error' | 'save' | 'close'> &
+  Pick<AdminFormController['refs'], 'titleRef' | 'descriptionRef'> & {
+    form: Omit<AdminFormController['form'], 'open'>;
+  };
+
+const AdminDetailsForm = ({ form, dispatch, busy, error, save, close, titleRef, descriptionRef }: DetailsFormProps) => {
   const id = useId();
-  const { form, refs, dispatch, busy, error, confirmDelete, save, close } = controller;
   const { title, description, allowSuggestions, fieldErrors } = form;
-  const { titleRef, descriptionRef } = refs;
   return (
     <form className="stack" onSubmit={save} noValidate>
       <TextField
@@ -42,7 +45,7 @@ const AdminDetailsForm = ({ controller }: { controller: AdminFormController }) =
         />
         <span>Participants may suggest other dates</span>
       </label>
-      <FormError message={confirmDelete ? null : error} />
+      <FormError message={error} />
       <div className="btn-row">
         <button type="submit" className="btn btn-primary" disabled={busy}>
           {busy ? 'Saving' : 'Save'}
@@ -57,10 +60,10 @@ const AdminDetailsForm = ({ controller }: { controller: AdminFormController }) =
 
 export function AdminPanel() {
   const id = useId();
-  const controller = useAdminForm();
-  const { form, refs, dispatch, busy, error, status, confirmDelete, setConfirmDelete, setError, destroy } = controller;
+  const { form, refs, dispatch, busy, error, status, confirmDelete, setConfirmDelete, setError, destroy, save, close } =
+    useAdminForm();
   const { open } = form;
-  const { editButtonRef } = refs;
+  const { editButtonRef, titleRef, descriptionRef } = refs;
   return (
     <section className="card stack" aria-labelledby={`${id}-heading`}>
       <div className="section-head">
@@ -92,7 +95,18 @@ export function AdminPanel() {
       </div>
       <StatusAnnouncer message={status} />
 
-      {open && <AdminDetailsForm controller={controller} />}
+      {open && (
+        <AdminDetailsForm
+          form={form}
+          dispatch={dispatch}
+          busy={busy}
+          error={confirmDelete ? null : error}
+          save={save}
+          close={close}
+          titleRef={titleRef}
+          descriptionRef={descriptionRef}
+        />
+      )}
       {!open && !confirmDelete && <FormError message={error} />}
       <TopDates />
       {confirmDelete && (

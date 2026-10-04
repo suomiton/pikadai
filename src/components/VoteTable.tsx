@@ -9,7 +9,8 @@ import { VoteRow } from './VoteRow';
 interface Props {
   editingId: string | null;
   showAll: boolean;
-  editRowProps: Omit<ComponentProps<typeof VoteEditRow>, 'options' | 'isBest' | 'isMine' | 'participant'>;
+  rows: readonly Participant[];
+  editRowProps: Omit<ComponentProps<typeof VoteEditRow>, 'isMine' | 'participant'>;
   busy: boolean;
   isBest: (optionId: string) => boolean;
   tallies: Tallies;
@@ -51,16 +52,14 @@ const VoteTableHead = ({
 
 const VoteTableBody = ({
   showAll,
+  rows,
   editingId,
   editRowProps,
   busy,
   isBest,
   onEdit,
-}: Pick<Props, 'showAll' | 'editingId' | 'editRowProps' | 'busy' | 'isBest' | 'onEdit'>) => {
+}: Pick<Props, 'showAll' | 'rows' | 'editingId' | 'editRowProps' | 'busy' | 'isBest' | 'onEdit'>) => {
   const { event, me, isAdmin } = usePoll();
-  const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
-  const rows = showAll ? event.participants : mine ? [mine] : [];
-  const rowProps = { ...editRowProps, options: event.options, isBest };
   return (
     <tbody>
       {rows.map((participant) =>
@@ -68,7 +67,7 @@ const VoteTableBody = ({
           <VoteEditRow
             key={participant.id}
             participant={participant}
-            {...rowProps}
+            {...editRowProps}
             isMine={me?.id === participant.id}
           />
         ) : (
@@ -129,21 +128,9 @@ export function VoteTable({ ref, ...props }: Props) {
             ? 'One row per participant and one column per date. The last row counts the yes and if-need-be answers for each date.'
             : 'Your row, with one column per date.'}
         </caption>
-        <VoteTableHead
-          showAll={props.showAll}
-          busy={props.busy}
-          isBest={props.isBest}
-          onRemoveOption={props.onRemoveOption}
-        />
-        <VoteTableBody
-          showAll={props.showAll}
-          editingId={props.editingId}
-          editRowProps={props.editRowProps}
-          busy={props.busy}
-          isBest={props.isBest}
-          onEdit={props.onEdit}
-        />
-        {props.showAll && <VoteTableFoot tallies={props.tallies} isBest={props.isBest} />}
+        <VoteTableHead {...props} />
+        <VoteTableBody {...props} />
+        {props.showAll && <VoteTableFoot {...props} />}
       </table>
     </div>
   );

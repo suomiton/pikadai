@@ -18,9 +18,8 @@ export function Comments() {
     event,
     me,
     body,
-    setBody,
+    onBodyChange,
     bodyError,
-    setBodyError,
     posted,
     status,
     busy,
@@ -62,10 +61,7 @@ export function Comments() {
             ref={textareaRef}
             label="Add a comment"
             value={body}
-            onChange={(value) => {
-              setBody(value);
-              setBodyError(undefined);
-            }}
+            onChange={onBodyChange}
             error={bodyError}
             hint={
               <span className="field-counter">

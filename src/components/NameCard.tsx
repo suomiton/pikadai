@@ -70,8 +70,9 @@ interface JoinFormProps {
 }
 
 const JoinForm = ({ id, onCancel }: JoinFormProps) => {
-  const { name, setName, nameError, setNameError, token, setToken, busy, error, turnstileRef, inputRef, submit } =
-    useJoinForm(onCancel);
+  const { name, onNameChange, nameError, token, setToken, busy, error, turnstileRef, inputRef, submit } = useJoinForm(
+    onCancel !== undefined,
+  );
   return (
     <form className="stack" onSubmit={submit} noValidate aria-label="Join the poll">
       <TextField
@@ -79,10 +80,7 @@ const JoinForm = ({ id, onCancel }: JoinFormProps) => {
         ref={inputRef}
         label="Your name"
         value={name}
-        onChange={(value) => {
-          setName(value);
-          setNameError(undefined);
-        }}
+        onChange={onNameChange}
         error={nameError}
         hint="Shown with your answers and comments. After joining, save your private link to return on another device."
         maxLength={LIMITS.nameMax}
@@ -114,21 +112,8 @@ interface RenameProps {
 }
 
 const RenameForm = ({ id, participantId, name, auth }: RenameProps) => {
-  const {
-    open,
-    draft,
-    setDraft,
-    draftError,
-    setDraftError,
-    status,
-    busy,
-    error,
-    changeButtonRef,
-    inputRef,
-    start,
-    close,
-    save,
-  } = useRenameForm({ participantId, name, auth });
+  const { open, draft, onDraftChange, draftError, status, busy, error, changeButtonRef, inputRef, start, close, save } =
+    useRenameForm({ participantId, name, auth });
   return (
     <div className="stack">
       <StatusAnnouncer message={status} />
@@ -139,10 +124,7 @@ const RenameForm = ({ id, participantId, name, auth }: RenameProps) => {
             ref={inputRef}
             label="New name"
             value={draft}
-            onChange={(value) => {
-              setDraft(value);
-              setDraftError(undefined);
-            }}
+            onChange={onDraftChange}
             error={draftError}
             maxLength={LIMITS.nameMax}
             required

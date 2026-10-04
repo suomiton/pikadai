@@ -4,23 +4,31 @@ import { api } from '../lib/api';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { useAsyncAction } from './useAsyncAction';
 
-// Fit the textarea to its text, and repeat when wrapping changes with its width.
+const fitTextarea = (el: HTMLTextAreaElement) => {
+  el.style.height = 'auto';
+  // scrollHeight excludes the border; the field uses border-box sizing.
+  const border = el.offsetHeight - el.clientHeight;
+  el.style.height = `${el.scrollHeight + border}px`;
+};
+
+// Schedule width-driven resizing outside the observer's delivery cycle.
 const observeTextareaSize = (el: HTMLTextAreaElement) => {
-  const fit = () => {
-    el.style.height = 'auto';
-    // scrollHeight excludes the border; the field uses border-box sizing.
-    const border = el.offsetHeight - el.clientHeight;
-    el.style.height = `${el.scrollHeight + border}px`;
-  };
-  fit();
   let width = el.clientWidth;
+  let frame: number | undefined;
   const observer = new ResizeObserver(() => {
     if (el.clientWidth === width) return;
     width = el.clientWidth;
-    fit();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      fitTextarea(el);
+    });
   });
   observer.observe(el);
-  return () => observer.disconnect();
+  return () => {
+    observer.disconnect();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+  };
 };
 
 /** Owns comment submission, textarea sizing and focus after posting. */
@@ -40,12 +48,22 @@ export function useComments() {
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (el) return observeTextareaSize(el);
+  }, [canComment]);
+
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (el) fitTextarea(el);
   }, [body, canComment]);
 
   // The form unmounts once the comment is posted; focus moves to the note that took its place.
   useEffect(() => {
     if (posted && !busy) postedNoteRef.current?.focus();
   }, [posted, busy]);
+
+  const onBodyChange = (value: string) => {
+    setBody(value);
+    setBodyError(undefined);
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -69,9 +87,8 @@ export function useComments() {
     event,
     me,
     body,
-    setBody,
+    onBodyChange,
     bodyError,
-    setBodyError,
     posted,
     status,
     busy,

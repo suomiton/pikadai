@@ -8,39 +8,38 @@ import { SuggestDate } from './SuggestDate';
 import { VoteRemovalDialog } from './VoteRemovalDialog';
 import { VoteTable } from './VoteTable';
 
-type VoteGridController = ReturnType<typeof useVoteGrid>;
-
-const VoteEditorPanel = ({ grid, errorId }: { grid: VoteGridController; errorId: string }) => {
-  const { action, saving, removal, cancel, errorHost } = grid;
-  const { editingParticipant } = saving;
-  if (!editingParticipant) return null;
-  return (
-    <EditPanel
-      busy={action.busy}
-      error={errorHost === 'panel' ? action.error : null}
-      errorId={errorId}
-      onSave={saving.save}
-      onCancel={cancel}
-      onRemove={() => removal.requestRemoval({ kind: 'participant', participant: editingParticipant })}
-    />
-  );
-};
-
 /** The availability section composes the table, editing controls and removal confirmation. */
 export function VoteGrid({ showAll }: { showAll: boolean }) {
   const id = useId();
-  const { me } = usePoll();
+  const { event, me } = usePoll();
   const grid = useVoteGrid(showAll);
-  const { editor, action, focus, saving, removal, status, tallies, isBest, beginEdit, toggle } = grid;
+  const {
+    editor,
+    action,
+    focus,
+    saving,
+    removal,
+    status,
+    tallies,
+    isBest,
+    beginEdit,
+    toggle,
+    rows,
+    cancel,
+    errorHost,
+  } = grid;
+  const { editingParticipant, save, nameEditable } = saving;
   const { editingId, name, draftVotes } = editor.state;
   const { busy, error } = action;
   const { pendingRemoval, requestRemoval, confirmRemoval, cancelRemoval } = removal;
   const { sectionRef, tableRegionRef, nameRef } = focus;
   const errorId = `${id}-error`;
   const editRowProps = {
+    options: event.options,
+    isBest,
     votes: draftVotes,
     onToggle: toggle,
-    nameEditable: saving.nameEditable,
+    nameEditable,
     name,
     onNameChange: editor.setName,
     nameInvalid: error === NAME_REQUIRED,
@@ -56,6 +55,7 @@ export function VoteGrid({ showAll }: { showAll: boolean }) {
       <VoteTable
         ref={tableRegionRef}
         showAll={showAll}
+        rows={rows}
         editingId={editingId}
         editRowProps={editRowProps}
         busy={busy}
@@ -69,8 +69,17 @@ export function VoteGrid({ showAll }: { showAll: boolean }) {
           <SuggestDate />
         </div>
       )}
-      <VoteEditorPanel grid={grid} errorId={errorId} />
-      {grid.errorHost === 'table' && <FormError message={error} />}
+      {editingParticipant && (
+        <EditPanel
+          busy={busy}
+          error={errorHost === 'panel' ? error : null}
+          errorId={errorId}
+          onSave={save}
+          onCancel={cancel}
+          onRemove={() => requestRemoval({ kind: 'participant', participant: editingParticipant })}
+        />
+      )}
+      {errorHost === 'table' && <FormError message={error} />}
       {pendingRemoval && (
         <VoteRemovalDialog
           removal={pendingRemoval}

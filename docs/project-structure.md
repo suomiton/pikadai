@@ -140,6 +140,7 @@ pikadai/
 │   ├── poll.spec.ts           Create, answer, suggest, organise, delete, blocked storage, changes underneath, dead ends
 │   ├── dialog.spec.ts         Confirmation keyboard behavior, cancellation, errors and reflow
 │   ├── participantLink.spec.ts  Identity recovery, navigation and private-link permissions
+│   ├── reviewRegressions.spec.ts  Removed rows, save announcements and focus after refresh
 │   └── preview.spec.ts        Against the production build: SPA fallback, security headers, Turnstile under the CSP
 │
 └── docs/                      You are here
@@ -224,8 +225,9 @@ limits and D1.
   kebab-case with `is-*` state modifiers.
 - **Formatting** is Prettier (`.prettierrc`: single quotes, trailing commas, 120 columns). `npm run format`
   rewrites the tree and `npm run format:check` is what CI runs.
-- **Functions.** Local helpers and handlers use arrow functions. Exported functions and React components
-  may use declarations. ESLint caps production functions at 100 lines, excluding blank lines and comments;
+- **Functions.** Module-local functions, including React components, use arrows. Exported functions and
+  components may use declarations. Generators are exempt because they have no arrow form.
+  ESLint caps production functions at 100 lines, excluding blank lines and comments;
   split components by UI responsibility and request handlers by validation, persistence and completion.
   Keep effects focused on one synchronisation task, with helpers or hooks for longer workflows.
 - **State.** What the poll page's sections share, the loaded poll, the viewer's tokens and the load status,

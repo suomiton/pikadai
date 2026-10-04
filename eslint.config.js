@@ -33,11 +33,11 @@ export default defineConfig([
         'error',
         {
           selector:
-            'FunctionDeclaration:not(ExportNamedDeclaration > FunctionDeclaration):not(ExportDefaultDeclaration > FunctionDeclaration)',
+            'FunctionDeclaration:not([generator=true]):not(ExportNamedDeclaration > FunctionDeclaration):not(ExportDefaultDeclaration > FunctionDeclaration)',
           message: 'Use an arrow function for local helpers and handlers.',
         },
         {
-          selector: 'VariableDeclarator > FunctionExpression',
+          selector: 'VariableDeclarator > FunctionExpression:not([generator=true])',
           message: 'Use an arrow function for local helpers and handlers.',
         },
       ],

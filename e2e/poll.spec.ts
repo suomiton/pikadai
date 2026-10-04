@@ -183,6 +183,9 @@ test.describe('answering a poll', () => {
     await answerDate(page, 0, 3); // no
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('row', { name: /Ada/ })).toBeVisible();
+    await expect(
+      page.locator('.vote-section').getByRole('status').filter({ hasText: 'Your answers were saved.' }),
+    ).toHaveText('Your answers were saved. The table now shows what everyone else answered.');
     await expect(page.locator('tfoot td.tally').nth(0)).toHaveText(/1\s*\/\s*0/);
   });
 
@@ -214,6 +217,10 @@ test.describe('answering a poll', () => {
     request,
     clientIp,
   }) => {
+    const resizeErrors: string[] = [];
+    page.on('pageerror', (error) => {
+      if (error.message.includes('ResizeObserver')) resizeErrors.push(error.message);
+    });
     const poll = await createPollViaApi(request, clientIp);
     await page.goto(poll.participantUrl);
     await expect(page.getByRole('heading', { name: 'Comments' })).toHaveCount(0);
@@ -286,6 +293,7 @@ test.describe('answering a poll', () => {
     await expect(seen).toContainText('Ada');
     await expect(seen.getByText('you')).toHaveCount(0);
     await expect(other.getByLabel('Add a comment')).toBeVisible();
+    expect(resizeErrors).toEqual([]);
   });
 
   test('a participant can suggest another date', async ({ page, request, clientIp }) => {

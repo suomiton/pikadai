@@ -54,11 +54,24 @@ const CreateDateField = ({ id, selected, dates, error, onToggle, ref }: DateFiel
   </div>
 );
 
-const CreatePollForm = ({ controller }: { controller: CreateFormController }) => {
+type CreatePollFormProps = Pick<CreateFormController, 'dates' | 'dispatch' | 'handleSubmit' | 'toggleDate'> &
+  CreateFormController['refs'] & {
+    form: Omit<CreateFormController['form'], 'progress'>;
+  };
+
+const CreatePollForm = ({
+  form,
+  dates,
+  dispatch,
+  handleSubmit,
+  toggleDate,
+  titleRef,
+  descriptionRef,
+  datesRef,
+  turnstileRef,
+}: CreatePollFormProps) => {
   const id = useId();
-  const { form, dates, dispatch, handleSubmit, toggleDate, refs } = controller;
   const { title, description, allowSuggestions, turnstileToken, fieldErrors } = form;
-  const { titleRef, descriptionRef, datesRef, turnstileRef } = refs;
   return (
     <form className="card stack create-form" onSubmit={handleSubmit} noValidate>
       <TextField
@@ -154,8 +167,8 @@ const CreateProgressDialog = ({ progress, onDismiss, returnFocusRef }: ProgressD
 );
 
 export function CreatePage() {
-  const controller = useCreateForm();
-  const { form, refs, dispatch } = controller;
+  const { form, refs, dispatch, dates, handleSubmit, toggleDate } = useCreateForm();
+  const { titleRef, descriptionRef, datesRef, turnstileRef } = refs;
   return (
     <>
       <section className="hero">
@@ -165,12 +178,22 @@ export function CreatePage() {
           poll deletes itself after it expires.
         </p>
       </section>
-      <CreatePollForm controller={controller} />
+      <CreatePollForm
+        form={form}
+        dates={dates}
+        dispatch={dispatch}
+        handleSubmit={handleSubmit}
+        toggleDate={toggleDate}
+        titleRef={titleRef}
+        descriptionRef={descriptionRef}
+        datesRef={datesRef}
+        turnstileRef={turnstileRef}
+      />
       {form.progress && (
         <CreateProgressDialog
           progress={form.progress}
           onDismiss={() => dispatch({ type: 'progressCleared' })}
-          returnFocusRef={refs.titleRef}
+          returnFocusRef={titleRef}
         />
       )}
     </>

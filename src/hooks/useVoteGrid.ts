@@ -12,6 +12,8 @@ import { useVoteRemoval } from './useVoteRemoval';
 
 export const NAME_REQUIRED = 'Please enter a name.';
 
+type ErrorHost = 'dialog' | 'panel' | 'table';
+
 const useVoteSaving = (
   editor: VoteEditor,
   action: AsyncAction,
@@ -56,17 +58,23 @@ const useVoteSaving = (
   const save = async () => {
     const input = validate();
     if (!input) return;
-    setStatus('Saving your answers.');
+    const isMine = input.participant.id === me?.id;
+    const name = input.name ?? input.participant.name;
+    let tableRevealed = false;
+    setStatus(isMine ? 'Saving your answers.' : `Saving ${name}'s answers.`);
     const saved = await run(async () => {
       await persist(input.participant, input.name);
       editor.close();
-      await refresh(event.id);
+      const refreshed = await refresh(event.id);
+      tableRevealed = refreshed && !showAll && hasAnswered({ votes: draftVotes });
     });
     if (saved) {
       setStatus(
-        showAll || input.participant.id !== me?.id
-          ? 'Your answers were saved.'
-          : 'Your answers were saved. The table now shows what everyone else answered.',
+        !isMine
+          ? `${name}'s answers were saved.`
+          : tableRevealed
+            ? 'Your answers were saved. The table now shows what everyone else answered.'
+            : 'Your answers were saved.',
       );
       focus.requestFocus('return');
     } else {
@@ -90,7 +98,7 @@ export function useVoteGrid(showAll: boolean) {
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
 
   const optionIds = useMemo(() => event.options.map((o) => o.id), [event.options]);
-  const { syncOptions, startEdit } = editor;
+  const { syncOptions, startEdit, close } = editor;
   useEffect(() => {
     syncOptions(optionIds);
   }, [optionIds, syncOptions]);
@@ -98,6 +106,15 @@ export function useVoteGrid(showAll: boolean) {
   // Open an unanswered row once per page load, including immediately after joining.
   const openedFor = useRef<string | null>(null);
   const { requestFocus } = focus;
+  const { editingParticipant } = saving;
+  const { setError } = action;
+  useEffect(() => {
+    if (editingId === null || editingParticipant) return;
+    close();
+    setError(null);
+    requestFocus('return');
+  }, [editingId, editingParticipant, close, setError, requestFocus]);
+
   useEffect(() => {
     if (!mine || hasAnswered(mine) || editingId !== null || openedFor.current === mine.id) return;
     openedFor.current = mine.id;
@@ -122,6 +139,8 @@ export function useVoteGrid(showAll: boolean) {
     const next = editor.toggle(option);
     setStatus(`${formatDateLong(option.date)}: ${LABEL[next ?? 'none']}`);
   };
+  const rows = showAll ? event.participants : mine ? [mine] : [];
+  const errorHost: ErrorHost = removal.pendingRemoval ? 'dialog' : editingId !== null ? 'panel' : 'table';
 
   return {
     editor,
@@ -135,8 +154,9 @@ export function useVoteGrid(showAll: boolean) {
     beginEdit,
     cancel,
     toggle,
+    rows,
     isFull: event.participants.length >= LIMITS.participantsMax,
     canSuggest: isAdmin || event.allowSuggestions,
-    errorHost: removal.pendingRemoval ? 'dialog' : editingId !== null ? 'panel' : 'table',
+    errorHost,
   };
 }

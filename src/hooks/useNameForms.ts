@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { useAsyncAction } from './useAsyncAction';
 
-export function useJoinForm(onCancel?: () => void) {
+export function useJoinForm(openedOnDemand = false) {
   const { event, adminToken } = usePoll();
   const { refresh, setIdentity } = usePollActions();
   const [name, setName] = useState('');
@@ -17,8 +17,13 @@ export function useJoinForm(onCancel?: () => void) {
 
   // Opened on demand: typing is the next step, so focus starts in the field.
   useEffect(() => {
-    if (onCancel) inputRef.current?.focus();
-  }, [onCancel]);
+    if (openedOnDemand) inputRef.current?.focus();
+  }, [openedOnDemand]);
+
+  const onNameChange = (value: string) => {
+    setName(value);
+    setNameError(undefined);
+  };
 
   const register = async (joinedName: string, turnstileToken: string) => {
     // The admin token, when this browser has one, marks the row as the organiser's.
@@ -47,7 +52,7 @@ export function useJoinForm(onCancel?: () => void) {
     }
   };
 
-  return { name, setName, nameError, setNameError, token, setToken, busy, error, turnstileRef, inputRef, submit };
+  return { name, onNameChange, nameError, token, setToken, busy, error, turnstileRef, inputRef, submit };
 }
 
 export interface RenameFormInput {
@@ -89,6 +94,11 @@ export function useRenameForm({ participantId, name, auth }: RenameFormInput) {
     setError(null);
   };
 
+  const onDraftChange = (value: string) => {
+    setDraft(value);
+    setDraftError(undefined);
+  };
+
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;
@@ -116,9 +126,8 @@ export function useRenameForm({ participantId, name, auth }: RenameFormInput) {
   return {
     open,
     draft,
-    setDraft,
+    onDraftChange,
     draftError,
-    setDraftError,
     status,
     busy,
     error,

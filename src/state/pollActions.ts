@@ -158,9 +158,7 @@ const rememberCredentials = (
       message: 'Your saved name changed while this link was opening. Try again to confirm it.',
     };
   }
-  if (effective) {
-    if (!saved || saved.id === effective.id) storage.setParticipant(id, effective);
-  }
+  if (effective) storage.setParticipant(id, effective);
   const effectiveAdmin = event.viewer.isAdmin ? adminToken : null;
   if (effectiveAdmin) storage.setAdminToken(id, effectiveAdmin);
   else if (adminToken && storage.getAdminToken(id) === adminToken) storage.setAdminToken(id, null);

@@ -57,7 +57,7 @@ export function useCreateForm() {
       allowSuggestions: form.allowSuggestions,
     });
     if (!parsed.success) {
-      const errors = fieldErrorsFromIssues(parsed.error.issues);
+      const errors = fieldErrorsFromIssues(parsed.error.issues, ['title', 'description', 'dates']);
       focusAfterErrors.current = firstInvalidField(errors);
       dispatch({ type: 'errors', errors });
       return null;
