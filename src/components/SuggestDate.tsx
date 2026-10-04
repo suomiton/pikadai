@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '@shared/limits';
-import { useAsyncAction } from '../hooks/useAsyncAction';
+import { usePollAction } from '../hooks/usePollAction';
 import { api } from '../lib/api';
 import { formatDate, formatDateLong, todayIso } from '../lib/dates';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
@@ -20,7 +20,7 @@ export function SuggestDate() {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const [status, setStatus] = useState('');
-  const { busy, error, setError, run } = useAsyncAction();
+  const { busy, error, setError, run } = usePollAction();
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
 

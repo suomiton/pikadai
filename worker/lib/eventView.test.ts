@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LIMITS } from '@shared/limits';
 import type { EventRow, EventRows } from '../db/queries';
 import { toEventView } from './eventView';
 
@@ -26,6 +27,7 @@ const rows: EventRows = {
       name: 'Ada',
       edit_token_hash: 'h1',
       is_organiser: 0,
+      is_disabled: 0,
       created_at: 1_100,
       updated_at: 1_100,
     },
@@ -35,6 +37,7 @@ const rows: EventRows = {
       name: 'Grace',
       edit_token_hash: 'h2',
       is_organiser: 1,
+      is_disabled: 0,
       created_at: 1_200,
       updated_at: 1_200,
     },
@@ -52,13 +55,17 @@ const rows: EventRows = {
       created_at: 1_300,
       name: 'Grace',
       is_organiser: 1,
+      is_disabled: 0,
     },
   ],
 };
 
+const guest = { isAdmin: false, participantId: null };
+const organiser = { isAdmin: true, participantId: null };
+
 describe('toEventView', () => {
   it('maps the event columns, turning the integer flag into a boolean', () => {
-    const view = toEventView(event, rows, false);
+    const view = toEventView(event, rows, guest);
     expect(view).toMatchObject({
       id: 'ev1',
       title: 'Dinner',
@@ -67,18 +74,18 @@ describe('toEventView', () => {
       createdAt: 1_000,
       expiresAt: 3_000,
     });
-    expect(toEventView({ ...event, allow_suggestions: 1 }, rows, false).allowSuggestions).toBe(true);
+    expect(toEventView({ ...event, allow_suggestions: 1 }, rows, guest).allowSuggestions).toBe(true);
   });
 
   it('maps options with who suggested them', () => {
-    expect(toEventView(event, rows, false).options).toEqual([
+    expect(toEventView(event, rows, guest).options).toEqual([
       { id: 'o1', date: '2026-10-15', suggestedBy: null },
       { id: 'o2', date: '2026-10-16', suggestedBy: 'p1' },
     ]);
   });
 
   it('groups votes by participant and gives a participant without votes an empty map', () => {
-    const [ada, grace] = toEventView(event, rows, false).participants;
+    const [ada, grace] = toEventView(event, rows, guest).participants;
     expect(ada).toEqual({
       id: 'p1',
       name: 'Ada',
@@ -86,20 +93,73 @@ describe('toEventView', () => {
       votes: { o1: 'yes', o2: 'maybe' },
       createdAt: 1_100,
       isOrganiser: false,
+      isDisabled: false,
     });
     expect(grace.votes).toEqual({});
     expect(grace.isOrganiser).toBe(true);
   });
 
   it('maps comments with the name the join supplied', () => {
-    expect(toEventView(event, rows, false).comments).toEqual([
-      { id: 'c1', participantId: 'p2', name: 'Grace', isOrganiser: true, body: 'I can host.', createdAt: 1_300 },
+    expect(toEventView(event, rows, guest).comments).toEqual([
+      {
+        id: 'c1',
+        participantId: 'p2',
+        name: 'Grace',
+        isOrganiser: true,
+        isDisabled: false,
+        body: 'I can host.',
+        createdAt: 1_300,
+      },
     ]);
-    expect(toEventView(event, { ...rows, comments: [] }, false).comments).toEqual([]);
+    expect(toEventView(event, { ...rows, comments: [] }, guest).comments).toEqual([]);
   });
 
   it('reports the viewer role it is given', () => {
-    expect(toEventView(event, rows, true).viewer).toEqual({ isAdmin: true });
-    expect(toEventView(event, rows, false).viewer).toEqual({ isAdmin: false });
+    expect(toEventView(event, rows, organiser).viewer).toEqual({ isAdmin: true });
+    expect(toEventView(event, rows, guest).viewer).toEqual({ isAdmin: false });
+  });
+
+  describe('a disabled participant', () => {
+    const disabledAda: EventRows = {
+      ...rows,
+      participants: rows.participants.map((p) => (p.id === 'p1' ? { ...p, is_disabled: 1 } : p)),
+      comments: [{ ...rows.comments[0], id: 'c2', participant_id: 'p1', name: 'Ada', is_organiser: 0, is_disabled: 1 }],
+    };
+
+    it('is left out, with their answers, for everyone but the organiser and themselves', () => {
+      const view = toEventView(event, disabledAda, guest);
+      expect(view.participants.map((p) => p.id)).toEqual(['p2']);
+      expect(toEventView(event, disabledAda, { isAdmin: false, participantId: 'p2' }).participants).toHaveLength(1);
+    });
+
+    it('is shown to the organiser, marked, with their answers', () => {
+      const [ada] = toEventView(event, disabledAda, organiser).participants;
+      expect(ada).toMatchObject({ id: 'p1', isDisabled: true, votes: { o1: 'yes', o2: 'maybe' } });
+    });
+
+    it('still sees their own row, marked', () => {
+      const view = toEventView(event, disabledAda, { isAdmin: false, participantId: 'p1' });
+      expect(view.participants.map((p) => [p.id, p.isDisabled])).toEqual([
+        ['p1', true],
+        ['p2', false],
+      ]);
+    });
+
+    it('still counts toward a full poll, though the viewer does not receive the row', () => {
+      const crowd = (n: number) =>
+        Array.from({ length: n }, (_, i) => ({ ...rows.participants[0], id: `p${i}`, is_disabled: i === 0 ? 1 : 0 }));
+      const full = toEventView(event, { ...rows, participants: crowd(LIMITS.participantsMax) }, guest);
+      expect(full.participants).toHaveLength(LIMITS.participantsMax - 1);
+      expect(full.isFull).toBe(true);
+      expect(toEventView(event, { ...rows, participants: crowd(LIMITS.participantsMax - 1) }, guest).isFull).toBe(
+        false,
+      );
+    });
+
+    it('keeps their comments visible to everyone, marked', () => {
+      expect(toEventView(event, disabledAda, guest).comments).toEqual([
+        expect.objectContaining({ id: 'c2', name: 'Ada', isDisabled: true }),
+      ]);
+    });
   });
 });

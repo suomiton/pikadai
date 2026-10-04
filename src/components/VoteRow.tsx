@@ -1,4 +1,5 @@
 import type { EventOption, Participant } from '@shared/types';
+import { ParticipantTags } from './ParticipantTags';
 import { VoteCells } from './VoteCells';
 
 interface Props {
@@ -7,7 +8,7 @@ interface Props {
   isBest: (optionId: string) => boolean;
   /** This browser's own answer; shows the "you" tag. */
   isMine: boolean;
-  /** The viewer may edit this row (their own, or any row for the organiser) and no editor is open. */
+  /** The viewer may edit this row (their own unless disabled, or any row for the organiser) and no editor is open. */
   canEdit: boolean;
   disabled: boolean;
   onEdit: (participant: Participant) => void;
@@ -16,11 +17,10 @@ interface Props {
 /** A saved participant: name with its tags, read-only answer glyphs and the Edit button. */
 export function VoteRow({ participant: p, options, isBest, isMine, canEdit, disabled, onEdit }: Props) {
   return (
-    <tr className={isMine ? 'is-me' : undefined}>
+    <tr className={[isMine && 'is-me', p.isDisabled && 'is-disabled'].filter(Boolean).join(' ') || undefined}>
       <th scope="row" className="name-col">
         <span className="participant-name">{p.name}</span>
-        {isMine && <span className="tag">you</span>}
-        {p.isOrganiser && <span className="tag tag-accent">organiser</span>}
+        <ParticipantTags isMine={isMine} isOrganiser={p.isOrganiser} isDisabled={p.isDisabled} />
       </th>
       <VoteCells options={options} votes={p.votes} isBest={isBest} />
       <td className="actions-col">

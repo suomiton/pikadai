@@ -41,7 +41,10 @@ erDiagram
         text id PK
         text event_id FK
         text name
+        text name_key
         text edit_token_hash
+        int  is_organiser
+        int  is_disabled
         int  created_at
         int  updated_at
     }
@@ -110,21 +113,31 @@ Constraints: `UNIQUE (event_id, date)`, so a date appears at most once per poll.
 
 One row per answer in a poll.
 
-| Column            | Type                                  | Notes                                                                                                                         |
-| ----------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                                                         |
-| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                                                               |
-| `name`            | TEXT                                  | 1–32 characters, trimmed; unique per poll ignoring case (unique index with `COLLATE NOCASE`); `nickname` until migration 0005 |
-| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                                                       |
-| `is_organiser`    | INTEGER                               | 1 when the join request carried the admin token (migration 0004); shown as an "organiser" pill                                |
-| `created_at`      | INTEGER                               |                                                                                                                               |
-| `updated_at`      | INTEGER                               |                                                                                                                               |
+| Column            | Type                                  | Notes                                                                                                |
+| ----------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `id`              | TEXT PK                               | sent back to the browser together with the edit token                                                |
+| `event_id`        | TEXT FK → events, `ON DELETE CASCADE` |                                                                                                      |
+| `name`            | TEXT                                  | 1–32 characters, trimmed; shown as typed; `nickname` until migration 0005                            |
+| `name_key`        | TEXT, nullable                        | the name as `nameKey` in `worker/lib/names.ts` folds it (migration 0006); unique per poll, see below |
+| `edit_token_hash` | TEXT                                  | SHA-256 of the participant's edit token                                                              |
+| `is_organiser`    | INTEGER                               | 1 when the join request carried the admin token (migration 0004); shown as an "organiser" pill       |
+| `is_disabled`     | INTEGER                               | 1 while the organiser has disabled the participant (migration 0007): hidden from others, not counted |
+| `created_at`      | INTEGER                               |                                                                                                      |
+| `updated_at`      | INTEGER                               |                                                                                                      |
 
-Indexes: `idx_participants_event_id (event_id)` and the unique `idx_participants_event_name (event_id,
-name COLLATE NOCASE)`, from migration 0002 and renamed with the column in 0005. SQLite accepts a collation per indexed column, so the index
-enforces case-insensitive uniqueness without changing the column. The Worker still runs a pre-check so the
-normal path returns a friendly `name_taken` before any write; the index catches the race where two
-requests pass the pre-check together, and the Worker maps that UNIQUE violation to the same error.
+Indexes: `idx_participants_event_id (event_id)` and two unique ones. Names are compared by their key: the
+name normalised to NFKC, lowercased (so Ä and ä match, which SQLite's `NOCASE` and `lower()` cannot do),
+stripped of invisible format characters and with every run of whitespace collapsed to one space
+(`nameKey` in `worker/lib/names.ts`).
+
+- `nameTaken` is the rule. It derives the key of every name in the poll and returns a friendly `name_taken`
+  before any write. It does not read `name_key`, because rows that existed before migration 0006 got
+  `lower(name)`, the closest key SQL can compute, and rows an older Worker inserted have none.
+- `idx_participants_event_name_key (event_id, name_key)`, from 0006, closes the race where two requests
+  pass the pre-check together; the Worker maps that UNIQUE violation to the same error.
+- `idx_participants_event_name (event_id, name COLLATE NOCASE)`, from 0002 and renamed in 0005, stays as
+  the backstop for rows without a key. Names equal ignoring ASCII case always share a key, so it never
+  refuses a name the rule allows.
 
 ### `votes`
 
@@ -162,7 +175,7 @@ removal by the organiser) or with the poll.
 **Enforced by SQLite**
 
 - Foreign keys with cascades, as listed above. D1 enables foreign-key enforcement by default.
-- One date per poll; one name per poll ignoring case; one vote per participant per option; valid
+- One date per poll; one name key per poll; one vote per participant per option; valid
   `answer` values; unique ticket nonce.
 
 **Enforced by the Worker** (`worker/routes/*.ts`, `shared/schemas.ts`)
@@ -220,8 +233,8 @@ All SQL lives in `worker/db/queries.ts`. The main ones:
 | `fetchEventRows` + `toEventView` | GET                           | four selects (options, participants, votes and comments joined to participants), then a pure mapping in `worker/lib/eventView.ts`            |
 | `insertEventWithOptions`         | POST events                   | batch: 1 event insert + N option inserts                                                                                                     |
 | `insertParticipantWithVotes`     | POST participants             | batch: 1 insert + N vote inserts                                                                                                             |
-| `updateParticipant`              | PUT participant               | batch: name update, and when votes are sent, delete votes and insert the new set                                                             |
-| `nameTaken`                      | POST/PUT participant          | `… WHERE event_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)`                                                                |
+| `updateParticipant`              | PUT participant               | batch: `name` and `name_key` only on a real rename, and when votes are sent, delete votes and insert the new set                             |
+| `nameTaken`                      | POST/PUT participant          | `SELECT id, name … WHERE event_id = ?`, then `nameKey` compared in the Worker                                                                |
 | `insertOption` / `deleteOption`  | options routes                | batch: insert or delete, plus the `expires_at` recalculation from the rows in the same transaction                                           |
 | `insertComment`                  | POST comments                 | one `INSERT … SELECT … WHERE …` carrying the one-per-interval rule and the per-poll cap; `countComments` names a refusal's reason afterwards |
 | `deleteExpiredEvents`            | cron                          | the purge above                                                                                                                              |
@@ -266,6 +279,8 @@ npm run db:migrate:remote     # production, after review
 - Migration 0005 is the one exception to "additive" so far: it renames `participants.nickname` to `name`.
   The Worker before it would fail against the renamed table, so that migration and the Worker using it
   go out together, and a rollback of the Worker alone would need the column renamed back.
+- Migration 0006 is additive, but the Worker that writes `name_key` needs the column: apply it before
+  deploying that Worker.
 - Local and remote migration state are independent. After pulling a branch with new migrations, run the
   local apply again.
 - There is no "down" migration. For an emergency revert of production data use D1 Time Travel.

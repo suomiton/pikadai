@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EventRow, ParticipantRow } from '../db/queries';
-import { bearerToken, isAdmin, isParticipantOwner, requireAdmin } from './auth';
+import { assertNotDisabled, bearerToken, isAdmin, isParticipantOwner, provenParticipant, requireAdmin } from './auth';
 import { sha256Hex } from './crypto';
 import { HttpError } from './http';
 
@@ -26,6 +26,7 @@ const fixtures = async (): Promise<{ event: EventRow; participant: ParticipantRo
       name: 'Ada',
       edit_token_hash: await sha256Hex(EDIT_TOKEN),
       is_organiser: 0,
+      is_disabled: 0,
       created_at: 0,
       updated_at: 0,
     },
@@ -70,5 +71,28 @@ describe('isParticipantOwner', () => {
     expect(await isParticipantOwner(EDIT_TOKEN, participant)).toBe(true);
     expect(await isParticipantOwner(ADMIN_TOKEN, participant)).toBe(false);
     expect(await isParticipantOwner(null, participant)).toBe(false);
+  });
+});
+
+describe('provenParticipant', () => {
+  it('returns the named row only when the token opens it', async () => {
+    const { participant } = await fixtures();
+    const other = { ...participant, id: 'p2', edit_token_hash: await sha256Hex('other-token') };
+    const rows = [participant, other];
+    expect(await provenParticipant(EDIT_TOKEN, 'p1', rows)).toBe(participant);
+    expect(await provenParticipant(EDIT_TOKEN, 'p2', rows)).toBeNull();
+    expect(await provenParticipant(EDIT_TOKEN, 'missing', rows)).toBeNull();
+    expect(await provenParticipant(EDIT_TOKEN, undefined, rows)).toBeNull();
+    expect(await provenParticipant(null, 'p1', rows)).toBeNull();
+  });
+});
+
+describe('assertNotDisabled', () => {
+  it('passes an enabled participant and refuses a disabled one with participant_disabled', async () => {
+    const { participant } = await fixtures();
+    expect(() => assertNotDisabled(participant)).not.toThrow();
+    expect(() => assertNotDisabled({ ...participant, is_disabled: 1 })).toThrow(
+      expect.objectContaining({ status: 403, code: 'participant_disabled' }),
+    );
   });
 });

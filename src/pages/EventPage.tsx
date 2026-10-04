@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
-import { LIMITS } from '@shared/limits';
 import type { EventView } from '@shared/types';
 import { AdminPanel } from '../components/AdminPanel';
 import { Comments } from '../components/Comments';
 import { NameCard } from '../components/NameCard';
+import { Results } from '../components/Results';
 import { ShareBox } from '../components/ShareBox';
 import { VoteGrid } from '../components/VoteGrid';
 import { formatTimestamp } from '../lib/dates';
@@ -24,6 +24,25 @@ const EventHeader = ({ event }: { event: EventView }) => (
     </p>
   </header>
 );
+
+/** Stands in for the Name tile while the visitor looks at the results without joining. */
+const ResultsOnlyBar = ({ onJoin }: { onJoin: () => void }) => {
+  // It appears because the button that was focused went away with the Name tile; take focus in its place.
+  const textRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    textRef.current?.focus();
+  }, []);
+  return (
+    <div className="notice section-head">
+      <p ref={textRef} tabIndex={-1}>
+        You are looking at the results without joining.
+      </p>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={onJoin}>
+        Join instead
+      </button>
+    </div>
+  );
+};
 
 const PollUnavailable = ({ error, onRetry }: { error: LoadError; onRetry: () => void }) => (
   <section className="card stack">
@@ -45,8 +64,10 @@ const PollUnavailable = ({ error, onRetry }: { error: LoadError; onRetry: () => 
 export function EventPage() {
   const { id = '' } = useParams();
   const { hash, key } = useLocation();
-  const { openPoll, refresh } = usePollActions();
+  const { openPoll, refresh, setResultsOnly } = usePollActions();
   const { poll } = useAppState();
+  // The poll whose visitor came back from the results to join, so its name field takes focus.
+  const [focusNameIn, setFocusNameIn] = useState<string | null>(null);
 
   // Also repeat for explicit navigation to another identity in the same poll. Replacing the address
   // bar after capturing a private link does not navigate or reset a draft. The router key distinguishes
@@ -74,19 +95,26 @@ export function EventPage() {
     return <PollUnavailable error={error} onRetry={() => void refresh(id)} />;
   }
 
-  const { event, adminToken, me, error, identityNotice, identityError } = current;
+  const { event, adminToken, me, error, identityNotice, identityError, resultsOnly } = current;
   const isAdmin = event.viewer.isAdmin;
 
   /*
    * The page unfolds in steps for someone answering. First only the Name tile; once they have joined,
-   * their own row and the comments; once they have answered a date, everyone's answers, the tallies
-   * and the share links. The organiser sees everything from the start, and so does a visitor who can
-   * no longer join because the poll is full.
+   * their own row and the comments; once they have answered a date, everyone's answers, the tallies,
+   * the results and the share links. The organiser sees everything from the start, and so does a visitor who can
+   * no longer join because the poll is full. A visitor who chose "Just take me to results" sees only the
+   * answers and the results, read-only, in place of the Name tile.
    */
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
-  const isFull = event.participants.length >= LIMITS.participantsMax;
+  // From the server: disabled rows count toward the limit but are not in `participants`.
+  const isFull = event.isFull;
+  const viewingResults = resultsOnly && me === null && !isAdmin;
   const showAll =
-    isAdmin || identityError !== null || (mine !== undefined && hasAnswered(mine)) || (me === null && isFull);
+    isAdmin ||
+    viewingResults ||
+    identityError !== null ||
+    (mine !== undefined && hasAnswered(mine)) ||
+    (me === null && isFull);
   const joined = me !== null;
 
   return (
@@ -117,10 +145,20 @@ export function EventPage() {
           </button>
         </div>
       )}
-      {!(me === null && isFull) && <NameCard />}
+      {viewingResults ? (
+        <ResultsOnlyBar
+          onJoin={() => {
+            setFocusNameIn(id);
+            setResultsOnly(id, false);
+          }}
+        />
+      ) : (
+        !(me === null && isFull) && <NameCard focusName={focusNameIn === id} />
+      )}
       {(joined || showAll) && <VoteGrid showAll={showAll} />}
-      {(joined || showAll) && <Comments />}
-      {showAll && <ShareBox />}
+      {showAll && <Results />}
+      {!viewingResults && (joined || showAll) && <Comments />}
+      {!viewingResults && showAll && <ShareBox />}
       {adminToken && <AdminPanel />}
     </div>
   );

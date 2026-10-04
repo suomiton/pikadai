@@ -12,6 +12,7 @@ import {
   countRows,
   createPoll,
   forbidOutboundFetch,
+  futureIso,
   getView,
   siteverifyOk,
   stubSiteverify,
@@ -121,6 +122,21 @@ describe('POST /api/events/:id/participants', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('rejects a name that differs only in non-ASCII case, Unicode spelling or spacing', async () => {
+    const poll = await createPoll();
+    await addParticipant(poll.client, poll.id, 'Äiti Öberg');
+    forbidOutboundFetch();
+    for (const name of ['äiti öberg', 'Äiti Öberg', 'Äiti   Öberg', 'Äi​ti Öberg']) {
+      const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+        name,
+        votes: {},
+        turnstileToken: DUMMY_TOKEN,
+      });
+      expect(res.status, name).toBe(409);
+      expect(res.body).toMatchObject({ code: 'name_taken' });
+    }
+  });
+
   it('lets exactly one of several simultaneous answers with the same name in', async () => {
     const poll = await createPoll();
     stubSiteverify(siteverifyOk('answer'));
@@ -136,6 +152,51 @@ describe('POST /api/events/:id/participants', () => {
     const statuses = attempts.map((r) => r.status).sort();
     expect(statuses).toEqual([201, 409, 409, 409, 409]);
     expect((await getView(poll.client, poll.id)).participants.filter((p) => p.name === 'Racer')).toHaveLength(1);
+  });
+
+  it('compares names with rows from before migration 0006, whose keys are ASCII-only or missing', async () => {
+    const poll = await createPoll();
+    const now = Date.now();
+    const legacy = (id: string, name: string, key: string | null) =>
+      env.DB.prepare(
+        'INSERT INTO participants (id, event_id, name, name_key, edit_token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).bind(`${id}-${poll.id.slice(0, 8)}`, poll.id, name, key, 'nohash', now, now);
+    // What the migration's lower() backfill gives "Äiti", and a row an older Worker inserted without a key.
+    await env.DB.batch([legacy('backfilled', 'Äiti', 'Äiti'), legacy('keyless', 'Ada', null)]);
+    forbidOutboundFetch();
+    for (const name of ['äiti', 'ADA']) {
+      const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+        name,
+        votes: {},
+        turnstileToken: DUMMY_TOKEN,
+      });
+      expect(res.status, name).toBe(409);
+      expect(res.body).toMatchObject({ code: 'name_taken' });
+    }
+  });
+
+  it('keeps the case-insensitive index as a backstop for rows without a key', async () => {
+    const poll = await createPoll();
+    const now = Date.now();
+    const insert = (id: string, name: string) =>
+      env.DB.prepare(
+        'INSERT INTO participants (id, event_id, name, edit_token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+        .bind(`${id}-${poll.id.slice(0, 8)}`, poll.id, name, 'nohash', now, now)
+        .run();
+    await insert('first', 'Ada');
+    await expect(insert('second', 'ADA')).rejects.toThrow(/UNIQUE/);
+  });
+
+  it('lets only one of two simultaneous answers in when the names differ only in non-ASCII case', async () => {
+    const poll = await createPoll();
+    stubSiteverify(siteverifyOk('answer'));
+    const attempts = await Promise.all(
+      ['Äiti', 'äiti'].map((name) =>
+        poll.client.post(`/api/events/${poll.id}/participants`, { name, votes: {}, turnstileToken: DUMMY_TOKEN }),
+      ),
+    );
+    expect(attempts.map((r) => r.status).sort()).toEqual([201, 409]);
   });
 
   it('refuses a full poll before contacting Turnstile', async () => {
@@ -255,6 +316,40 @@ describe('GET /api/events/:id/participants/:participantId', () => {
 });
 
 describe('PUT /api/events/:id/participants/:participantId', () => {
+  it('saves answers for legacy names that differ only in non-ASCII case without re-keying them', async () => {
+    // NOCASE let both in before migration 0006, which backfilled the keys "Äiti" and "äiti".
+    const poll = await createPoll();
+    const [a] = poll.view.options;
+    const now = Date.now();
+    const rows = [
+      { id: `upper-${poll.id.slice(0, 8)}`, name: 'Äiti', token: 'u'.repeat(43) },
+      { id: `lower-${poll.id.slice(0, 8)}`, name: 'äiti', token: 'l'.repeat(43) },
+    ];
+    await env.DB.batch(
+      await Promise.all(
+        rows.map(async (r) =>
+          env.DB.prepare(
+            'INSERT INTO participants (id, event_id, name, name_key, edit_token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          ).bind(r.id, poll.id, r.name, r.name, await sha256Hex(r.token), now, now),
+        ),
+      ),
+    );
+    const [upper] = rows;
+    const path = `/api/events/${poll.id}/participants/${upper.id}`;
+    const own = { Authorization: `Bearer ${upper.token}`, 'X-Participant-Id': upper.id };
+    expect((await poll.client.put(path, { votes: { [a.id]: 'yes' } }, own)).status).toBe(204);
+    // The organiser's save from the table sends the unchanged name along with the votes.
+    expect(
+      (await poll.client.put(path, { name: 'Äiti', votes: { [a.id]: 'maybe' } }, bearer(poll.adminToken))).status,
+    ).toBe(204);
+    const view = await getView(poll.client, poll.id);
+    expect(view.participants.find((p) => p.id === upper.id)?.votes).toEqual({ [a.id]: 'maybe' });
+    // A real rename onto the other spelling is still refused.
+    const renamed = await poll.client.put(path, { name: 'ÄITI' }, own);
+    expect(renamed.status).toBe(409);
+    expect(renamed.body).toMatchObject({ code: 'name_taken' });
+  });
+
   it('changes only what is sent: a name-only save keeps the votes, a votes-only save keeps the name', async () => {
     const poll = await createPoll();
     const [a, b] = poll.view.options;
@@ -361,6 +456,28 @@ describe('PUT /api/events/:id/participants/:participantId', () => {
     );
     expect(same.status).toBe(204);
   });
+
+  it('refuses a rename onto a name that differs only in non-ASCII case or spacing, but allows restyling your own', async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    await addParticipant(client(), poll.id, 'Örjan Ström');
+    const path = `/api/events/${poll.id}/participants/${ada.id}`;
+    for (const name of ['örjan ström', 'Örjan  Ström']) {
+      const res = await poll.client.put(path, { name }, asParticipant(ada));
+      expect(res.status, name).toBe(409);
+      expect(res.body).toMatchObject({ code: 'name_taken' });
+    }
+    expect((await poll.client.put(path, { name: 'Äda' }, asParticipant(ada))).status).toBe(204);
+    // The new name's key replaced the old one: a newcomer may take "Ada" now, but not "äda".
+    expect((await addParticipant(client(), poll.id, 'Ada')).id).toBeTruthy();
+    stubSiteverify(siteverifyOk('answer'));
+    const taken = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      name: 'äda',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
+    expect(taken.status).toBe(409);
+  });
 });
 
 describe('DELETE /api/events/:id/participants/:participantId', () => {
@@ -388,5 +505,103 @@ describe('DELETE /api/events/:id/participants/:participantId', () => {
     const res = await poll.client.delete(`/api/events/${poll.id}/participants/${ada.id}`, asParticipant(grace));
     expect(res.status).toBe(403);
     expect(res.body).toMatchObject({ code: 'not_owner' });
+  });
+});
+
+describe('PUT /api/events/:id/participants/:participantId/disabled', () => {
+  const disabledPath = (eventId: string, participantId: string) =>
+    `/api/events/${eventId}/participants/${participantId}/disabled`;
+
+  it('lets only the organiser disable and enable a participant', async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    const grace = await addParticipant(client(), poll.id, 'Grace');
+    const path = disabledPath(poll.id, ada.id);
+
+    for (const headers of [{}, asParticipant(ada), asParticipant(grace)]) {
+      const res = await poll.client.put(path, { disabled: true }, headers);
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({ code: 'admin_required' });
+    }
+    expect((await poll.client.put(path, { disabled: 'yes' }, bearer(poll.adminToken))).status).toBe(400);
+    expect(
+      (await poll.client.put(disabledPath(poll.id, 'nobody'), { disabled: true }, bearer(poll.adminToken))).status,
+    ).toBe(404);
+
+    expect((await poll.client.put(path, { disabled: true }, bearer(poll.adminToken))).status).toBe(204);
+    expect((await getView(poll.client, poll.id, bearer(poll.adminToken))).participants[0].isDisabled).toBe(true);
+    expect((await poll.client.put(path, { disabled: false }, bearer(poll.adminToken))).status).toBe(204);
+    expect((await getView(poll.client, poll.id, bearer(poll.adminToken))).participants[0].isDisabled).toBe(false);
+  });
+
+  it('hides a disabled participant from everyone but the organiser and themselves, until enabled again', async () => {
+    const poll = await createPoll();
+    const [a] = poll.view.options;
+    const ada = await addParticipant(poll.client, poll.id, 'Ada', { [a.id]: 'yes' });
+    const grace = await addParticipant(client(), poll.id, 'Grace', { [a.id]: 'maybe' });
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: true }, bearer(poll.adminToken));
+
+    const names = async (headers?: Record<string, string>) =>
+      (await getView(poll.client, poll.id, headers)).participants.map((p) => `${p.name}${p.isDisabled ? '!' : ''}`);
+    expect(await names()).toEqual(['Grace']);
+    expect(await names(asParticipant(grace))).toEqual(['Grace']);
+    // Ada's id with someone else's token proves nothing.
+    expect(await names({ ...asParticipant(grace), 'X-Participant-Id': ada.id })).toEqual(['Grace']);
+    expect(await names(asParticipant(ada))).toEqual(['Ada!', 'Grace']);
+    expect(await names(bearer(poll.adminToken))).toEqual(['Ada!', 'Grace']);
+
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: false }, bearer(poll.adminToken));
+    const view = await getView(poll.client, poll.id);
+    expect(view.participants.map((p) => p.name)).toEqual(['Ada', 'Grace']);
+    expect(view.participants[0].votes).toEqual({ [a.id]: 'yes' });
+  });
+
+  it("keeps a disabled participant's comments visible to everyone, marked", async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    expect((await poll.client.post(`/api/events/${poll.id}/comments`, { body: 'Hi' }, asParticipant(ada))).status).toBe(
+      201,
+    );
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: true }, bearer(poll.adminToken));
+    expect((await getView(poll.client, poll.id)).comments).toEqual([
+      expect.objectContaining({ name: 'Ada', body: 'Hi', isDisabled: true }),
+    ]);
+  });
+
+  it("refuses a disabled participant's own writes but lets the organiser change their row", async () => {
+    const poll = await createPoll();
+    const [a] = poll.view.options;
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: true }, bearer(poll.adminToken));
+    const path = `/api/events/${poll.id}/participants/${ada.id}`;
+
+    const refused = [
+      await poll.client.put(path, { name: 'Ada B' }, asParticipant(ada)),
+      await poll.client.put(path, { votes: { [a.id]: 'yes' } }, asParticipant(ada)),
+      await poll.client.delete(path, asParticipant(ada)),
+      await poll.client.post(`/api/events/${poll.id}/comments`, { body: 'Let me in' }, asParticipant(ada)),
+      await poll.client.post(`/api/events/${poll.id}/options`, { date: futureIso(20) }, asParticipant(ada)),
+    ];
+    for (const res of refused) {
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({ code: 'participant_disabled' });
+    }
+
+    expect((await poll.client.put(path, { votes: { [a.id]: 'no' } }, bearer(poll.adminToken))).status).toBe(204);
+    expect((await poll.client.delete(path, bearer(poll.adminToken))).status).toBe(204);
+  });
+
+  it("keeps a disabled participant's name reserved", async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    await poll.client.put(disabledPath(poll.id, ada.id), { disabled: true }, bearer(poll.adminToken));
+    forbidOutboundFetch();
+    const res = await poll.client.post(`/api/events/${poll.id}/participants`, {
+      name: 'ada',
+      votes: {},
+      turnstileToken: DUMMY_TOKEN,
+    });
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'name_taken' });
   });
 });

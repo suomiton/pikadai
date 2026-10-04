@@ -62,6 +62,10 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+.tag-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
 
 /* Buttons */
 .btn {
@@ -270,8 +274,8 @@ textarea.input {
 }
 
 /* A warning that is not an error, such as blocked storage. */
+/* No margin of its own: the reset already clears a paragraph's, and the surrounding .stack spaces it. */
 .notice {
-  margin: 0;
   padding: 0.6rem 0.8rem;
   border-left: 3px solid var(--accent);
   background: var(--bg-inset);
@@ -457,6 +461,11 @@ textarea.input {
 .vote-table tr.is-me .name-col {
   color: var(--accent);
 }
+/* A disabled row, which only the organiser and that participant see: the name struck through, out of the counts. */
+.vote-table tr.is-disabled .participant-name {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
 .vote-table tr.is-editing td,
 .vote-table tr.is-editing th {
   background: var(--bg-elev-2);
@@ -556,11 +565,7 @@ thead th.is-best .opt-day {
   color: var(--accent);
 }
 
-/* Top dates: the organiser's scoreboard */
-.top-dates h3 {
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-}
+/* The results tile's top dates */
 .score-table {
   width: 100%;
   max-width: 30rem;

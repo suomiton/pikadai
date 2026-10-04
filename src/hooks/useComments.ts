@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 're
 import { createCommentSchema } from '@shared/schemas';
 import { api } from '../lib/api';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
-import { useAsyncAction } from './useAsyncAction';
+import { usePollAction } from './usePollAction';
 
 const fitTextarea = (el: HTMLTextAreaElement) => {
   el.style.height = 'auto';
@@ -39,11 +39,13 @@ export function useComments() {
   const [bodyError, setBodyError] = useState<string | undefined>();
   const [posted, setPosted] = useState(false);
   const [status, setStatus] = useState('');
-  const { busy, error, run } = useAsyncAction();
+  const { busy, error, run } = usePollAction();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const postedNoteRef = useRef<HTMLParagraphElement>(null);
 
-  const canComment = me !== null && !posted;
+  // The server refuses a disabled participant's comments; the form is not offered to them.
+  const isDisabled = me !== null && event.participants.some((p) => p.id === me.id && p.isDisabled);
+  const canComment = me !== null && !isDisabled && !posted;
 
   useLayoutEffect(() => {
     const el = textareaRef.current;
@@ -95,6 +97,7 @@ export function useComments() {
     error,
     textareaRef,
     postedNoteRef,
+    isDisabled,
     canComment,
     submit,
   };

@@ -177,22 +177,31 @@ page then unfolds in three steps for someone answering (`EventPage` decides whic
 
 | Step              | Condition                                 | On screen                                                                                                   |
 | ----------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Name              | no identity for this poll in this browser | the title and the Name tile: a name, the Turnstile check, Join                                              |
+| Name              | no identity for this poll in this browser | the title and the Name tile: a name, the Turnstile check, Join, and "Just take me to results"               |
 | Your availability | joined, no date answered yet              | the Name tile (now showing the name, with a rename), the table with only the viewer's own row, the comments |
-| Everyone          | at least one date answered                | everyone's rows, the tallies and the best-date highlight, the comments, the share links                     |
+| Everyone          | at least one date answered                | everyone's rows, the tallies and the best-date highlight, the results, the comments, the share links        |
 
-Hiding other people's answers until the viewer has given their own keeps the answer honest. The organiser
+"Just take me to results" skips joining: the Name tile gives way to a line offering "Join instead", and
+the page shows only everyone's rows (read-only, without the date picker) and the results; no comments or
+share links. Nothing is posted, so it needs no Turnstile token. The choice lives in the store
+(`PollSession.resultsOnly`) and is not saved, so a reload asks for the name again.
+
+Hiding other people's answers until the viewer has given their own keeps the answer honest; a visitor who
+asks for the results anyway sees them, but has not answered under a name. The organiser
 sees everything from the start, with the Name tile above it offering to join on demand (the Turnstile widget
 loads only when they ask), and so does a visitor who can no longer join because the poll is full. "Answered" means at least one date has an answer, including `no`; changing one's
-name or commenting does not count, and the top-dates table counts the same people.
+name or commenting does not count, and the results tile, the three dates most people can make once three
+people have answered, counts the same people.
 
 1. `GET /api/events/:id` returns the full view: options, participants, votes, comments, and `viewer.isAdmin`.
 2. A visitor without an identity for this poll types a name into the Name tile (`NameCard`); the
    Turnstile widget produces a token.
 3. `POST /api/events/:id/participants` with an empty vote set checks the participant cap and name
-   uniqueness (case-insensitive within the poll), then verifies Turnstile and inserts the row. A unique
-   index on `(event_id, name COLLATE NOCASE)` backs the name check, so two simultaneous joins with the
-   same name cannot both get in. When the request carries the admin token, the row is marked
+   uniqueness within the poll, then verifies Turnstile and inserts the row. Names are compared by
+   `nameKey` (`worker/lib/names.ts`): Unicode-normalised, lowercased beyond A–Z, invisible characters
+   dropped and spaces collapsed, so "Äiti", "äiti" and "Äiti " are one name. A unique index on the
+   stored key, `(event_id, name_key)`, backs the check, so two simultaneous joins with the same name cannot
+   both get in. When the request carries the admin token, the row is marked
    `is_organiser`, and the organiser's name is shown with an outlined "organiser" pill on their answer
    row and on their comments. The client sends the token whenever it has one; the server decides.
 4. The response `{ id, editToken }` is stored in `localStorage` under the poll id and offered as
@@ -226,6 +235,34 @@ by one person or by many, cannot slip through; a refused post is `429 comment_to
 reloaded. Comments show the participant's current name, cannot be edited or deleted, and go when
 their participant goes: leaving the poll or being removed by the organiser takes the comments along.
 
+### Disabling a participant
+
+The organiser can disable anyone else in the poll from that person's row: Edit, then **Disable**, and
+**Enable** to undo it. `PUT /api/events/:id/participants/:participantId/disabled` with `{ disabled }`
+needs the admin token and sets `participants.is_disabled`; nothing is deleted.
+
+- **Who sees the row.** `GET /api/events/:id` leaves a disabled row and its answers out for everyone but
+  the organiser and the participant themselves, so the hiding is not just cosmetic. The client sends its
+  saved participant identity (`Authorization` plus `X-Participant-Id`) with the fetch; the Worker gives a
+  disabled row back only when that token opens it. Without that, the disabled person's browser would see
+  its identity missing from the poll and forget it, and re-enabling could not bring them back. The admin
+  token takes the header when the browser has one; if the server refuses it, the client fetches again as
+  the verified participant before deciding their row is gone.
+- **Counts.** `isDisabled` rows are left out of the tallies, the best-date highlight, the answer count
+  and the top dates (`counted` in `src/lib/votes.ts`). The organiser sees the row struck through with a
+  "disabled" pill.
+- **Comments** stay visible to everyone with the same pill.
+- **What the participant can still do.** Read the poll. Their own token can no longer save answers,
+  rename, leave, comment or suggest a date: each answers `403 participant_disabled`. The organiser can
+  still change or remove the row.
+- **Finding out.** Nothing refreshes the poll by itself, so someone disabled while their page is open
+  learns it from their next change. Every participant change runs through `usePollAction`, which
+  re-fetches the poll on that refusal, so the page turns read-only whichever change came first.
+- **What it is not.** A ban: in an anonymous poll anyone can join again under another name. The row
+  still counts toward the 100-participant cap and keeps its name reserved. Since other people do not
+  receive the row, the view carries `isFull`, counted over every row, and the client asks that rather than
+  counting `participants`.
+
 ### Suggesting a date
 
 Any reader may `POST /api/events/:id/options` while `allow_suggestions` is on. If the request carries a
@@ -251,7 +288,7 @@ The controls are layered so no single one has to be perfect.
 | Creation tickets: 5 s minimum age, single use, bound to the requesting client                                                                   | skipping the wait; spending pre-harvested tickets from other addresses | `worker/lib/tickets.ts`                                                                |
 | Hard limits: 16 KB request body, 100-char title, 500-char description, 32-char name, 512-char comment, 40 dates, 100 participants, 200 comments | oversized requests, storage abuse and spam text                        | `shared/limits.ts`; `hono/body-limit` in `worker/index.ts`, schemas and route handlers |
 | Comments need the participant token; one per 10 s per participant, decided by the insert statement                                              | anonymous or scripted comment floods                                   | `comments` route, `insertComment` in `worker/db/queries.ts`                            |
-| Unique name per poll                                                                                                                            | impersonation within a poll                                            | unique index from `migrations/0002`, pre-check in the `participants` route             |
+| Unique name per poll                                                                                                                            | impersonation within a poll                                            | pre-check by `nameKey`, unique indexes from `migrations/0002` and `0006`               |
 | Vote set replaced per save, unknown option ids rejected                                                                                         | orphan or forged votes                                                 | `participants` route                                                                   |
 | Expiry plus nightly purge                                                                                                                       | indefinite hosting of junk                                             | `worker/index.ts` `scheduled` handler                                                  |
 
@@ -294,7 +331,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | ------ | --------------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
 | POST   | `/api/tickets`                                | none                                          | Issue a creation ticket → `{ ticket, minAgeMs }` |
 | POST   | `/api/events`                                 | Turnstile + ticket                            | Create a poll → `{ id, adminToken }`             |
-| GET    | `/api/events/:id`                             | optional admin bearer token                   | Full poll view with `viewer.isAdmin`             |
+| GET    | `/api/events/:id`                             | optional admin or own token                   | Full poll view with `viewer.isAdmin`             |
 | PATCH  | `/api/events/:id`                             | admin                                         | Change title, description, `allowSuggestions`    |
 | DELETE | `/api/events/:id`                             | admin                                         | Delete poll and everything in it                 |
 | POST   | `/api/events/:id/options`                     | anyone while suggestions are on; admin always | Add a date                                       |
@@ -303,6 +340,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | GET    | `/api/events/:id/participants/:participantId` | own token                                     | Validate a private link → 204                    |
 | PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Change the name, replace the votes, or both      |
 | DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
+| PUT    | `/api/events/:id/participants/:id/disabled`   | admin                                         | Disable or enable a participant                  |
 | POST   | `/api/events/:id/comments`                    | participant token + `X-Participant-Id`        | Post a comment → `Comment`                       |
 
 Error codes the client maps to messages (`src/lib/errors.ts`):
@@ -311,7 +349,7 @@ Error codes the client maps to messages (`src/lib/errors.ts`):
 `ticket_invalid`, `ticket_too_early`,
 `ticket_expired`, `ticket_used`, `rate_limited`, `not_found`, `expired`, `admin_required`,
 `suggestions_disabled`, `too_many_options`, `date_exists`, `event_full`, `name_taken`,
-`unknown_option`, `not_owner`, `not_participant`, `too_many_comments`, `comment_too_soon`, `internal`.
+`unknown_option`, `not_owner`, `not_participant`, `participant_disabled`, `too_many_comments`, `comment_too_soon`, `internal`.
 
 ## Key decisions and trade-offs
 

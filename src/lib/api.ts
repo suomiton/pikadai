@@ -3,6 +3,7 @@ import type {
   CreateCommentInput,
   CreateEventInput,
   CreateParticipantInput,
+  SetParticipantDisabledInput,
   UpdateEventInput,
   UpdateParticipantInput,
 } from '@shared/schemas';
@@ -96,8 +97,9 @@ export const api = {
   createEvent: (input: CreateEventInput) =>
     request<CreateEventResponse>('/api/events', { method: 'POST', body: input }),
 
-  getEvent: (id: string, adminToken: string | null, signal?: AbortSignal) =>
-    request<EventView>(eventPath(id), { headers: authHeaders({ adminToken }), signal }),
+  /** The participant identity lets a disabled participant receive their own row, which others do not see. */
+  getEvent: (id: string, auth: Auth, signal?: AbortSignal) =>
+    request<EventView>(eventPath(id), { headers: authHeaders(auth), signal }),
 
   updateEvent: (id: string, input: UpdateEventInput, adminToken: string) =>
     request<void>(eventPath(id), { method: 'PATCH', body: input, headers: authHeaders({ adminToken }) }),
@@ -140,6 +142,13 @@ export const api = {
     request<void>(`${eventPath(id)}/participants/${encodeURIComponent(participantId)}`, {
       method: 'DELETE',
       headers: authHeaders(auth),
+    }),
+
+  setParticipantDisabled: (id: string, participantId: string, input: SetParticipantDisabledInput, adminToken: string) =>
+    request<void>(`${eventPath(id)}/participants/${encodeURIComponent(participantId)}/disabled`, {
+      method: 'PUT',
+      body: input,
+      headers: authHeaders({ adminToken }),
     }),
 
   /** Always as the participant: a comment is posted under a name, which the admin token does not have. */

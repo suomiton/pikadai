@@ -4,8 +4,9 @@ import { nameSchema } from '@shared/schemas';
 import { api } from '../lib/api';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { useAsyncAction } from './useAsyncAction';
+import { usePollAction } from './usePollAction';
 
-export function useJoinForm(openedOnDemand = false) {
+export function useJoinForm(focusOnMount = false) {
   const { event, adminToken } = usePoll();
   const { refresh, setIdentity } = usePollActions();
   const [name, setName] = useState('');
@@ -15,10 +16,10 @@ export function useJoinForm(openedOnDemand = false) {
   const turnstileRef = useRef<TurnstileInstance>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Opened on demand: typing is the next step, so focus starts in the field.
+  // Opened on demand, or reopened from the results: typing is the next step, so focus starts in the field.
   useEffect(() => {
-    if (openedOnDemand) inputRef.current?.focus();
-  }, [openedOnDemand]);
+    if (focusOnMount) inputRef.current?.focus();
+  }, [focusOnMount]);
 
   const onNameChange = (value: string) => {
     setName(value);
@@ -69,7 +70,7 @@ export function useRenameForm({ participantId, name, auth }: RenameFormInput) {
   const [draft, setDraft] = useState('');
   const [draftError, setDraftError] = useState<string | undefined>();
   const [status, setStatus] = useState('');
-  const { busy, error, setError, run } = useAsyncAction();
+  const { busy, error, setError, run } = usePollAction();
   const changeButtonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef(false);

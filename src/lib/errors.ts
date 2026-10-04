@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   suggestions_disabled: 'The organiser has turned off date suggestions.',
   not_owner: 'You can only change your own answers.',
   not_participant: 'Join the poll with your name before commenting.',
+  participant_disabled: 'The organiser has disabled you in this poll, so you can no longer change anything.',
   too_many_comments: 'This poll has reached its comment limit.',
   comment_too_soon: 'You commented a moment ago. Wait ten seconds and try again.',
   admin_required: 'This action needs the admin link.',
@@ -32,4 +33,12 @@ export function describeError(err: unknown): string {
   if (err instanceof TypeError) return 'Network error. Check your connection and try again.';
   if (err instanceof Error) return err.message;
   return 'Something went wrong.';
+}
+
+/**
+ * The organiser disabled the viewer since the page loaded. Nothing refreshes the poll by itself, so the
+ * code that gets this refusal re-fetches it, and the page turns read-only.
+ */
+export function isParticipantDisabled(err: unknown): boolean {
+  return err instanceof ApiRequestError && err.code === 'participant_disabled';
 }

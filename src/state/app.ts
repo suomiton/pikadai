@@ -26,6 +26,11 @@ export interface PollSession {
   identityNotice: string | null;
   /** The poll loaded, but participant verification needs a retry. `me` stays null until then. */
   identityError: string | null;
+  /**
+   * The visitor chose "Just take me to results" instead of joining: the page shows only the availability
+   * table and the results. Not stored; opening the poll again asks for the name again.
+   */
+  resultsOnly: boolean;
 }
 
 export interface AppState {
@@ -45,6 +50,7 @@ export type AppAction =
     }
   | { type: 'poll/failed'; id: string; error: LoadError }
   | { type: 'poll/identity'; id: string; me: ParticipantIdentity | null }
+  | { type: 'poll/resultsOnly'; id: string; value: boolean }
   | { type: 'poll/close'; id: string };
 
 export const initialAppState: AppState = { poll: null };
@@ -72,6 +78,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         error: null,
         identityNotice: null,
         identityError: null,
+        resultsOnly: false,
       },
     };
   }
@@ -99,6 +106,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'poll/identity':
       return { poll: { ...poll, me: action.me, identityNotice: null, identityError: null } };
+
+    case 'poll/resultsOnly':
+      return { poll: { ...poll, resultsOnly: action.value } };
 
     case 'poll/close':
       return { poll: null };

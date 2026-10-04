@@ -32,6 +32,8 @@ export interface PollActions {
   setIdentity(id: string, me: ParticipantIdentity | null): void;
   /** Drop every token for poll `id` and close its session if it is on screen; used after the organiser deletes it. */
   forgetPoll(id: string): void;
+  /** Show poll `id` without joining ("Just take me to results"), or go back to the Name tile. */
+  setResultsOnly(id: string, value: boolean): void;
 }
 
 /** The server says the poll no longer exists: deleted (404) or expired (410). */
@@ -191,12 +193,24 @@ const createPollLoader = (deps: PollActionDeps, state: RequestState) => {
       !controller.signal.aborted && seq === state.issued && state.held === session && location.readHash() === hash;
     try {
       const candidate = session.me;
-      const [event, initialVerification] = await Promise.all([
-        api.getEvent(id, adminToken, controller.signal),
+      const [first, initialVerification] = await Promise.all([
+        api.getEvent(id, { adminToken, participant: candidate }, controller.signal),
         candidate && !session.verified
           ? validIdentity(api, id, candidate, controller.signal)
           : Promise.resolve<Verification>({ status: candidate ? 'valid' : 'invalid' }),
       ]);
+      if (!isCurrent()) return false;
+      // The admin token takes the Authorization header. When the server refuses it, it has not seen the
+      // participant's token either, so it leaves out their own row if the organiser disabled them. Ask
+      // again as the verified participant before treating the missing row as a dead identity.
+      const event =
+        adminToken &&
+        !first.viewer.isAdmin &&
+        candidate &&
+        initialVerification.status === 'valid' &&
+        !hasParticipant(first, candidate)
+          ? await api.getEvent(id, { adminToken: null, participant: candidate }, controller.signal)
+          : first;
       if (!isCurrent()) return false;
       const resolved = await resolveIdentity(deps, session, event, initialVerification, controller.signal, isCurrent);
       if (!resolved || !isCurrent()) return false;
@@ -305,6 +319,10 @@ export function createPollActions(deps: PollActionDeps): PollActions {
         replaceHash(location, id, '');
         dispatch({ type: 'poll/close', id });
       }
+    },
+
+    setResultsOnly: (id, value) => {
+      dispatch({ type: 'poll/resultsOnly', id, value });
     },
   };
 }

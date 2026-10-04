@@ -3,23 +3,26 @@ import { formatDate } from '../lib/dates';
 import { topDates } from '../lib/votes';
 import { usePoll } from '../state/AppStateProvider';
 
-/** The organiser's scoreboard: the three dates most people can make, once enough people have answered. */
-export function TopDates() {
+/**
+ * The results tile: the three dates most people can make, once enough people have answered. Everyone who
+ * can see the whole table sees it too; disabled participants are not counted.
+ */
+export function Results() {
   const { event } = usePoll();
   const id = useId();
   const scores = useMemo(() => topDates(event.options, event.participants), [event.options, event.participants]);
   const bestYes = scores?.[0]?.yes;
 
   return (
-    <div className="top-dates">
-      <h3 id={id}>Top dates</h3>
+    <section className="card stack" aria-labelledby={`${id}-heading`}>
+      <h2 id={`${id}-heading`}>Results</h2>
       {scores === null ? (
         // "three" is TOP_DATES_MIN_ANSWERS in src/lib/votes.ts.
         <p className="hint">The three most popular dates appear here once three people have answered.</p>
       ) : scores.length === 0 ? (
         <p className="hint">No one has said yes to a date yet.</p>
       ) : (
-        <table className="score-table" aria-labelledby={id}>
+        <table className="score-table" aria-label="Top dates">
           <thead>
             <tr>
               <th scope="col">Date</th>
@@ -47,6 +50,6 @@ export function TopDates() {
           </tbody>
         </table>
       )}
-    </div>
+    </section>
   );
 }

@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { LIMITS } from '@shared/limits';
 import { useJoinForm, useRenameForm } from '../hooks/useNameForms';
 import { participantLink } from '../lib/participantLink';
-import { usePoll } from '../state/AppStateProvider';
+import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { FormError } from './FormError';
 import { CopyField } from './CopyField';
 import { StatusAnnouncer } from './StatusAnnouncer';
@@ -17,8 +17,9 @@ import { TurnstileField } from './TurnstileField';
  * The organiser sees the whole poll without joining, so for them the form waits behind a button
  * rather than loading the Turnstile widget on every visit.
  */
-export function NameCard() {
+export function NameCard({ focusName = false }: { focusName?: boolean }) {
   const { event, me, adminToken, isAdmin, identityError } = usePoll();
+  const { setResultsOnly } = usePollActions();
   const id = useId();
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
   // Opening a guest's private link in an organiser's browser must never give that guest admin access.
@@ -40,8 +41,19 @@ export function NameCard() {
             </button>
           </div>
         ) : (
-          <JoinForm id={id} onCancel={isAdmin ? () => setJoining(false) : undefined} />
+          <JoinForm
+            id={id}
+            onCancel={isAdmin ? () => setJoining(false) : undefined}
+            // The organiser sees everything already; everyone else may skip joining and only look.
+            onSkip={isAdmin ? undefined : () => setResultsOnly(event.id, true)}
+            focusOnMount={isAdmin || focusName}
+          />
         )
+      ) : mine?.isDisabled ? (
+        <p>
+          You are in this poll as <strong className="participant-name">{mine.name}</strong>, but the organiser has
+          disabled you. Your answers no longer count and only the organiser sees them. You can still follow the poll.
+        </p>
       ) : (
         <RenameForm id={id} participantId={me.id} name={mine?.name ?? null} auth={{ adminToken, participant: me }} />
       )}
@@ -67,12 +79,14 @@ interface JoinFormProps {
   id: string;
   /** Present when the form was opened on demand (the organiser), so it can be put away again. */
   onCancel?: () => void;
+  /** "Just take me to results": show the answers and results without joining. */
+  onSkip?: () => void;
+  focusOnMount: boolean;
 }
 
-const JoinForm = ({ id, onCancel }: JoinFormProps) => {
-  const { name, onNameChange, nameError, token, setToken, busy, error, turnstileRef, inputRef, submit } = useJoinForm(
-    onCancel !== undefined,
-  );
+const JoinForm = ({ id, onCancel, onSkip, focusOnMount }: JoinFormProps) => {
+  const { name, onNameChange, nameError, token, setToken, busy, error, turnstileRef, inputRef, submit } =
+    useJoinForm(focusOnMount);
   return (
     <form className="stack" onSubmit={submit} noValidate aria-label="Join the poll">
       <TextField
@@ -93,6 +107,11 @@ const JoinForm = ({ id, onCancel }: JoinFormProps) => {
         <button type="submit" className="btn btn-primary" disabled={busy || !token}>
           {busy ? 'Joining' : 'Join'}
         </button>
+        {onSkip && (
+          <button type="button" className="btn btn-secondary" onClick={onSkip} disabled={busy}>
+            Just take me to results
+          </button>
+        )}
         {onCancel && (
           <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={busy}>
             Cancel

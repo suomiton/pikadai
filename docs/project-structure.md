@@ -46,7 +46,9 @@ pikadai/
 │   │   ├── ratelimit.ts       clientIp, rateLimitKey (IPv6 by /64), rateLimit middleware factory
 │   │   ├── expiry.ts          computeExpiresAt: when a poll is purged
 │   │   ├── eventView.ts       toEventView: rows → the EventView JSON, pure
-│   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, isParticipantOwner; no Hono inside
+│   │   ├── names.ts           nameKey: the folded form names are compared in for uniqueness
+│   │   └── auth.ts            bearerToken, loadEvent, isAdmin, requireAdmin, isParticipantOwner,
+│   │                          provenParticipant, assertNotDisabled; no Hono inside
 │   ├── db/
 │   │   └── queries.ts         All SQL; row types; fetchEventRows
 │   └── test/                  Integration tests: the whole Worker in workerd with a local D1
@@ -59,14 +61,16 @@ pikadai/
 │   ├── 0002_participants_nickname_unique.sql
 │   ├── 0003_comments.sql
 │   ├── 0004_participants_is_organiser.sql
-│   └── 0005_participants_name.sql
+│   ├── 0005_participants_name.sql
+│   ├── 0006_participants_name_key.sql
+│   └── 0007_participants_is_disabled.sql
 │
 ├── src/                       React application
 │   ├── main.tsx               Mounts the router, imports global CSS
 │   ├── router.tsx             Routes: / (create), /e/:id (poll), * (not found)
 │   ├── vite-env.d.ts          Types for import.meta.env
 │   ├── state/                 Pure reducers, each with a *.test.ts, and the root store
-│   │   ├── app.ts             PollSession and appReducer: the poll on screen, the viewer's tokens, load status
+│   │   ├── app.ts             PollSession and appReducer: the poll on screen, the viewer's tokens, load status, results-only mode
 │   │   ├── pollActions.ts     createPollActions: private-link capture, identity verification, loading and storage; dependencies injected
 │   │   ├── AppStateProvider.tsx  Context around the router; usePoll, useAdminToken, usePollActions
 │   │   ├── createForm.ts      CreatePage's draft, errors and progress
@@ -74,6 +78,7 @@ pikadai/
 │   │   └── voteEditor.ts      The availability table's editing state machine
 │   ├── hooks/
 │   │   ├── useAsyncAction.ts  busy / error / run for one request
+│   │   ├── usePollAction.ts   useAsyncAction for a participant's change; a disabled refusal re-fetches the poll
 │   │   ├── useCreateForm.ts   Creation validation, progress and focus
 │   │   ├── useAdminForm.ts    Organiser draft, requests and focus
 │   │   ├── useNameForms.ts    Joining, renaming and focus for the Name tile
@@ -81,7 +86,8 @@ pikadai/
 │   │   ├── useVoteEditor.ts   voteEditorReducer bound to dispatch
 │   │   ├── useVoteGrid.ts     Vote editing, saving and announcements
 │   │   ├── useVoteEditorFocus.ts  Focus when opening or closing a row
-│   │   └── useVoteRemoval.ts  Participant/date removal and confirmation state
+│   │   ├── useVoteRemoval.ts  Participant/date removal and confirmation state
+│   │   └── useParticipantDisabling.ts  The organiser's Disable / Enable on someone else's row
 │   ├── pages/
 │   │   ├── CreatePage.tsx     Form, calendar, Turnstile, masked-delay progress dialog
 │   │   ├── EventPage.tsx      Opens the poll in the store (effect keyed on the id); decides which sections show at each step of answering
@@ -99,9 +105,10 @@ pikadai/
 │   │   ├── NameCard.tsx       The first tile: joining, renaming and the private participant link
 │   │   ├── OptionHeader.tsx   One date column header
 │   │   ├── VoteRow.tsx        A saved participant row
+│   │   ├── ParticipantTags.tsx  The "you", "organiser" and "disabled" pills after a name
 │   │   ├── VoteEditRow.tsx    The row being edited
 │   │   ├── VoteCells.tsx      The answer cells both rows share
-│   │   ├── EditPanel.tsx      Save / Cancel / Remove under the table
+│   │   ├── EditPanel.tsx      Save / Cancel / Disable / Remove under the table
 │   │   ├── Comments.tsx       The comments tile: list, and the once-per-page-load form with its counter and growing textarea
 │   │   ├── TextField.tsx      Label, input or textarea, error and hint, with the aria wiring
 │   │   ├── FormError.tsx      The role="alert" paragraph
@@ -109,15 +116,15 @@ pikadai/
 │   │   ├── SuggestDate.tsx    Add / suggest a date: the button under the table and its picker
 │   │   ├── ShareBox.tsx       Participant and admin links
 │   │   ├── CopyField.tsx      Read-only input with Copy button
-│   │   ├── TopDates.tsx       The organiser's scoreboard: the three dates most people can make
-│   │   └── AdminPanel.tsx     Edit details, delete poll, top dates
+│   │   ├── Results.tsx        The results tile: the three dates most people can make
+│   │   └── AdminPanel.tsx     Edit details, delete poll
 │   ├── lib/                   Each module has a *.test.ts beside it
 │   │   ├── api.ts             Typed fetch wrapper; one function per endpoint; Authorization header
 │   │   ├── storage.ts         localStorage access for admin and participant tokens
 │   │   ├── participantLink.ts  Private-link generation and fragment parsing
 │   │   ├── dates.ts           ISO date helpers, month grid, Intl formatting
 │   │   ├── errors.ts          Error code → user-facing message
-│   │   ├── votes.ts           cycle (tap order), computeTallies and topDates (the organiser's scoreboard)
+│   │   ├── votes.ts           cycle (tap order), counted, computeTallies and topDates (the results tile)
 │   │   ├── validation.ts      First validation error per field, shared by creation and organiser forms
 │   │   └── timing.ts          sleep, waitUntil
 │   └── styles/
@@ -141,6 +148,8 @@ pikadai/
 │   ├── dialog.spec.ts         Confirmation keyboard behavior, cancellation, errors and reflow
 │   ├── participantLink.spec.ts  Identity recovery, navigation and private-link permissions
 │   ├── reviewRegressions.spec.ts  Removed rows, save announcements and focus after refresh
+│   ├── disable.spec.ts    The organiser disables and enables a participant; what each viewer sees
+│   ├── resultsOnly.spec.ts  "Just take me to results" and back to joining
 │   └── preview.spec.ts        Against the production build: SPA fallback, security headers, Turnstile under the CSP
 │
 └── docs/                      You are here

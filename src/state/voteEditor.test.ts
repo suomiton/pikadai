@@ -8,8 +8,9 @@ const ada: Participant = {
   votes: { o1: 'yes', o2: 'no' },
   createdAt: 0,
   isOrganiser: false,
+  isDisabled: false,
 };
-const fresh: Participant = { id: 'p2', name: 'Grace', votes: {}, createdAt: 0, isOrganiser: false };
+const fresh: Participant = { id: 'p2', name: 'Grace', votes: {}, createdAt: 0, isOrganiser: false, isDisabled: false };
 
 const toggle = (state: VoteEditorState, optionId: string): VoteEditorState =>
   voteEditorReducer(state, { type: 'toggle', optionId });

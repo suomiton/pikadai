@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LIMITS } from '@shared/limits';
 import type { EventOption, Participant } from '@shared/types';
 import { api, ApiRequestError } from '../lib/api';
 import { formatDateLong } from '../lib/dates';
 import { computeTallies, hasAnswered, LABEL } from '../lib/votes';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
-import { useAsyncAction, type AsyncAction } from './useAsyncAction';
+import type { AsyncAction } from './useAsyncAction';
+import { useParticipantDisabling } from './useParticipantDisabling';
+import { usePollAction } from './usePollAction';
 import { useVoteEditor, type VoteEditor } from './useVoteEditor';
 import { useVoteEditorFocus, type VoteEditorFocus } from './useVoteEditorFocus';
 import { useVoteRemoval } from './useVoteRemoval';
@@ -87,13 +88,14 @@ const useVoteSaving = (
 
 /** Coordinates the editor, mutations and announcements without rendering the table. */
 export function useVoteGrid(showAll: boolean) {
-  const { event, me, isAdmin } = usePoll();
+  const { event, me, isAdmin, resultsOnly } = usePoll();
   const editor = useVoteEditor();
-  const action = useAsyncAction();
+  const action = usePollAction();
   const [status, setStatus] = useState('');
   const focus = useVoteEditorFocus(editor.state.returnTo, me?.id, action.busy);
   const saving = useVoteSaving(editor, action, focus, setStatus, showAll);
   const removal = useVoteRemoval(editor, action, setStatus);
+  const setDisabled = useParticipantDisabling(editor, action, focus, setStatus);
   const { editingId } = editor.state;
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
 
@@ -115,8 +117,18 @@ export function useVoteGrid(showAll: boolean) {
     requestFocus('return');
   }, [editingId, editingParticipant, close, setError, requestFocus]);
 
+  // The organiser disabled the viewer while their own row was open: close it, keeping the refusal that
+  // revealed it under the table. A confirmation dialog that is still open keeps the focus.
+  const lockedOut = !isAdmin && editingParticipant?.isDisabled === true;
+  const removalOpen = removal.pendingRemoval !== null;
   useEffect(() => {
-    if (!mine || hasAnswered(mine) || editingId !== null || openedFor.current === mine.id) return;
+    if (!lockedOut) return;
+    close();
+    if (!removalOpen) requestFocus('return');
+  }, [lockedOut, removalOpen, close, requestFocus]);
+
+  useEffect(() => {
+    if (!mine || mine.isDisabled || hasAnswered(mine) || editingId !== null || openedFor.current === mine.id) return;
     openedFor.current = mine.id;
     startEdit(mine);
     requestFocus('editor');
@@ -148,6 +160,7 @@ export function useVoteGrid(showAll: boolean) {
     focus,
     saving,
     removal,
+    setDisabled,
     status,
     tallies,
     isBest,
@@ -155,8 +168,10 @@ export function useVoteGrid(showAll: boolean) {
     cancel,
     toggle,
     rows,
-    isFull: event.participants.length >= LIMITS.participantsMax,
-    canSuggest: isAdmin || event.allowSuggestions,
+    /** The viewer's own row is disabled: they can no longer answer. */
+    isDisabled: mine?.isDisabled ?? false,
+    isFull: event.isFull,
+    canSuggest: isAdmin || (event.allowSuggestions && !mine?.isDisabled && !resultsOnly),
     errorHost,
   };
 }

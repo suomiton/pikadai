@@ -4,7 +4,7 @@ import { createCommentSchema } from '@shared/schemas';
 import type { Comment } from '@shared/types';
 import type { AppEnv } from '../env';
 import { countComments, getParticipant, insertComment } from '../db/queries';
-import { bearerToken, isParticipantOwner, loadEvent, PARTICIPANT_ID_HEADER } from '../lib/auth';
+import { assertNotDisabled, bearerToken, isParticipantOwner, loadEvent, PARTICIPANT_ID_HEADER } from '../lib/auth';
 import { randomId } from '../lib/crypto';
 import { errors, parseBody, readJson } from '../lib/http';
 import { rateLimit } from '../lib/ratelimit';
@@ -24,6 +24,7 @@ comments.post(
     if (!participant || !(await isParticipantOwner(bearerToken(c.req.header('Authorization')), participant))) {
       throw errors.forbidden('Join the poll with a name before commenting', 'not_participant');
     }
+    assertNotDisabled(participant);
 
     const body = parseBody(createCommentSchema, await readJson(c));
 
@@ -53,6 +54,7 @@ comments.post(
         participantId: participant.id,
         name: participant.name,
         isOrganiser: participant.is_organiser === 1,
+        isDisabled: false,
         body: comment.body,
         createdAt: now,
       } satisfies Comment,

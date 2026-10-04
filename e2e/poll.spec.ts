@@ -469,13 +469,14 @@ test.describe('organising a poll', () => {
     await answer('Grace', { [first.id]: 'yes', [second.id]: 'maybe' });
 
     await page.goto(poll.adminUrl);
-    const organiser = page.getByRole('region', { name: 'Organiser' });
-    await expect(organiser.getByText('once three people have answered')).toBeVisible();
-    await expect(organiser.getByRole('table')).toHaveCount(0);
+    const results = page.getByRole('region', { name: 'Results' });
+    await expect(results.getByText('once three people have answered')).toBeVisible();
+    await expect(results.getByRole('table')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Organiser' }).getByRole('table')).toHaveCount(0);
 
     await answer('Linus', { [first.id]: 'yes', [second.id]: 'no', [third.id]: 'yes' });
     await page.reload();
-    const rows = organiser.getByRole('table', { name: 'Top dates' }).locator('tbody tr');
+    const rows = results.getByRole('table', { name: 'Top dates' }).locator('tbody tr');
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(0)).toContainText(/3\s*\/\s*3/);
     await expect(rows.nth(0)).toContainText('100%');
@@ -485,6 +486,36 @@ test.describe('organising a poll', () => {
     await expect(rows.nth(1)).toContainText(String(Number(second.date.slice(-2))));
     await expect(rows.nth(2)).toContainText(/1\s*\/\s*3/);
     await expect(rows.nth(2)).toContainText(String(Number(third.date.slice(-2))));
+  });
+
+  test('a participant sees the results once they have answered, not before', async ({ page, request, clientIp }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    const headers = { 'CF-Connecting-IP': clientIp };
+    const view = (await (await request.get(`/api/events/${poll.id}`, { headers })).json()) as EventView;
+    for (const name of ['Ada', 'Grace', 'Linus']) {
+      const res = await request.post(`/api/events/${poll.id}/participants`, {
+        headers,
+        data: { name, votes: { [view.options[0].id]: 'yes' }, turnstileToken: DUMMY_TURNSTILE_TOKEN },
+      });
+      expect(res.status()).toBe(201);
+    }
+
+    await page.goto(poll.participantUrl);
+    const results = page.getByRole('region', { name: 'Results' });
+    await expect(results).toHaveCount(0);
+    await nameField(page).fill('Mia');
+    const join = page.getByRole('button', { name: 'Join' });
+    await waitForTurnstile(join);
+    await join.click();
+    await expect(page.locator('tbody tr.is-editing')).toHaveCount(1);
+    await expect(results).toHaveCount(0);
+
+    await answerDate(page, 0, 1); // yes
+    await page.getByRole('button', { name: 'Save' }).click();
+    const top = results.getByRole('table', { name: 'Top dates' }).locator('tbody tr');
+    await expect(top).toHaveCount(1);
+    await expect(top.nth(0)).toContainText(/4\s*\/\s*4/);
+    await expect(top.nth(0)).toContainText('100%');
   });
 
   test('turning suggestions off hides the picker from participants', async ({

@@ -5,7 +5,6 @@ import { FormError } from './FormError';
 import { ConfirmDialog } from './ConfirmDialog';
 import { StatusAnnouncer } from './StatusAnnouncer';
 import { TextField } from './TextField';
-import { TopDates } from './TopDates';
 
 type DetailsFormProps = Pick<AdminFormController, 'dispatch' | 'busy' | 'error' | 'save' | 'close'> &
   Pick<AdminFormController['refs'], 'titleRef' | 'descriptionRef'> & {
@@ -108,7 +107,6 @@ export function AdminPanel() {
         />
       )}
       {!open && !confirmDelete && <FormError message={error} />}
-      <TopDates />
       {confirmDelete && (
         <ConfirmDialog
           title="Delete this poll?"

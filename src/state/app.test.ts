@@ -12,7 +12,8 @@ const event = (overrides: Partial<EventView> = {}): EventView => ({
   createdAt: 0,
   expiresAt: 1,
   options: [],
-  participants: [{ id: 'p1', name: 'Ada', votes: {}, createdAt: 0, isOrganiser: false }],
+  participants: [{ id: 'p1', name: 'Ada', votes: {}, createdAt: 0, isOrganiser: false, isDisabled: false }],
+  isFull: false,
   comments: [],
   viewer: { isAdmin: true },
   ...overrides,
@@ -57,6 +58,7 @@ describe('appReducer', () => {
       error: null,
       identityNotice: null,
       identityError: null,
+      resultsOnly: false,
     });
   });
 
@@ -110,6 +112,16 @@ describe('appReducer', () => {
     const state = open();
     expect(appReducer(state, { type: 'poll/identity', id: 'ev2', me: other })).toBe(state);
     expect(appReducer(initialAppState, { type: 'poll/identity', id: 'ev1', me })).toBe(initialAppState);
+  });
+
+  it('switches to results only and back for the current poll, keeping it through a refresh', () => {
+    const results = appReducer(loaded(), { type: 'poll/resultsOnly', id: 'ev1', value: true });
+    expect(results.poll?.resultsOnly).toBe(true);
+    expect(loaded(results).poll?.resultsOnly).toBe(true);
+    expect(appReducer(results, { type: 'poll/resultsOnly', id: 'ev1', value: false }).poll?.resultsOnly).toBe(false);
+    expect(appReducer(results, { type: 'poll/resultsOnly', id: 'ev2', value: false })).toBe(results);
+    // Opening the poll again, as a reload does, asks for the name again.
+    expect(open(results).poll?.resultsOnly).toBe(false);
   });
 
   it('closes the session for the current poll only', () => {

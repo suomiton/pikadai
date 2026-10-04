@@ -4,7 +4,7 @@ import { createEventSchema, updateEventSchema } from '@shared/schemas';
 import type { CreateEventResponse } from '@shared/types';
 import type { AppEnv } from '../env';
 import { deleteEvent, fetchEventRows, insertEventWithOptions, updateEvent } from '../db/queries';
-import { bearerToken, isAdmin, loadEvent, requireAdmin } from '../lib/auth';
+import { bearerToken, isAdmin, loadEvent, PARTICIPANT_ID_HEADER, provenParticipant, requireAdmin } from '../lib/auth';
 import { randomId, randomToken, sha256Hex } from '../lib/crypto';
 import { toEventView } from '../lib/eventView';
 import { computeExpiresAt } from '../lib/expiry';
@@ -70,8 +70,12 @@ events.get(
   rateLimit((env) => env.READ_LIMITER),
   async (c) => {
     const event = await loadEvent(c.env.DB, c.req.param('id'));
-    const admin = await isAdmin(bearerToken(c.req.header('Authorization')), event);
-    return c.json(toEventView(event, await fetchEventRows(c.env.DB, event.id), admin));
+    const token = bearerToken(c.req.header('Authorization'));
+    const admin = await isAdmin(token, event);
+    const rows = await fetchEventRows(c.env.DB, event.id);
+    // Only a participant's own token proves who they are; the organiser sees every row anyway.
+    const me = admin ? null : await provenParticipant(token, c.req.header(PARTICIPANT_ID_HEADER), rows.participants);
+    return c.json(toEventView(event, rows, { isAdmin: admin, participantId: me?.id ?? null }));
   },
 );
 
