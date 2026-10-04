@@ -3,6 +3,7 @@ import { LIMITS } from '@shared/limits';
 import type { EventOption, Participant } from '@shared/types';
 import { api, ApiRequestError } from '../lib/api';
 import { formatDateLong } from '../lib/dates';
+import { isParticipantDisabled } from '../lib/errors';
 import { computeTallies, hasAnswered, LABEL } from '../lib/votes';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { useAsyncAction, type AsyncAction } from './useAsyncAction';
@@ -50,8 +51,11 @@ const useVoteSaving = (
         { adminToken, participant: me },
       );
     } catch (err) {
-      // Refresh removed dates and prune stale votes, keeping the editor open for another attempt.
-      if (err instanceof ApiRequestError && err.code === 'unknown_option') void refresh(event.id);
+      // Refresh removed dates and prune stale votes, keeping the editor open for another attempt; or show
+      // that the organiser has disabled the viewer.
+      if ((err instanceof ApiRequestError && err.code === 'unknown_option') || isParticipantDisabled(err)) {
+        void refresh(event.id);
+      }
       throw err;
     }
   };
@@ -158,6 +162,8 @@ export function useVoteGrid(showAll: boolean) {
     cancel,
     toggle,
     rows,
+    /** The viewer's own row is disabled: they can no longer answer. */
+    isDisabled: mine?.isDisabled ?? false,
     isFull: event.participants.length >= LIMITS.participantsMax,
     canSuggest: isAdmin || (event.allowSuggestions && !mine?.isDisabled && !resultsOnly),
     errorHost,

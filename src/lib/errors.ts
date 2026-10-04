@@ -34,3 +34,11 @@ export function describeError(err: unknown): string {
   if (err instanceof Error) return err.message;
   return 'Something went wrong.';
 }
+
+/**
+ * The organiser disabled the viewer since the page loaded. Nothing refreshes the poll by itself, so the
+ * code that gets this refusal re-fetches it, and the page turns read-only.
+ */
+export function isParticipantDisabled(err: unknown): boolean {
+  return err instanceof ApiRequestError && err.code === 'participant_disabled';
+}

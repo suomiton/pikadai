@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createCommentSchema } from '@shared/schemas';
 import { api } from '../lib/api';
+import { isParticipantDisabled } from '../lib/errors';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { useAsyncAction } from './useAsyncAction';
 
@@ -78,7 +79,12 @@ export function useComments() {
     }
     setBodyError(undefined);
     const sent = await run(async () => {
-      await api.addComment(event.id, parsed.data, me);
+      try {
+        await api.addComment(event.id, parsed.data, me);
+      } catch (err) {
+        if (isParticipantDisabled(err)) void refresh(event.id);
+        throw err;
+      }
       setPosted(true);
       await refresh(event.id);
     });

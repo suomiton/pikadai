@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { nameSchema } from '@shared/schemas';
 import { api } from '../lib/api';
+import { isParticipantDisabled } from '../lib/errors';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { useAsyncAction } from './useAsyncAction';
 
@@ -115,7 +116,12 @@ export function useRenameForm({ participantId, name, auth }: RenameFormInput) {
     }
     // Name only: an answer saved from the table at the same moment cannot be overwritten by this.
     const saved = await run(async () => {
-      await api.updateParticipant(event.id, participantId, { name: parsed.data }, auth);
+      try {
+        await api.updateParticipant(event.id, participantId, { name: parsed.data }, auth);
+      } catch (err) {
+        if (isParticipantDisabled(err)) void refresh(event.id);
+        throw err;
+      }
       returnFocus.current = true;
       setOpen(false);
       await refresh(event.id);

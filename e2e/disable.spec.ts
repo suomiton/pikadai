@@ -127,4 +127,21 @@ test.describe('disabling a participant', () => {
     await expect(page.getByRole('button', { name: 'Edit your answers' })).toBeVisible();
     await expect(page.getByLabel('Add a comment')).toBeVisible();
   });
+
+  test('someone disabled while the page is open learns it on their next save, and the page turns read-only', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const { poll, ada, headers } = await seed(request, clientIp);
+    await page.goto(privateLink(poll, ada));
+    await page.getByRole('button', { name: 'Edit your answers' }).click();
+    await setDisabled(request, poll, ada, true, headers);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('alert')).toHaveText(
+      'The organiser has disabled you in this poll, so you can no longer change anything.',
+    );
+    await expect(page.getByRole('region', { name: 'Name' })).toContainText('the organiser has disabled you');
+    await expect(page.getByLabel('Add a comment')).toHaveCount(0);
+  });
 });

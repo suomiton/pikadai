@@ -52,7 +52,9 @@ export function VoteGrid({ showAll }: { showAll: boolean }) {
       <h2 id={`${id}-heading`}>Availability</h2>
       <StatusAnnouncer message={status} />
       {me === null && grid.isFull && <p className="hint">This poll is full.</p>}
-      {!showAll && <p className="hint">Answer at least one date and save to see what others have answered.</p>}
+      {!showAll && !grid.isDisabled && (
+        <p className="hint">Answer at least one date and save to see what others have answered.</p>
+      )}
       <VoteTable
         ref={tableRegionRef}
         showAll={showAll}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiRequestError } from './api';
-import { describeError } from './errors';
+import { describeError, isParticipantDisabled } from './errors';
 
 /** Every code the Worker can emit; see the API reference in docs/architecture.md. */
 const WORKER_CODES = [
@@ -50,5 +50,13 @@ describe('describeError', () => {
   it('passes other errors through and has a last resort', () => {
     expect(describeError(new Error('boom'))).toBe('boom');
     expect(describeError('???')).toBe('Something went wrong.');
+  });
+});
+
+describe('isParticipantDisabled', () => {
+  it('recognises only the refusal of a disabled participant', () => {
+    expect(isParticipantDisabled(new ApiRequestError(403, 'participant_disabled', 'disabled'))).toBe(true);
+    expect(isParticipantDisabled(new ApiRequestError(403, 'not_owner', 'no'))).toBe(false);
+    expect(isParticipantDisabled(new Error('participant_disabled'))).toBe(false);
   });
 });
