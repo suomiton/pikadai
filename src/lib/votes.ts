@@ -47,7 +47,7 @@ export const LABEL: Record<Cell, string> = { yes: 'Yes', maybe: 'If need be', no
 
 /** How many people must have answered before the top dates say anything about the group. */
 export const TOP_DATES_MIN_ANSWERS = 3;
-/** How many dates the organiser's top-dates table shows at most. */
+/** How many dates the results tile shows at most. */
 export const TOP_DATES_COUNT = 3;
 
 export interface DateScore {

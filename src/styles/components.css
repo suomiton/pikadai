@@ -565,11 +565,7 @@ thead th.is-best .opt-day {
   color: var(--accent);
 }
 
-/* Top dates: the organiser's scoreboard */
-.top-dates h3 {
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-}
+/* The results tile's top dates */
 .score-table {
   width: 100%;
   max-width: 30rem;

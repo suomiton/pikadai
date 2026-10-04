@@ -115,15 +115,15 @@ pikadai/
 │   │   ├── SuggestDate.tsx    Add / suggest a date: the button under the table and its picker
 │   │   ├── ShareBox.tsx       Participant and admin links
 │   │   ├── CopyField.tsx      Read-only input with Copy button
-│   │   ├── TopDates.tsx       The organiser's scoreboard: the three dates most people can make
-│   │   └── AdminPanel.tsx     Edit details, delete poll, top dates
+│   │   ├── Results.tsx        The results tile: the three dates most people can make
+│   │   └── AdminPanel.tsx     Edit details, delete poll
 │   ├── lib/                   Each module has a *.test.ts beside it
 │   │   ├── api.ts             Typed fetch wrapper; one function per endpoint; Authorization header
 │   │   ├── storage.ts         localStorage access for admin and participant tokens
 │   │   ├── participantLink.ts  Private-link generation and fragment parsing
 │   │   ├── dates.ts           ISO date helpers, month grid, Intl formatting
 │   │   ├── errors.ts          Error code → user-facing message
-│   │   ├── votes.ts           cycle (tap order), computeTallies and topDates (the organiser's scoreboard)
+│   │   ├── votes.ts           cycle (tap order), counted, computeTallies and topDates (the results tile)
 │   │   ├── validation.ts      First validation error per field, shared by creation and organiser forms
 │   │   └── timing.ts          sleep, waitUntil
 │   └── styles/

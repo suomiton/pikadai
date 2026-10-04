@@ -179,12 +179,13 @@ page then unfolds in three steps for someone answering (`EventPage` decides whic
 | ----------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Name              | no identity for this poll in this browser | the title and the Name tile: a name, the Turnstile check, Join                                              |
 | Your availability | joined, no date answered yet              | the Name tile (now showing the name, with a rename), the table with only the viewer's own row, the comments |
-| Everyone          | at least one date answered                | everyone's rows, the tallies and the best-date highlight, the comments, the share links                     |
+| Everyone          | at least one date answered                | everyone's rows, the tallies and the best-date highlight, the results, the comments, the share links        |
 
 Hiding other people's answers until the viewer has given their own keeps the answer honest. The organiser
 sees everything from the start, with the Name tile above it offering to join on demand (the Turnstile widget
 loads only when they ask), and so does a visitor who can no longer join because the poll is full. "Answered" means at least one date has an answer, including `no`; changing one's
-name or commenting does not count, and the top-dates table counts the same people.
+name or commenting does not count, and the results tile, the three dates most people can make once three
+people have answered, counts the same people.
 
 1. `GET /api/events/:id` returns the full view: options, participants, votes, comments, and `viewer.isAdmin`.
 2. A visitor without an identity for this poll types a name into the Name tile (`NameCard`); the
