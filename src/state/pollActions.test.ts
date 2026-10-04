@@ -464,34 +464,124 @@ describe('private links', () => {
     expect(h.storage.getParticipant('ev1')).toEqual(me);
   });
 
-  it('uses a different private identity for this visit without overwriting the saved one', async () => {
+  it('ignores a different private link and keeps this browser’s saved profile active', async () => {
     const h = harness(participantHash(me));
     h.storage.setParticipant('ev1', meB);
     h.getEvent.mockResolvedValue(event({ participants: [...event().participants, bea] }));
     await h.actions.openPoll('ev1', 'private-visit');
-    expect(h.state().poll?.me).toEqual(me);
+    expect(h.state().poll?.me).toEqual(meB);
     expect(h.storage.getParticipant('ev1')).toEqual(meB);
-    expect(h.state().poll?.identityNotice).toContain('Your saved name on this device has not changed');
+    expect(h.state().poll?.identityNotice).toContain('The other private link was not opened');
+    expect(h.verifyParticipant).toHaveBeenCalledExactlyOnceWith('ev1', meB, expect.any(AbortSignal));
     await h.actions.refresh('ev1');
-    expect(h.state().poll?.me).toEqual(me);
+    expect(h.state().poll?.me).toEqual(meB);
     expect(h.storage.getParticipant('ev1')).toEqual(meB);
     expect(h.verifyParticipant).toHaveBeenCalledTimes(1);
-    // Navigating back to the public URL restores this device's own identity in the same load.
     await h.actions.openPoll('ev1', 'public-visit');
     expect(h.state().poll?.me).toEqual(meB);
     expect(h.state().poll?.identityNotice).toBeNull();
-    expect(h.verifyParticipant).toHaveBeenLastCalledWith('ev1', meB, expect.any(AbortSignal));
   });
 
-  it('does not erase the saved identity when removing a different session-only participant', async () => {
+  it.each(['admin-token', null])(
+    'ignores a different link’s admin credential and keeps only saved access (%s)',
+    async (adminToken) => {
+      const h = harness(participantHash(me, 'incoming-admin-token'));
+      h.storage.setParticipant('ev1', meB);
+      h.storage.setAdminToken('ev1', adminToken);
+      h.getEvent.mockResolvedValue(
+        event({ participants: [...event().participants, bea], viewer: { isAdmin: adminToken !== null } }),
+      );
+      await h.actions.openPoll('ev1');
+      expect(h.getEvent).toHaveBeenCalledWith('ev1', adminToken, expect.any(AbortSignal));
+      expect(h.state().poll?.me).toEqual(meB);
+      expect(h.state().poll?.adminToken).toBe(adminToken);
+      expect(h.storage.getAdminToken('ev1')).toBe(adminToken);
+      expect(h.location.readHash()).toBe('');
+    },
+  );
+
+  it('removes the saved profile when its own answer is removed after another link was ignored', async () => {
     const h = harness(participantHash(me));
     h.storage.setParticipant('ev1', meB);
     h.getEvent.mockResolvedValue(event({ participants: [...event().participants, bea] }));
     await h.actions.openPoll('ev1');
     h.actions.setIdentity('ev1', null);
     expect(h.state().poll?.me).toBeNull();
-    expect(h.storage.getParticipant('ev1')).toEqual(meB);
+    expect(h.storage.getParticipant('ev1')).toBeNull();
     expect(h.location.readHash()).toBe('');
+  });
+
+  it('keeps a profile saved by another tab while private-link verification was in flight', async () => {
+    const h = harness(participantHash(me));
+    const verification = deferred<void>();
+    h.getEvent.mockResolvedValue(event({ participants: [...event().participants, bea] }));
+    h.verifyParticipant.mockReturnValueOnce(verification.promise);
+    const opening = h.actions.openPoll('ev1');
+    h.storage.setParticipant('ev1', meB);
+    verification.resolve();
+    await opening;
+    expect(h.state().poll?.me).toEqual(meB);
+    expect(h.storage.getParticipant('ev1')).toEqual(meB);
+    expect(h.state().poll?.identityNotice).toContain('The other private link was not opened');
+    expect(h.verifyParticipant).toHaveBeenLastCalledWith('ev1', meB, expect.any(AbortSignal));
+  });
+
+  it('waits for a retry if the saved profile changes again while it is being confirmed', async () => {
+    const h = harness(participantHash(me));
+    const first = deferred<void>();
+    const second = deferred<void>();
+    const started = deferred<void>();
+    h.getEvent.mockResolvedValue(
+      event({ participants: [...event().participants, bea, { ...bea, id: meA.id, name: 'Ari' }] }),
+    );
+    h.verifyParticipant.mockReturnValueOnce(first.promise).mockImplementationOnce(() => {
+      started.resolve();
+      return second.promise;
+    });
+    const opening = h.actions.openPoll('ev1');
+    h.storage.setParticipant('ev1', meB);
+    first.resolve();
+    await started.promise;
+    h.storage.setParticipant('ev1', meA);
+    second.resolve();
+    await opening;
+    expect(h.state().poll?.me).toBeNull();
+    expect(h.state().poll?.identityError).toContain('Your saved name changed');
+    expect(h.storage.getParticipant('ev1')).toEqual(meA);
+    await h.actions.refresh('ev1');
+    expect(h.state().poll?.me).toEqual(meA);
+    expect(h.state().poll?.identityError).toBeNull();
+  });
+
+  it.each(['deleted', 'bad-token'])(
+    'does not adopt the link if a profile saved during verification is invalid (%s)',
+    async (reason) => {
+      const h = harness(participantHash(me));
+      const pending = deferred<void>();
+      h.getEvent.mockResolvedValue(
+        event({ participants: reason === 'deleted' ? event().participants : [...event().participants, bea] }),
+      );
+      h.verifyParticipant
+        .mockReturnValueOnce(pending.promise)
+        .mockRejectedValueOnce(new ApiRequestError(403, 'not_owner', 'Invalid saved profile'));
+      const opening = h.actions.openPoll('ev1');
+      h.storage.setParticipant('ev1', meB);
+      pending.resolve();
+      await opening;
+      expect(h.state().poll?.me).toBeNull();
+      expect(h.storage.getParticipant('ev1')).toBeNull();
+      expect(h.state().poll?.identityNotice).toContain('The other private link was not opened');
+    },
+  );
+
+  it('does not remove a newer profile saved in another tab when deleting the current answer', async () => {
+    const h = harness(participantHash(me));
+    h.getEvent.mockResolvedValue(event());
+    await h.actions.openPoll('ev1');
+    h.storage.setParticipant('ev1', meB);
+    h.actions.setIdentity('ev1', null);
+    expect(h.storage.getParticipant('ev1')).toEqual(meB);
+    expect(h.state().poll?.me).toBeNull();
   });
 
   it('retains private-link access in memory with blocked storage and a repeated opening effect', async () => {
@@ -580,7 +670,7 @@ describe('private links', () => {
   });
 
   it('falls back to a valid saved identity and shows a notice when a private token is rejected', async () => {
-    const h = harness(participantHash(me));
+    const h = harness(participantHash({ ...meB, token: 'x'.repeat(43) }));
     h.storage.setParticipant('ev1', meB);
     h.getEvent.mockResolvedValue(event({ participants: [...event().participants, bea] }));
     h.verifyParticipant.mockRejectedValueOnce(new ApiRequestError(403, 'not_owner', 'Invalid link'));
@@ -604,13 +694,13 @@ describe('private links', () => {
     expect(h.verifyParticipant).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back in the same load after the linked participant has been deleted', async () => {
+  it('ignores another person’s deleted private link and keeps the saved profile', async () => {
     const h = harness(participantHash(me));
     h.storage.setParticipant('ev1', meB);
     h.getEvent.mockResolvedValue(event({ participants: [bea] }));
     await h.actions.openPoll('ev1');
     expect(h.state().poll?.me).toEqual(meB);
-    expect(h.state().poll?.identityNotice).toBe('This private link is no longer valid.');
+    expect(h.state().poll?.identityNotice).toContain('The other private link was not opened');
   });
 
   it.each([me, null])(
@@ -628,16 +718,19 @@ describe('private links', () => {
     },
   );
 
-  it.each(['bad-token', 'deleted'])('clears a rejected saved fallback (%s)', async (reason) => {
-    const h = harness(participantHash(me));
-    h.storage.setParticipant('ev1', meB);
-    h.getEvent.mockResolvedValue(event({ participants: reason === 'deleted' ? [] : [...event().participants, bea] }));
-    h.verifyParticipant.mockRejectedValue(new ApiRequestError(403, 'not_owner', 'Invalid link'));
-    await h.actions.openPoll('ev1');
-    expect(h.state().poll?.me).toBeNull();
-    expect(h.storage.getParticipant('ev1')).toBeNull();
-    expect(h.state().poll?.identityNotice).toBe('This private link is no longer valid.');
-  });
+  it.each(['bad-token', 'deleted'])(
+    'clears a rejected saved profile without adopting the other link (%s)',
+    async (reason) => {
+      const h = harness(participantHash(me));
+      h.storage.setParticipant('ev1', meB);
+      h.getEvent.mockResolvedValue(event({ participants: reason === 'deleted' ? [] : [...event().participants, bea] }));
+      h.verifyParticipant.mockRejectedValue(new ApiRequestError(403, 'not_owner', 'Invalid link'));
+      await h.actions.openPoll('ev1');
+      expect(h.state().poll?.me).toBeNull();
+      expect(h.storage.getParticipant('ev1')).toBeNull();
+      expect(h.state().poll?.identityNotice).toContain('The other private link was not opened');
+    },
+  );
 
   it('removes an invalid stored token even if its participant still exists', async () => {
     const h = harness();
@@ -700,7 +793,7 @@ describe('private links', () => {
   });
 
   it('keeps the poll readable if saved fallback verification fails, then restores it on retry', async () => {
-    const h = harness(participantHash(me));
+    const h = harness(participantHash({ ...meB, token: 'x'.repeat(43) }));
     h.storage.setParticipant('ev1', meB);
     h.getEvent.mockResolvedValue(event({ participants: [...event().participants, bea] }));
     h.verifyParticipant
@@ -758,7 +851,7 @@ describe('private links', () => {
   });
 
   it('ignores a saved fallback verification that completes after navigation', async () => {
-    const h = harness(participantHash(me));
+    const h = harness(participantHash({ ...meB, token: 'x'.repeat(43) }));
     h.storage.setParticipant('ev1', meB);
     h.getEvent.mockResolvedValueOnce(event({ participants: [...event().participants, bea] }));
     const fallbackStarted = deferred<void>();
@@ -795,7 +888,7 @@ describe('private links', () => {
       expect(h.state().poll?.error).toBeNull();
       h.getEvent.mockResolvedValueOnce(event({ participants: [...event().participants, bea] }));
       await h.actions.openPoll('ev1');
-      expect(h.state().poll?.me).toEqual(meB);
+      expect(h.state().poll?.me).toEqual(me);
       expect(h.storage.getParticipant('ev1')).toEqual(me);
     },
   );

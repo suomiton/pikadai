@@ -23,7 +23,7 @@ async function addAnswer(
 }
 
 test.describe('private links', () => {
-  test('rejected and malformed links restore the saved name with a notice instead of inviting a duplicate join', async ({
+  test('a saved profile blocks another person’s private link and its admin credential', async ({
     page,
     request,
     clientIp,
@@ -35,7 +35,57 @@ test.describe('private links', () => {
       ({ id, identity }) => localStorage.setItem(`pikadai:participant:${id}`, JSON.stringify(identity)),
       { id: poll.id, identity: grace.identity },
     );
-    for (const hash of [`#participant=${ada.identity.id}&token=${'x'.repeat(43)}`, '#participant=short&token=short']) {
+    let foreignVerifications = 0;
+    page.on('request', (req) => {
+      if (
+        req.method() === 'GET' &&
+        new URL(req.url()).pathname === `/api/events/${poll.id}/participants/${ada.identity.id}`
+      )
+        foreignVerifications++;
+    });
+    await page.goto(poll.participantUrl + ada.hash + `&admin=${poll.adminToken}`);
+    await expect(page.getByRole('status').filter({ hasText: 'The other private link was not opened' })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Grace/ }).getByText('you')).toBeVisible();
+    await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit Ada', exact: true })).toHaveCount(0);
+    await expect(page.getByText('organiser view')).toHaveCount(0);
+    await expect(page.getByLabel('Admin link')).toHaveCount(0);
+    await expect(page.getByLabel('Your private link')).toHaveValue(
+      new URL(poll.participantUrl + grace.hash, page.url()).href,
+    );
+    await page.getByRole('button', { name: 'Edit your answers' }).click();
+    await answerDate(page, 0, 1);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('row', { name: /Grace/ }).getByRole('img', { name: 'If need be' })).toHaveCount(1);
+    await expect(page.getByRole('row', { name: /Ada/ }).getByRole('img', { name: 'Yes' })).toHaveCount(1);
+    await page.getByLabel('Add a comment').fill('Still using my own profile.');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.locator('.comment-author')).toHaveText('Grace');
+    expect(foreignVerifications).toBe(0);
+    expect(
+      await page.evaluate((id) => JSON.parse(localStorage.getItem(`pikadai:participant:${id}`)!), poll.id),
+    ).toEqual(grace.identity);
+    expect(await page.evaluate((id) => localStorage.getItem(`pikadai:admin:${id}`), poll.id)).toBeNull();
+    await page.reload();
+    await expect(page.getByRole('row', { name: /Grace/ }).getByText('you')).toBeVisible();
+  });
+
+  test('rejected and malformed links restore the saved name with a notice instead of inviting a duplicate join', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    await addAnswer(request, clientIp, poll.id);
+    const grace = await addAnswer(request, clientIp, poll.id, 'Grace');
+    await page.addInitScript(
+      ({ id, identity }) => localStorage.setItem(`pikadai:participant:${id}`, JSON.stringify(identity)),
+      { id: poll.id, identity: grace.identity },
+    );
+    for (const hash of [
+      `#participant=${grace.identity.id}&token=${'x'.repeat(43)}`,
+      '#participant=short&token=short',
+    ]) {
       await page.goto(poll.participantUrl + hash);
       await expect(page.getByRole('row', { name: /Grace/ }).getByText('you')).toBeVisible();
       await expect(page.getByRole('status').filter({ hasText: 'This private link is no longer valid.' })).toBeVisible();
@@ -92,7 +142,7 @@ test.describe('private links', () => {
   }) => {
     const poll = await createPollViaApi(request, clientIp);
     const ada = await addAnswer(request, clientIp, poll.id);
-    const grace = await addAnswer(request, clientIp, poll.id, 'Grace');
+    await addAnswer(request, clientIp, poll.id, 'Grace');
     const privateUrl = poll.participantUrl + ada.hash;
     const requests: string[] = [];
     page.on('request', (req) => requests.push(req.url()));
@@ -106,22 +156,12 @@ test.describe('private links', () => {
     await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     expect(requests.every((url) => !url.includes(ada.identity.token))).toBe(true);
 
-    // The private link wins even when the other device has already saved a different participant.
+    // A fresh device can recover the same identity from the saved private link.
     const other = await otherPerson.newPage();
-    await other.addInitScript(({ key, identity }) => localStorage.setItem(key, JSON.stringify(identity)), {
-      key: `pikadai:participant:${poll.id}`,
-      identity: grace.identity,
-    });
     await other.goto(new URL(privateUrl, page.url()).href);
     await expect(other.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
     await expect(other.getByRole('row', { name: /Grace/ }).getByText('you')).toHaveCount(0);
     await expect(other.getByRole('button', { name: 'Edit Grace' })).toHaveCount(0);
-    await expect(
-      other.getByRole('status').filter({ hasText: 'Your saved name on this device has not changed' }),
-    ).toBeVisible();
-    expect(
-      await other.evaluate((id) => JSON.parse(localStorage.getItem(`pikadai:participant:${id}`)!), poll.id),
-    ).toEqual(grace.identity);
     await other.getByRole('button', { name: 'Edit your answers' }).click();
     await answerDate(other, 0, 1); // yes → if need be
     await other.getByRole('button', { name: 'Save' }).click();
@@ -137,7 +177,7 @@ test.describe('private links', () => {
     await expect(other.getByLabel('Poll link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
 
     await other.reload();
-    await expect(other.getByRole('row', { name: /Grace/ }).getByText('you')).toBeVisible();
+    await expect(other.getByRole('row', { name: /Ada L./ }).getByText('you')).toBeVisible();
 
     // The public link carries no participant credentials for a browser with no saved identity.
     await page.evaluate(() => localStorage.clear());
@@ -252,15 +292,24 @@ test.describe('private links', () => {
     await expect(page.getByText('organiser view')).toBeVisible();
     await page.goto(poll.participantUrl + ada.hash);
     await expect(page.getByText('organiser view')).toBeVisible();
-    await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
+    await expect(page.getByRole('row', { name: /Host/ }).getByText('you')).toBeVisible();
+    await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: 'The other private link was not opened' })).toBeVisible();
     await expect(page.getByLabel('Admin link')).toHaveValue(new URL(poll.adminUrl, page.url()).href);
     await expect(page.getByLabel('Poll link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
     const guestPrivateUrl = new URL(poll.participantUrl + ada.hash, page.url()).href;
-    await expect(page.getByLabel('Your private link')).toHaveValue(guestPrivateUrl);
+    await expect(page.getByLabel('Your private link')).toHaveValue(
+      new URL(poll.participantUrl + host.hash + `&admin=${poll.adminToken}`, page.url()).href,
+    );
     await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     expect(
       await page.evaluate((id) => JSON.parse(localStorage.getItem(`pikadai:participant:${id}`)!), poll.id),
     ).toEqual(host.identity);
+    // Without a saved profile, a guest link can open in this organiser's browser, but its copy field never gains admin access.
+    await page.evaluate((id) => localStorage.removeItem(`pikadai:participant:${id}`), poll.id);
+    await page.goto(guestPrivateUrl);
+    await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
+    await expect(page.getByLabel('Your private link')).toHaveValue(guestPrivateUrl);
     const other = await otherPerson.newPage();
     await other.goto(guestPrivateUrl);
     await expect(other.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
@@ -343,7 +392,11 @@ test.describe('private links', () => {
     await expect(other.getByRole('heading', { name: 'Find a date that works for everyone.' })).toBeVisible();
   });
 
-  test('switches identities on fragment navigation within the same poll', async ({ page, request, clientIp }) => {
+  test('keeps the saved profile on fragment navigation and Back within the same poll', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
     const poll = await createPollViaApi(request, clientIp);
     const ada = await addAnswer(request, clientIp, poll.id);
     const grace = await addAnswer(request, clientIp, poll.id, 'Grace');
@@ -352,14 +405,16 @@ test.describe('private links', () => {
     await page.evaluate((hash) => {
       window.location.hash = hash;
     }, grace.hash);
-    await expect(page.getByRole('row', { name: /Grace/ }).getByText('you')).toBeVisible();
-    await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: 'The other private link was not opened' })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
+    await expect(page.getByRole('row', { name: /Grace/ }).getByText('you')).toHaveCount(0);
     await expect(page.getByLabel('Your private link')).toHaveValue(
-      new URL(poll.participantUrl + grace.hash, page.url()).href,
+      new URL(poll.participantUrl + ada.hash, page.url()).href,
     );
     await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     await page.goBack();
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'The other private link was not opened' })).toHaveCount(0);
   });
 
   test('keeps the poll readable during a verification outage and restores access on retry', async ({

@@ -44,7 +44,8 @@ function sameIdentity(a: ParticipantIdentity | null, b: ParticipantIdentity | nu
 
 type Verification = { status: 'valid' | 'invalid' } | { status: 'pending'; message: string };
 const invalidLinkNotice = 'This private link is no longer valid.';
-const sessionNotice = 'You are using this private link for this visit. Your saved name on this device has not changed.';
+const savedProfileNotice =
+  'This browser already has a saved name for this poll. The other private link was not opened.';
 
 export function createPollActions({ api, storage, dispatch, getState, location }: PollActionDeps): PollActions {
   /*
@@ -112,11 +113,22 @@ export function createPollActions({ api, storage, dispatch, getState, location }
       if (!isCurrent()) return false;
       let verification = initialVerification;
       let notice = session.notice;
+      // Another tab may have saved this browser's profile while the link was being checked.
+      // Confirm that profile instead of exposing the linked person's answers as editable.
+      const savedDuringLoad = storage.getParticipant(id);
+      if (session.fromLink && candidate && savedDuringLoad && candidate.id !== savedDuringLoad.id) {
+        candidate = savedDuringLoad;
+        notice = savedProfileNotice;
+        verification = hasParticipant(event, candidate)
+          ? await validIdentity(id, candidate, controller.signal)
+          : { status: 'invalid' };
+        if (!isCurrent()) return false;
+      }
       const rejected: ParticipantIdentity[] = [];
       if (candidate && (!hasParticipant(event, candidate) || verification.status === 'invalid')) {
         rejected.push(candidate);
         candidate = session.fromLink && !sameIdentity(candidate, session.saved) ? session.saved : null;
-        if (session.fromLink) notice = invalidLinkNotice;
+        if (session.fromLink && notice !== savedProfileNotice) notice = invalidLinkNotice;
         verification =
           candidate && hasParticipant(event, candidate)
             ? await validIdentity(id, candidate, controller.signal)
@@ -131,11 +143,19 @@ export function createPollActions({ api, storage, dispatch, getState, location }
       for (const identity of rejected) {
         if (sameIdentity(storage.getParticipant(id), identity)) storage.setParticipant(id, null);
       }
-      const effective = verification.status === 'valid' ? candidate : null;
+      let effective = verification.status === 'valid' ? candidate : null;
       const saved = storage.getParticipant(id);
+      if (effective && saved && saved.id !== effective.id) {
+        candidate = saved;
+        effective = null;
+        notice = savedProfileNotice;
+        verification = {
+          status: 'pending',
+          message: 'Your saved name changed while this link was opening. Try again to confirm it.',
+        };
+      }
       if (effective) {
-        if (!saved || sameIdentity(saved, effective)) storage.setParticipant(id, effective);
-        else notice = sessionNotice;
+        if (!saved || saved.id === effective.id) storage.setParticipant(id, effective);
       }
       const effectiveAdmin = event.viewer.isAdmin ? adminToken : null;
       if (effectiveAdmin) storage.setAdminToken(id, effectiveAdmin);
@@ -194,12 +214,16 @@ export function createPollActions({ api, storage, dispatch, getState, location }
       if (reuse && inFlight) return;
       const saved = reuse ? reuse.saved : storage.getParticipant(id);
       const linked = explicit ? parseParticipantHash(hash) : null;
+      const otherProfile = !!(linked && saved && linked.id !== saved.id);
+      // A private link cannot switch a browser that already has its own profile for this poll.
+      // Ignore its admin credential too, including on a malformed private link.
+      const incomingAdmin = explicit && saved && linked?.id !== saved.id ? null : fromHash;
       const savedAdmin = storage.getAdminToken(id);
       // Preserve first-time admin recovery through a poll-fetch outage, without overwriting a
       // different saved token until the server confirms the incoming one.
-      if (fromHash && !savedAdmin) storage.setAdminToken(id, fromHash);
-      const adminToken = fromHash ?? savedAdmin ?? kept?.adminToken ?? null;
-      const me = explicit ? (linked ?? saved) : reuse ? reuse.me : saved;
+      if (incomingAdmin && !savedAdmin) storage.setAdminToken(id, incomingAdmin);
+      const adminToken = incomingAdmin ?? savedAdmin ?? kept?.adminToken ?? null;
+      const me = explicit ? (otherProfile ? saved : (linked ?? saved)) : reuse ? reuse.me : saved;
       const capturedKey = fromHash || explicit ? replaceHash(id, '') : undefined;
       held = {
         id,
@@ -208,8 +232,8 @@ export function createPollActions({ api, storage, dispatch, getState, location }
         me,
         saved,
         verified: sameIdentity(me, kept?.me ?? null) && (reuse?.verified ?? false),
-        fromLink: explicit || (reuse?.fromLink ?? false),
-        notice: explicit && !linked ? invalidLinkNotice : (reuse?.notice ?? null),
+        fromLink: (explicit && !otherProfile) || (reuse?.fromLink ?? false),
+        notice: otherProfile ? savedProfileNotice : explicit && !linked ? invalidLinkNotice : (reuse?.notice ?? null),
       };
       dispatch({ type: 'poll/open', id, adminToken, me });
       await load(id, adminToken);
@@ -222,7 +246,7 @@ export function createPollActions({ api, storage, dispatch, getState, location }
     },
 
     setIdentity(id, me) {
-      // Removing a session-only identity must not remove the different one saved on this device.
+      // Removing the current identity must not remove a newer profile saved by another tab.
       if (me || held?.id !== id || sameIdentity(storage.getParticipant(id), held.me)) storage.setParticipant(id, me);
       if (held?.id === id)
         held = {

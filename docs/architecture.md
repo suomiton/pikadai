@@ -105,10 +105,11 @@ ordinary refreshes fetch only the poll; the participant list detects deleted ide
 or rate-limit failure during verification still loads a readable poll, keeps the candidate in memory,
 and offers a retry. Joining, answering, and commenting under that identity wait for confirmation.
 
-A valid private link takes precedence for the current visit. If the device already has a different
-saved identity, that identity is preserved and the UI explains the temporary switch. Reloading or
-navigating back to the public URL restores the saved identity. A malformed, rejected, or deleted link
-shows a notice and falls back to the saved identity, verifying it in the same load. Rejected saved
+If this browser already has a saved profile for the poll, a different participant's private link is
+ignored, including any admin credential in that link. The saved profile stays active, and a notice
+explains why the other link was not opened. This also applies if another tab saves the profile while
+link verification is in flight. A malformed link or a rejected token for the same participant shows
+a notice and falls back to the saved identity, verifying it in the same load. Rejected saved
 credentials are removed; outages never erase them. Old `localStorage` identities receive the same
 private copy link after verification, with no token rotation or database migration.
 

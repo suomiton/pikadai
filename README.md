@@ -14,6 +14,8 @@ identity. The organiser's own private link also restores their poll-management p
 private: anyone with that link can use the permissions it carries, including editing or deleting the
 poll for an organiser. The address bar stays on the public URL; use the "Poll link" in Share to invite
 other people. If browser storage is blocked, reopen your saved private link after a reload.
+When this browser already has a profile saved for the poll, another person's private link is ignored
+and your own profile stays active.
 
 Runs entirely on Cloudflare's free plan: a Worker (TypeScript, Hono) serves both the React app and the
 API from one origin, with D1 for storage, Turnstile and rate limiting against abuse, and a nightly cron

@@ -22,7 +22,7 @@ export interface PollSession {
   event: EventView | null;
   /** The last failed load; cleared by the next successful one. A loaded event stays through a transient failure. */
   error: LoadError | null;
-  /** A link was rejected or is being used without replacing this device's saved identity. */
+  /** A link was rejected or ignored to keep this device's saved identity. */
   identityNotice: string | null;
   /** The poll loaded, but participant verification needs a retry. `me` stays null until then. */
   identityError: string | null;
