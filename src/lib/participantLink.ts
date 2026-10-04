@@ -15,7 +15,7 @@ export function participantLink(
   return `${origin}/e/${encodeURIComponent(eventId)}${participantHash(me, adminToken)}`;
 }
 
-/** An explicit private link takes precedence over this browser's saved identity, even if malformed. */
+/** Detect an explicit private link so malformed credentials can show a notice before falling back. */
 export function hasParticipantHash(hash: string): boolean {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   return params.has('participant') || params.has('token');

@@ -1,6 +1,6 @@
 import { ApiRequestError, type api as apiModule } from '../lib/api';
 import { describeError } from '../lib/errors';
-import { hasParticipantHash, parseParticipantHash, participantHash } from '../lib/participantLink';
+import { hasParticipantHash, parseParticipantHash } from '../lib/participantLink';
 import type { ParticipantIdentity, storage as storageModule } from '../lib/storage';
 import { hasParticipant, parseAdminHash, type AppAction, type AppState } from './app';
 
@@ -14,7 +14,7 @@ export interface PollActionDeps {
   storage: typeof storageModule;
   dispatch: (action: AppAction) => void;
   getState: () => AppState;
-  location: { readHash(): string; replaceHash(id: string, hash: string): void };
+  location: { readHash(): string; replaceHash(id: string, hash: string): string | void };
 }
 
 /**
@@ -24,7 +24,7 @@ export interface PollActionDeps {
  */
 export interface PollActions {
   /** Start viewing a poll: pick up private-link or stored credentials, validate the identity, then fetch. */
-  openPoll(id: string): Promise<void>;
+  openPoll(id: string, navigationKey?: string, routerHash?: string): Promise<void>;
   /** Re-fetch poll `id` if it is the one on screen. Resolves to whether the fetch succeeded. */
   refresh(id: string): Promise<boolean>;
   /** Remember (or forget, with null) which participant this browser is in poll `id`. */
@@ -37,6 +37,14 @@ export interface PollActions {
 function isGone(err: unknown): boolean {
   return err instanceof ApiRequestError && (err.status === 404 || err.status === 410);
 }
+
+function sameIdentity(a: ParticipantIdentity | null, b: ParticipantIdentity | null): boolean {
+  return a?.id === b?.id && a?.token === b?.token;
+}
+
+type Verification = { status: 'valid' | 'invalid' } | { status: 'pending'; message: string };
+const invalidLinkNotice = 'This private link is no longer valid.';
+const sessionNotice = 'You are using this private link for this visit. Your saved name on this device has not changed.';
 
 export function createPollActions({ api, storage, dispatch, getState, location }: PollActionDeps): PollActions {
   /*
@@ -56,63 +64,101 @@ export function createPollActions({ api, storage, dispatch, getState, location }
    * re-rendered with the first run's dispatch before the second run reads it. This copy survives
    * both, so the second run still fetches as the organiser or the participant.
    */
-  let held: { id: string; adminToken: string | null; me: ParticipantIdentity | null } | null = null;
+  let held: {
+    id: string;
+    navigationKey: string | undefined;
+    adminToken: string | null;
+    me: ParticipantIdentity | null;
+    verified: boolean;
+    saved: ParticipantIdentity | null;
+    fromLink: boolean;
+    notice: string | null;
+  } | null = null;
 
   function replaceHash(id: string, hash: string) {
-    if (location.readHash() !== hash) location.replaceHash(id, hash);
+    if (location.readHash() !== hash) return location.replaceHash(id, hash);
   }
 
-  async function validIdentity(id: string, me: ParticipantIdentity | null, signal: AbortSignal): Promise<boolean> {
-    if (!me) return false;
+  async function validIdentity(id: string, me: ParticipantIdentity, signal: AbortSignal): Promise<Verification> {
     try {
       await api.verifyParticipant(id, me, signal);
-      return true;
+      return { status: 'valid' };
     } catch (err) {
-      if (err instanceof ApiRequestError && err.status === 403 && err.code === 'not_owner') return false;
-      // An outage must not erase a valid private link or the stored identity; the user can retry.
-      throw err;
+      if (err instanceof ApiRequestError && err.status === 403 && err.code === 'not_owner')
+        return { status: 'invalid' };
+      // Keep the poll readable and the candidate in memory; only identity-dependent actions wait.
+      return { status: 'pending', message: describeError(err) };
     }
   }
 
   async function load(id: string, adminToken: string | null): Promise<boolean> {
+    const session = held;
+    if (!session || session.id !== id) return false;
     inFlight?.abort();
     const controller = new AbortController();
     inFlight = controller;
     const seq = ++issued;
-    const me = held?.id === id ? held.me : null;
     const hash = location.readHash();
+    const isCurrent = () =>
+      !controller.signal.aborted && seq === issued && held === session && location.readHash() === hash;
     try {
-      const [event, verified] = await Promise.all([
+      let candidate = session.me;
+      const [event, initialVerification] = await Promise.all([
         api.getEvent(id, adminToken, controller.signal),
-        validIdentity(id, me, controller.signal),
+        candidate && !session.verified
+          ? validIdentity(id, candidate, controller.signal)
+          : Promise.resolve<Verification>({ status: candidate ? 'valid' : 'invalid' }),
       ]);
-      if (
-        controller.signal.aborted ||
-        seq !== issued ||
-        held?.id !== id ||
-        held.me !== me ||
-        location.readHash() !== hash
-      )
-        return false;
+      if (!isCurrent()) return false;
+      let verification = initialVerification;
+      let notice = session.notice;
+      const rejected: ParticipantIdentity[] = [];
+      if (candidate && (!hasParticipant(event, candidate) || verification.status === 'invalid')) {
+        rejected.push(candidate);
+        candidate = session.fromLink && !sameIdentity(candidate, session.saved) ? session.saved : null;
+        if (session.fromLink) notice = invalidLinkNotice;
+        verification =
+          candidate && hasParticipant(event, candidate)
+            ? await validIdentity(id, candidate, controller.signal)
+            : { status: 'invalid' };
+        if (!isCurrent()) return false;
+      }
+      if (candidate && verification.status === 'invalid') {
+        rejected.push(candidate);
+        candidate = null;
+      }
       applied = seq;
-      const effective = verified && hasParticipant(event, me) ? me : null;
+      for (const identity of rejected) {
+        if (sameIdentity(storage.getParticipant(id), identity)) storage.setParticipant(id, null);
+      }
+      const effective = verification.status === 'valid' ? candidate : null;
+      const saved = storage.getParticipant(id);
       if (effective) {
-        storage.setParticipant(id, effective);
-      } else if (me) {
-        // A bad link must not erase a different, valid identity already saved in this browser.
-        const saved = storage.getParticipant(id);
-        if (saved?.id === me.id && saved.token === me.token) storage.setParticipant(id, null);
-        dispatch({ type: 'poll/identity', id, me: null });
+        if (!saved || sameIdentity(saved, effective)) storage.setParticipant(id, effective);
+        else notice = sessionNotice;
       }
-      held = { id, adminToken: event.viewer.isAdmin ? adminToken : null, me: effective };
-      if (effective) replaceHash(id, participantHash(effective, held.adminToken));
-      else if (hasParticipantHash(location.readHash())) {
-        replaceHash(id, held.adminToken ? `#admin=${encodeURIComponent(held.adminToken)}` : '');
-      }
-      dispatch({ type: 'poll/loaded', id, event });
+      const effectiveAdmin = event.viewer.isAdmin ? adminToken : null;
+      if (effectiveAdmin) storage.setAdminToken(id, effectiveAdmin);
+      else if (adminToken && storage.getAdminToken(id) === adminToken) storage.setAdminToken(id, null);
+      held = {
+        ...session,
+        adminToken: effectiveAdmin,
+        me: candidate,
+        verified: verification.status === 'valid',
+        saved: storage.getParticipant(id),
+        notice,
+      };
+      dispatch({
+        type: 'poll/loaded',
+        id,
+        event,
+        me: effective,
+        identityNotice: notice,
+        identityError: verification.status === 'pending' ? verification.message : null,
+      });
       return true;
     } catch (err) {
-      if (controller.signal.aborted || seq <= applied || seq !== issued || location.readHash() !== hash) return false;
+      if (!isCurrent() || seq <= applied) return false;
       applied = seq;
       dispatch({ type: 'poll/failed', id, error: { message: describeError(err), gone: isGone(err) } });
       return false;
@@ -122,24 +168,49 @@ export function createPollActions({ api, storage, dispatch, getState, location }
   }
 
   return {
-    async openPoll(id) {
+    async openPoll(id, navigationKey, routerHash) {
       /*
        * The admin link carries its token in the URL fragment, which browsers never send to the
-       * server. Standalone admin links move into storage and are stripped. Combined private links
-       * retain both credentials so the organiser can restore their identity and permissions elsewhere.
+       * server. Capture credentials in memory and strip them immediately, so copying the address
+       * bar or using a mobile share sheet sends the public link, even when storage is blocked.
        */
       const hash = location.readHash();
       const fromHash = parseAdminHash(hash);
-      if (fromHash !== null) {
-        storage.setAdminToken(id, fromHash);
-        if (!hasParticipantHash(hash)) replaceHash(id, '');
-      }
       const kept = held?.id === id ? held : null;
-      const adminToken = fromHash ?? storage.getAdminToken(id) ?? kept?.adminToken ?? null;
-      const me = hasParticipantHash(hash)
-        ? parseParticipantHash(hash)
-        : (storage.getParticipant(id) ?? kept?.me ?? null);
-      held = { id, adminToken, me };
+      const explicit = hasParticipantHash(hash);
+      // StrictMode can repeat an effect with the router's old fragment just after the first run
+      // stripped it. Keep that captured identity until the router observes the public URL.
+      if (
+        kept &&
+        !explicit &&
+        !fromHash &&
+        routerHash &&
+        (hasParticipantHash(routerHash) || parseAdminHash(routerHash))
+      )
+        return;
+      const reuse = !explicit && !fromHash && kept?.navigationKey === navigationKey ? kept : null;
+      // Stripping a fragment notifies the router; that follow-up effect must reuse the capture in
+      // progress instead of aborting it and spending another read/verification request.
+      if (reuse && inFlight) return;
+      const saved = reuse ? reuse.saved : storage.getParticipant(id);
+      const linked = explicit ? parseParticipantHash(hash) : null;
+      const savedAdmin = storage.getAdminToken(id);
+      // Preserve first-time admin recovery through a poll-fetch outage, without overwriting a
+      // different saved token until the server confirms the incoming one.
+      if (fromHash && !savedAdmin) storage.setAdminToken(id, fromHash);
+      const adminToken = fromHash ?? savedAdmin ?? kept?.adminToken ?? null;
+      const me = explicit ? (linked ?? saved) : reuse ? reuse.me : saved;
+      const capturedKey = fromHash || explicit ? replaceHash(id, '') : undefined;
+      held = {
+        id,
+        navigationKey: capturedKey ?? navigationKey,
+        adminToken,
+        me,
+        saved,
+        verified: sameIdentity(me, kept?.me ?? null) && (reuse?.verified ?? false),
+        fromLink: explicit || (reuse?.fromLink ?? false),
+        notice: explicit && !linked ? invalidLinkNotice : (reuse?.notice ?? null),
+      };
       dispatch({ type: 'poll/open', id, adminToken, me });
       await load(id, adminToken);
     },
@@ -151,19 +222,20 @@ export function createPollActions({ api, storage, dispatch, getState, location }
     },
 
     setIdentity(id, me) {
-      storage.setParticipant(id, me);
-      if (held?.id === id) held = { ...held, me };
+      // Removing a session-only identity must not remove the different one saved on this device.
+      if (me || held?.id !== id || sameIdentity(storage.getParticipant(id), held.me)) storage.setParticipant(id, me);
+      if (held?.id === id)
+        held = {
+          ...held,
+          me,
+          verified: me !== null,
+          saved: storage.getParticipant(id),
+          fromLink: false,
+          notice: null,
+        };
       const poll = getState().poll;
       if (poll?.id === id) {
         dispatch({ type: 'poll/identity', id, me });
-        replaceHash(
-          id,
-          me
-            ? participantHash(me, poll.adminToken)
-            : poll.adminToken
-              ? `#admin=${encodeURIComponent(poll.adminToken)}`
-              : '',
-        );
       }
     },
 
@@ -186,6 +258,17 @@ export const browserLocation: PollActionDeps['location'] = {
     // The store can still hold the last poll after EventPage unmounts. A late response must not
     // attach its private link to the home page or another route.
     if (window.location.pathname.replace(/\/$/, '') !== `/e/${encodeURIComponent(id)}`) return;
-    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search + hash);
+    // Native fragment navigation can reuse the history key. Give each captured visit a distinct
+    // key while keeping its history position/user state, then sync the router with the public URL.
+    // Otherwise reopening the same private link is invisible to it, and Back cannot restore the
+    // saved identity between two entries whose fragments were both stripped.
+    const key = crypto.randomUUID();
+    window.history.replaceState(
+      { ...window.history.state, key },
+      '',
+      window.location.pathname + window.location.search + hash,
+    );
+    window.dispatchEvent(new Event('popstate'));
+    return key;
   },
 };

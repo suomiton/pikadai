@@ -31,8 +31,8 @@ function write(key: string, value: string | null): void {
 export const storage = {
   /**
    * Whether this browser keeps what is written here. False in some private modes and when site data
-   * is blocked. Private links still restore participant access after a reload; the UI asks the viewer
-   * to save their link where a credential is handed out.
+   * is blocked. Reopening a saved private link still restores access; the UI asks the viewer to
+   * save it for reloads or after the tab closes.
    */
   available: (): boolean => {
     try {

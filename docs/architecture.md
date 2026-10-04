@@ -83,28 +83,39 @@ when the browser blocks `localStorage`; the page then warns that the link will n
 no recovery path if the admin link is lost; that is the price of having no accounts, and the UI says so
 next to the link.
 
-**Private participant links.** After joining, the address bar becomes
-`/e/:id#participant=PARTICIPANT_ID&token=EDIT_TOKEN`, and the Name tile offers a copyable "Your private
-link". The token is the existing cryptographically random 256-bit edit token, not a value derived from
-the participant's name or public id. It stays in the fragment so a saved link can restore access on
-another device, after site data is cleared, or when storage is blocked. Anyone holding the private
-link can edit that person's answers and comment as them; the public share link remains `/e/:id`.
+**Private links.** The Name tile offers a copyable "Your private link":
+`/e/:id#participant=PARTICIPANT_ID&token=EDIT_TOKEN`. The token is the existing cryptographically random
+256-bit edit token, not a value derived from the participant's name or public id. Opening a private
+link captures its credentials in memory and immediately strips the fragment. Joining and restoring a
+saved identity also leave the address bar at the public `/e/:id` URL, so copying the address bar or
+using a mobile share sheet does not send credentials. The private copy field warns that anyone with
+the link can edit that person's answers and comment as them. The public field is labelled "Poll link".
 
-For an organiser who joins, the private link also includes `&admin=ADMIN_TOKEN`. Both secrets stay in
-the fragment so opening the link on another device or after clearing site data restores their name
-and organiser permissions together. The Name tile warns that this link also grants access to edit
-or delete the poll. A returning organiser's saved admin token is added to their private link after
-the server confirms it; participant-only links continue to grant only participant access.
+For an organiser's own participant row (`isOrganiser`), the private copy field includes
+`&admin=ADMIN_TOKEN` after the server confirms admin access. Opening it on another device restores
+their name and organiser permissions together. The warning explains that this link also grants access
+to edit or delete the poll. Opening a guest's private link in an organiser's browser keeps that
+browser's organiser access, but never attaches the admin credential to the guest's private copy link.
 
-On opening or refreshing a poll, the client validates the participant token with
+When adopting an identity, the client validates its token with
 `GET /api/events/:id/participants/:participantId`, in parallel with fetching the poll. That endpoint
-accepts only the participant's own token, including when the browser also holds the admin token. A
-private link takes precedence over a different identity saved for the same poll. Invalid or deleted
-identities are dropped from the session and their participant fragment is removed, preserving a valid
-admin credential in the URL; a network failure preserves
-the link for retry. A returning participant with only the old `localStorage` identity gets the same
-private link after verification, with no token rotation or database migration. Keep the link somewhere
-safe: a closed incognito session cannot restore access if both the link and its storage are lost.
+accepts only the participant's own token, including when the browser also holds the admin token.
+Successful joins already prove ownership. Verified identities are remembered in the session and
+ordinary refreshes fetch only the poll; the participant list detects deleted identities. A transport
+or rate-limit failure during verification still loads a readable poll, keeps the candidate in memory,
+and offers a retry. Joining, answering, and commenting under that identity wait for confirmation.
+
+A valid private link takes precedence for the current visit. If the device already has a different
+saved identity, that identity is preserved and the UI explains the temporary switch. Reloading or
+navigating back to the public URL restores the saved identity. A malformed, rejected, or deleted link
+shows a notice and falls back to the saved identity, verifying it in the same load. Rejected saved
+credentials are removed; outages never erase them. Old `localStorage` identities receive the same
+private copy link after verification, with no token rotation or database migration.
+
+All credential fragments are stripped even when storage is blocked. Access continues in memory for
+the current visit, and the UI asks the viewer to save their private or admin link and reopen it after
+a reload or when the tab closes. A closed incognito session cannot restore access if both the saved
+link and its browser storage are lost.
 
 **Why `Authorization`.** A request carries at most one token, in the standard header: the admin token when
 the browser has one, otherwise the participant's edit token, since everything a participant may do the admin
@@ -183,8 +194,8 @@ name or commenting does not count, and the top-dates table counts the same peopl
    same name cannot both get in. When the request carries the admin token, the row is marked
    `is_organiser`, and the organiser's name is shown with an outlined "organiser" pill on their answer
    row and on their comments. The client sends the token whenever it has one; the server decides.
-4. The response `{ id, editToken }` is stored in `localStorage` under the poll id and used to replace
-   the address bar's fragment with the private participant link. The new row opens for
+4. The response `{ id, editToken }` is stored in `localStorage` under the poll id and offered as
+   "Your private link" in the Name tile; the address bar stays public. The new row opens for
    editing by itself with focus on its first date cell; so does the row of someone who joined earlier
    and has not answered yet.
 5. Every save of answers, now and later, sends both as headers to
@@ -288,7 +299,7 @@ All request and response bodies are JSON. Errors are `{ error: string, code: str
 | POST   | `/api/events/:id/options`                     | anyone while suggestions are on; admin always | Add a date                                       |
 | DELETE | `/api/events/:id/options/:optionId`           | admin                                         | Remove a date and its votes                      |
 | POST   | `/api/events/:id/participants`                | Turnstile; admin token marks the organiser    | Join: add a participant → `{ id, editToken }`    |
-| GET    | `/api/events/:id/participants/:participantId` | own token                                     | Validate a private participant link → 204        |
+| GET    | `/api/events/:id/participants/:participantId` | own token                                     | Validate a private link → 204                    |
 | PUT    | `/api/events/:id/participants/:participantId` | own token or admin                            | Change the name, replace the votes, or both      |
 | DELETE | `/api/events/:id/participants/:participantId` | own token or admin                            | Remove an answer                                 |
 | POST   | `/api/events/:id/comments`                    | participant token + `X-Participant-Id`        | Post a comment → `Comment`                       |

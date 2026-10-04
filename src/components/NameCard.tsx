@@ -21,16 +21,20 @@ import { TurnstileField } from './TurnstileField';
  * rather than loading the Turnstile widget on every visit.
  */
 export function NameCard() {
-  const { event, me, adminToken, isAdmin } = usePoll();
+  const { event, me, adminToken, isAdmin, identityError } = usePoll();
   const id = useId();
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
+  // Opening a guest's private link in an organiser's browser must never give that guest admin access.
+  const privateAdminToken = mine?.isOrganiser ? adminToken : null;
   const [joining, setJoining] = useState(false);
   const joinButtonRef = useRef<HTMLButtonElement>(null);
 
   return (
     <section className="card stack name-card" aria-labelledby={`${id}-heading`}>
       <h2 id={`${id}-heading`}>Name</h2>
-      {me === null ? (
+      {identityError ? (
+        <p>Your name could not be confirmed. Try again above to edit answers or comment.</p>
+      ) : me === null ? (
         isAdmin && !joining ? (
           <div className="section-head">
             <p>You have not joined this poll yourself.</p>
@@ -47,13 +51,16 @@ export function NameCard() {
       {me && (
         <CopyField
           label="Your private link"
-          value={participantLink(window.location.origin, event.id, me, adminToken)}
+          value={participantLink(window.location.origin, event.id, me, privateAdminToken)}
           hint={
-            adminToken
+            privateAdminToken
               ? 'Save this link to return on any device with your organiser access. Keep it private: anyone with it can edit or delete the poll and comment as you.'
               : 'Save this link to return on any device, even after clearing browser data. Keep it private: anyone with it can change your answers and comment as you.'
           }
         />
+      )}
+      {me && (
+        <StorageNotice consequence="save your private link and reopen it after a reload or when this tab closes." />
       )}
     </section>
   );

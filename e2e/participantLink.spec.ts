@@ -3,8 +3,14 @@ import type { CreateParticipantResponse, EventView } from '../shared/types';
 import { createPollViaApi, DUMMY_TURNSTILE_TOKEN, expect, test } from './fixtures';
 import { answerDate, nameField, waitForTurnstile } from './helpers';
 
-async function addAnswer(request: APIRequestContext, clientIp: string, pollId: string, name = 'Ada') {
-  const headers = { 'CF-Connecting-IP': clientIp };
+async function addAnswer(
+  request: APIRequestContext,
+  clientIp: string,
+  pollId: string,
+  name = 'Ada',
+  adminToken: string | null = null,
+) {
+  const headers = { 'CF-Connecting-IP': clientIp, ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}) };
   const view = (await (await request.get(`/api/events/${pollId}`, { headers })).json()) as EventView;
   const response = await request.post(`/api/events/${pollId}/participants`, {
     headers,
@@ -16,7 +22,68 @@ async function addAnswer(request: APIRequestContext, clientIp: string, pollId: s
   return { identity, hash: `#participant=${id}&token=${editToken}` };
 }
 
-test.describe('private participant links', () => {
+test.describe('private links', () => {
+  test('rejected and malformed links restore the saved name with a notice instead of inviting a duplicate join', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    const ada = await addAnswer(request, clientIp, poll.id);
+    const grace = await addAnswer(request, clientIp, poll.id, 'Grace');
+    await page.addInitScript(
+      ({ id, identity }) => localStorage.setItem(`pikadai:participant:${id}`, JSON.stringify(identity)),
+      { id: poll.id, identity: grace.identity },
+    );
+    for (const hash of [`#participant=${ada.identity.id}&token=${'x'.repeat(43)}`, '#participant=short&token=short']) {
+      await page.goto(poll.participantUrl + hash);
+      await expect(page.getByRole('row', { name: /Grace/ }).getByText('you')).toBeVisible();
+      await expect(page.getByRole('status').filter({ hasText: 'This private link is no longer valid.' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Join', exact: true })).toHaveCount(0);
+      await expect(page.getByLabel('Your private link')).toHaveValue(
+        new URL(poll.participantUrl + grace.hash, page.url()).href,
+      );
+      await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
+      expect(
+        await page.evaluate((id) => JSON.parse(localStorage.getItem(`pikadai:participant:${id}`)!), poll.id),
+      ).toEqual(grace.identity);
+    }
+  });
+
+  test('post-save refreshes do not make another verification request when that endpoint is rate limited', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const poll = await createPollViaApi(request, clientIp);
+    const ada = await addAnswer(request, clientIp, poll.id);
+    let rateLimited = false;
+    let verifications = 0;
+    await page.route(`**/api/events/${poll.id}/participants/${ada.identity.id}`, async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      verifications++;
+      if (rateLimited) await route.fulfill({ status: 429, json: { error: 'Slow down', code: 'rate_limited' } });
+      else await route.fallback();
+    });
+    await page.goto(poll.participantUrl + ada.hash);
+    await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
+    const initialVerifications = verifications;
+    rateLimited = true;
+    await page.getByRole('button', { name: 'Edit your answers' }).click();
+    await answerDate(page, 0, 1);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('row', { name: /Ada/ }).getByRole('img', { name: 'If need be' })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Change name' }).click();
+    await nameField(page).fill('Ada L.');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByText('You are in this poll as')).toContainText('Ada L.');
+    await page.getByLabel('Add a comment').fill('No verification request needed after this save.');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.locator('.comment-author')).toHaveText('Ada L.');
+    expect(verifications).toBe(initialVerifications);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+
   test('restores answers after site data deletion and on another device, including edits and comments', async ({
     page,
     otherPerson,
@@ -31,10 +98,12 @@ test.describe('private participant links', () => {
     page.on('request', (req) => requests.push(req.url()));
     await page.goto(privateUrl);
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
+    await expect(page.getByLabel('Your private link')).toHaveValue(new URL(privateUrl, page.url()).href);
     await page.evaluate(() => localStorage.clear());
-    await page.reload();
+    await page.goto(privateUrl);
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
-    await expect(page).toHaveURL(new URL(privateUrl, page.url()).href);
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     expect(requests.every((url) => !url.includes(ada.identity.token))).toBe(true);
 
     // The private link wins even when the other device has already saved a different participant.
@@ -47,6 +116,12 @@ test.describe('private participant links', () => {
     await expect(other.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
     await expect(other.getByRole('row', { name: /Grace/ }).getByText('you')).toHaveCount(0);
     await expect(other.getByRole('button', { name: 'Edit Grace' })).toHaveCount(0);
+    await expect(
+      other.getByRole('status').filter({ hasText: 'Your saved name on this device has not changed' }),
+    ).toBeVisible();
+    expect(
+      await other.evaluate((id) => JSON.parse(localStorage.getItem(`pikadai:participant:${id}`)!), poll.id),
+    ).toEqual(grace.identity);
     await other.getByRole('button', { name: 'Edit your answers' }).click();
     await answerDate(other, 0, 1); // yes → if need be
     await other.getByRole('button', { name: 'Save' }).click();
@@ -59,7 +134,10 @@ test.describe('private participant links', () => {
     await other.getByRole('button', { name: 'Send', exact: true }).click();
     const comment = other.locator('.comment').filter({ hasText: 'This link works on my other device.' });
     await expect(comment.locator('.comment-author')).toHaveText('Ada L.');
-    await expect(other.getByLabel('Participant link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
+    await expect(other.getByLabel('Poll link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
+
+    await other.reload();
+    await expect(other.getByRole('row', { name: /Grace/ }).getByText('you')).toBeVisible();
 
     // The public link carries no participant credentials for a browser with no saved identity.
     await page.evaluate(() => localStorage.clear());
@@ -80,9 +158,11 @@ test.describe('private participant links', () => {
       identity: ada.identity,
     });
     await page.goto(poll.participantUrl);
-    await expect(page).toHaveURL(new URL(poll.participantUrl + ada.hash, page.url()).href);
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
-    await expect(page.getByLabel('Your private link')).toHaveValue(page.url());
+    await expect(page.getByLabel('Your private link')).toHaveValue(
+      new URL(poll.participantUrl + ada.hash, page.url()).href,
+    );
     expect(
       (
         (await (
@@ -92,7 +172,7 @@ test.describe('private participant links', () => {
     ).toHaveLength(1);
   });
 
-  test('joining with blocked storage still restores the private link after a reload', async ({
+  test('joining with blocked storage keeps the address bar public and restores access by reopening the saved link', async ({
     page,
     request,
     clientIp,
@@ -111,13 +191,18 @@ test.describe('private participant links', () => {
     const join = page.getByRole('button', { name: 'Join', exact: true });
     await waitForTurnstile(join);
     await join.click();
-    await expect(page).toHaveURL(/#participant=[A-Za-z0-9_-]{22}&token=[A-Za-z0-9_-]{43}$/);
-    await expect(page.getByLabel('Your private link')).toHaveValue(page.url());
-    const privateUrl = page.url();
+    await expect(page.getByLabel('Your private link')).toHaveValue(
+      /#participant=[A-Za-z0-9_-]{22}&token=[A-Za-z0-9_-]{43}$/,
+    );
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
+    const privateUrl = await page.getByLabel('Your private link').inputValue();
+    await expect(page.getByRole('note')).toContainText('reopen it after a reload');
     await page.reload();
+    await expect(page.getByRole('button', { name: 'Join', exact: true })).toBeVisible();
+    await page.goto(privateUrl);
     await expect(page.getByText('You are in this poll as')).toContainText('Ada');
     await expect(page.locator('tr.is-editing')).toHaveCount(1);
-    await expect(page).toHaveURL(privateUrl);
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     await answerDate(page, 0, 1);
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByRole('row', { name: /Ada/ }).getByRole('img', { name: 'Yes' })).toHaveCount(1);
@@ -132,6 +217,7 @@ test.describe('private participant links', () => {
     const ada = await addAnswer(request, clientIp, poll.id);
     await page.goto(`${poll.participantUrl}#participant=${ada.identity.id}&token=${'x'.repeat(43)}`);
     await expect(page.getByRole('button', { name: 'Join', exact: true })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'This private link is no longer valid.' })).toBeVisible();
     await expect(page.getByLabel('Your private link')).toHaveCount(0);
     await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     await page.goto(poll.participantUrl + ada.hash);
@@ -149,21 +235,42 @@ test.describe('private participant links', () => {
     expect(await page.evaluate((id) => localStorage.getItem(`pikadai:participant:${id}`), poll.id)).toBeNull();
   });
 
-  test('preserves an organiser session and keeps the public and admin links separate', async ({
+  test('preserves an organiser session without attaching admin access to a guest private link', async ({
     page,
+    otherPerson,
     request,
     clientIp,
   }) => {
     const poll = await createPollViaApi(request, clientIp);
     const ada = await addAnswer(request, clientIp, poll.id);
+    const host = await addAnswer(request, clientIp, poll.id, 'Host', poll.adminToken);
+    await page.addInitScript(
+      ({ id, identity }) => localStorage.setItem(`pikadai:participant:${id}`, JSON.stringify(identity)),
+      { id: poll.id, identity: host.identity },
+    );
     await page.goto(poll.adminUrl);
     await expect(page.getByText('organiser view')).toBeVisible();
     await page.goto(poll.participantUrl + ada.hash);
     await expect(page.getByText('organiser view')).toBeVisible();
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
     await expect(page.getByLabel('Admin link')).toHaveValue(new URL(poll.adminUrl, page.url()).href);
-    await expect(page.getByLabel('Participant link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
-    await expect(page.getByLabel('Your private link')).toHaveValue(page.url());
+    await expect(page.getByLabel('Poll link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
+    const guestPrivateUrl = new URL(poll.participantUrl + ada.hash, page.url()).href;
+    await expect(page.getByLabel('Your private link')).toHaveValue(guestPrivateUrl);
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
+    expect(
+      await page.evaluate((id) => JSON.parse(localStorage.getItem(`pikadai:participant:${id}`)!), poll.id),
+    ).toEqual(host.identity);
+    const other = await otherPerson.newPage();
+    await other.goto(guestPrivateUrl);
+    await expect(other.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
+    await expect(other.getByText('organiser view')).toHaveCount(0);
+    await expect(other.getByRole('button', { name: 'Delete poll', exact: true })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('row', { name: /Host/ }).getByText('you')).toBeVisible();
+    await expect(page.getByLabel('Your private link')).toHaveValue(
+      new URL(poll.participantUrl + host.hash + `&admin=${poll.adminToken}`, page.url()).href,
+    );
   });
 
   test('the organiser private link restores their name and all permissions on another device with blocked storage', async ({
@@ -180,18 +287,20 @@ test.describe('private participant links', () => {
     const join = page.getByRole('button', { name: 'Join', exact: true });
     await waitForTurnstile(join);
     await join.click();
-    await expect(page).toHaveURL(/#participant=[A-Za-z0-9_-]{22}&token=[A-Za-z0-9_-]{43}&admin=[A-Za-z0-9_-]{43}$/);
-    await expect(page.getByLabel('Your private link')).toHaveValue(page.url());
+    await expect(page.getByLabel('Your private link')).toHaveValue(
+      /#participant=[A-Za-z0-9_-]{22}&token=[A-Za-z0-9_-]{43}&admin=[A-Za-z0-9_-]{43}$/,
+    );
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     await expect(page.getByRole('region', { name: 'Name', exact: true })).toContainText('edit or delete the poll');
-    const privateUrl = page.url();
+    const privateUrl = await page.getByLabel('Your private link').inputValue();
     await answerDate(page, 0, 1);
     await page.getByRole('button', { name: 'Save', exact: true }).click();
 
-    // Opening the ordinary poll URL also upgrades a saved organiser identity to the combined link.
+    // The public URL restores the saved organiser identity; only the private copy field contains credentials.
     await page.goto(poll.participantUrl);
-    await expect(page).toHaveURL(privateUrl);
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     await page.evaluate(() => localStorage.clear());
-    await page.reload();
+    await page.goto(privateUrl);
     await expect(page.getByText('organiser view')).toBeVisible();
     await expect(page.getByText('You are in this poll as')).toContainText('Host');
 
@@ -222,9 +331,10 @@ test.describe('private participant links', () => {
     await expect(comment.locator('.comment-author')).toHaveText('Host');
     await expect(comment.getByText('organiser', { exact: true })).toBeVisible();
 
-    await other.reload();
+    await expect(other).toHaveURL(new URL(poll.participantUrl, other.url()).href);
+    await other.goto(privateUrl);
     await expect(other.getByText('organiser view')).toBeVisible();
-    await expect(other).toHaveURL(privateUrl);
+    await expect(other).toHaveURL(new URL(poll.participantUrl, other.url()).href);
     await other.getByRole('button', { name: 'Delete poll', exact: true }).click();
     await other
       .getByRole('alertdialog', { name: 'Delete this poll?' })
@@ -244,12 +354,15 @@ test.describe('private participant links', () => {
     }, grace.hash);
     await expect(page.getByRole('row', { name: /Grace/ }).getByText('you')).toBeVisible();
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toHaveCount(0);
-    await expect(page.getByLabel('Your private link')).toHaveValue(page.url());
+    await expect(page.getByLabel('Your private link')).toHaveValue(
+      new URL(poll.participantUrl + grace.hash, page.url()).href,
+    );
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     await page.goBack();
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();
   });
 
-  test('keeps the link during a verification outage so retry can restore access', async ({
+  test('keeps the poll readable during a verification outage and restores access on retry', async ({
     page,
     request,
     clientIp,
@@ -261,8 +374,13 @@ test.describe('private participant links', () => {
       failing ? route.fulfill({ status: 503, json: { error: 'Unavailable', code: 'internal' } }) : route.fallback(),
     );
     await page.goto(poll.participantUrl + ada.hash);
-    await expect(page.getByRole('heading', { name: 'Poll unavailable' })).toBeVisible();
-    await expect(page).toHaveURL(new URL(poll.participantUrl + ada.hash, page.url()).href);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Board game night');
+    await expect(page.getByRole('alert')).toContainText('Could not confirm your private link.');
+    await expect(page.getByRole('row', { name: /Ada/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Join', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit your answers' })).toHaveCount(0);
+    await expect(page.getByLabel('Add a comment')).toHaveCount(0);
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
     failing = false;
     await page.getByRole('button', { name: 'Try again' }).click();
     await expect(page.getByRole('row', { name: /Ada/ }).getByText('you')).toBeVisible();

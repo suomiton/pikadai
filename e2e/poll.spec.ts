@@ -27,7 +27,7 @@ test.describe('creating a poll', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Team dinner' })).toBeVisible();
     await expect(page.getByText('organiser view')).toBeVisible();
     await expect(page.getByLabel('Admin link')).toHaveValue(/#admin=[A-Za-z0-9_-]{43}$/);
-    await expect(page.getByLabel('Participant link')).toHaveValue(
+    await expect(page.getByLabel('Poll link')).toHaveValue(
       new RegExp(`${page.url().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}$`),
     );
   });
@@ -93,7 +93,7 @@ test.describe('answering a poll', () => {
     await expect(page.getByRole('heading', { name: 'Name' })).toBeVisible();
     await expect(page.getByRole('table')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Comments' })).toHaveCount(0);
-    await expect(page.getByLabel('Participant link')).toHaveCount(0);
+    await expect(page.getByLabel('Poll link')).toHaveCount(0);
     await nameField(page).fill('Ada');
     const join = page.getByRole('button', { name: 'Join' });
     await waitForTurnstile(join);
@@ -104,14 +104,16 @@ test.describe('answering a poll', () => {
     await expect(editing).toHaveCount(1);
     await expect(editing.locator('.participant-name')).toHaveText('Ada');
     await expect(editing.locator('button.vote-btn').first()).toBeFocused();
-    await expect(page).toHaveURL(/#participant=[A-Za-z0-9_-]{22}&token=[A-Za-z0-9_-]{43}$/);
-    await expect(page.getByLabel('Your private link')).toHaveValue(page.url());
+    await expect(page).toHaveURL(new URL(poll.participantUrl, page.url()).href);
+    await expect(page.getByLabel('Your private link')).toHaveValue(
+      /#participant=[A-Za-z0-9_-]{22}&token=[A-Za-z0-9_-]{43}$/,
+    );
     await expect(page.getByText('You are in this poll as')).toContainText('Ada');
     await expect(page.getByRole('button', { name: 'Join' })).toHaveCount(0);
     await expect(page.getByText('Answer at least one date and save to see what others have answered.')).toBeVisible();
     await expect(page.locator('tfoot')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Comments' })).toBeVisible();
-    await expect(page.getByLabel('Participant link')).toHaveCount(0);
+    await expect(page.getByLabel('Poll link')).toHaveCount(0);
     await answerDate(page, 0, 1); // yes
     await answerDate(page, 1, 2); // if need be
     await page.getByRole('button', { name: 'Save' }).click();
@@ -126,8 +128,8 @@ test.describe('answering a poll', () => {
     await expect(row.getByRole('img', { name: 'If need be' })).toHaveCount(1);
     await expect(page.getByRole('status').filter({ hasText: 'Your answers were saved.' })).toBeAttached();
     await expect(page.locator('tfoot')).toHaveCount(1);
-    await expect(page.getByLabel('Participant link')).toBeVisible();
-    await expect(page.getByLabel('Participant link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
+    await expect(page.getByLabel('Poll link')).toBeVisible();
+    await expect(page.getByLabel('Poll link')).toHaveValue(new URL(poll.participantUrl, page.url()).href);
 
     // The identity survives the re-fetch, so this browser can still edit the answer after a reload.
     await page.reload();
