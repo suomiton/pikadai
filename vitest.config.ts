@@ -32,7 +32,7 @@ export default defineConfig({
       thresholds: {
         'shared/**/*.ts': { statements: 95, branches: 95 },
         'src/state/*.ts': { statements: 90, branches: 95 },
-        'src/lib/{dates,errors,storage,timing,votes}.ts': { statements: 90, branches: 90 },
+        'src/lib/{dates,errors,participantLink,storage,timing,votes}.ts': { statements: 90, branches: 90 },
         'worker/**/*.ts': { statements: 90, branches: 75 },
       },
     },

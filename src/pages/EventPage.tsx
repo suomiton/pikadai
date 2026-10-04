@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { LIMITS } from '@shared/limits';
 import { AdminPanel } from '../components/AdminPanel';
 import { Comments } from '../components/Comments';
@@ -12,14 +12,16 @@ import { useAppState, usePollActions } from '../state/AppStateProvider';
 
 export function EventPage() {
   const { id = '' } = useParams();
+  const { hash, key } = useLocation();
   const { openPoll, refresh } = usePollActions();
   const { poll } = useAppState();
 
-  // Capturing the admin link, reading storage and the first fetch all happen here, once per route
-  // id, so they repeat if the id changes while this page stays mounted. Nothing runs during render.
+  // Also repeat for explicit navigation to another identity in the same poll. Replacing the address
+  // bar after capturing a private link does not navigate or reset a draft. The router key distinguishes
+  // real navigation back to the saved identity from StrictMode's repeated opening effect.
   useEffect(() => {
-    void openPoll(id);
-  }, [id, openPoll]);
+    void openPoll(id, key, hash);
+  }, [id, hash, key, openPoll]);
 
   // Until the effect has dispatched, the store may still hold another poll or nothing at all.
   const current = poll?.id === id ? poll : null;
@@ -55,7 +57,7 @@ export function EventPage() {
     );
   }
 
-  const { event, adminToken, me, error } = current;
+  const { event, adminToken, me, error, identityNotice, identityError } = current;
   const isAdmin = event.viewer.isAdmin;
 
   /*
@@ -66,7 +68,8 @@ export function EventPage() {
    */
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
   const isFull = event.participants.length >= LIMITS.participantsMax;
-  const showAll = isAdmin || (mine !== undefined && hasAnswered(mine)) || (me === null && isFull);
+  const showAll =
+    isAdmin || identityError !== null || (mine !== undefined && hasAnswered(mine)) || (me === null && isFull);
   const joined = me !== null;
 
   return (
@@ -93,6 +96,19 @@ export function EventPage() {
         </div>
       )}
 
+      {identityNotice && (
+        <p className="notice" role="status">
+          {identityNotice}
+        </p>
+      )}
+      {identityError && (
+        <div className="card refresh-error" role="alert">
+          <p>Could not confirm your private link. {identityError}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => void refresh(id)}>
+            Try again
+          </button>
+        </div>
+      )}
       {!(me === null && isFull) && <NameCard />}
       {(joined || showAll) && <VoteGrid showAll={showAll} />}
       {(joined || showAll) && <Comments />}

@@ -4,8 +4,10 @@ import { LIMITS } from '@shared/limits';
 import { nameSchema } from '@shared/schemas';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { api } from '../lib/api';
+import { participantLink } from '../lib/participantLink';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { FormError } from './FormError';
+import { CopyField } from './CopyField';
 import { StatusAnnouncer } from './StatusAnnouncer';
 import { StorageNotice } from './StorageNotice';
 import { TextField } from './TextField';
@@ -19,16 +21,20 @@ import { TurnstileField } from './TurnstileField';
  * rather than loading the Turnstile widget on every visit.
  */
 export function NameCard() {
-  const { event, me, adminToken, isAdmin } = usePoll();
+  const { event, me, adminToken, isAdmin, identityError } = usePoll();
   const id = useId();
   const mine = me ? event.participants.find((p) => p.id === me.id) : undefined;
+  // Opening a guest's private link in an organiser's browser must never give that guest admin access.
+  const privateAdminToken = mine?.isOrganiser ? adminToken : null;
   const [joining, setJoining] = useState(false);
   const joinButtonRef = useRef<HTMLButtonElement>(null);
 
   return (
     <section className="card stack name-card" aria-labelledby={`${id}-heading`}>
       <h2 id={`${id}-heading`}>Name</h2>
-      {me === null ? (
+      {identityError ? (
+        <p>Your name could not be confirmed. Try again above to edit answers or comment.</p>
+      ) : me === null ? (
         isAdmin && !joining ? (
           <div className="section-head">
             <p>You have not joined this poll yourself.</p>
@@ -41,6 +47,20 @@ export function NameCard() {
         )
       ) : (
         <RenameForm id={id} participantId={me.id} name={mine?.name ?? null} auth={{ adminToken, participant: me }} />
+      )}
+      {me && (
+        <CopyField
+          label="Your private link"
+          value={participantLink(window.location.origin, event.id, me, privateAdminToken)}
+          hint={
+            privateAdminToken
+              ? 'Save this link to return on any device with your organiser access. Keep it private: anyone with it can edit or delete the poll and comment as you.'
+              : 'Save this link to return on any device, even after clearing browser data. Keep it private: anyone with it can change your answers and comment as you.'
+          }
+        />
+      )}
+      {me && (
+        <StorageNotice consequence="save your private link and reopen it after a reload or when this tab closes." />
       )}
     </section>
   );
@@ -108,11 +128,11 @@ function JoinForm({ id, onCancel }: JoinFormProps) {
           setNameError(undefined);
         }}
         error={nameError}
-        hint="Shown with your answers and comments."
+        hint="Shown with your answers and comments. After joining, save your private link to return on another device."
         maxLength={LIMITS.nameMax}
         required
       />
-      <StorageNotice consequence="you will not be able to change your answers or comment under this name later from this browser." />
+      <StorageNotice consequence="save your private link after joining to change your answers or comment under this name later." />
       <TurnstileField action="answer" ref={turnstileRef} onToken={setToken} />
       <FormError message={error} />
       <div className="btn-row">

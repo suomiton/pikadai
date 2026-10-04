@@ -31,8 +31,8 @@ function write(key: string, value: string | null): void {
 export const storage = {
   /**
    * Whether this browser keeps what is written here. False in some private modes and when site data
-   * is blocked; the poll still works in this tab, but nothing survives a reload, so the UI says so
-   * where a credential is handed out.
+   * is blocked. Reopening a saved private link still restores access; the UI asks the viewer to
+   * save it for reloads or after the tab closes.
    */
   available: (): boolean => {
     try {

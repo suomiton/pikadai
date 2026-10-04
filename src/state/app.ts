@@ -22,6 +22,10 @@ export interface PollSession {
   event: EventView | null;
   /** The last failed load; cleared by the next successful one. A loaded event stays through a transient failure. */
   error: LoadError | null;
+  /** A link was rejected or ignored to keep this device's saved identity. */
+  identityNotice: string | null;
+  /** The poll loaded, but participant verification needs a retry. `me` stays null until then. */
+  identityError: string | null;
 }
 
 export interface AppState {
@@ -31,7 +35,14 @@ export interface AppState {
 /** Every action names its poll, so a result or write for a poll the user has left cannot touch the current one. */
 export type AppAction =
   | { type: 'poll/open'; id: string; adminToken: string | null; me: ParticipantIdentity | null }
-  | { type: 'poll/loaded'; id: string; event: EventView }
+  | {
+      type: 'poll/loaded';
+      id: string;
+      event: EventView;
+      me?: ParticipantIdentity | null;
+      identityNotice?: string | null;
+      identityError?: string | null;
+    }
   | { type: 'poll/failed'; id: string; error: LoadError }
   | { type: 'poll/identity'; id: string; me: ParticipantIdentity | null }
   | { type: 'poll/close'; id: string };
@@ -52,28 +63,42 @@ export function parseAdminHash(hash: string): string | null {
 export function appReducer(state: AppState, action: AppAction): AppState {
   const poll = state.poll;
   if (action.type === 'poll/open') {
-    return { poll: { id: action.id, adminToken: action.adminToken, me: action.me, event: null, error: null } };
+    return {
+      poll: {
+        id: action.id,
+        adminToken: action.adminToken,
+        me: action.me,
+        event: null,
+        error: null,
+        identityNotice: null,
+        identityError: null,
+      },
+    };
   }
   // Everything else is about the poll on screen; anything for another poll is stale and ignored.
   if (!poll || poll.id !== action.id) return state;
 
   switch (action.type) {
-    case 'poll/loaded':
+    case 'poll/loaded': {
+      const me = action.me === undefined ? poll.me : action.me;
       return {
         poll: {
           ...poll,
           event: action.event,
           error: null,
-          me: hasParticipant(action.event, poll.me) ? poll.me : null,
+          identityNotice: action.identityNotice ?? null,
+          identityError: action.identityError ?? null,
+          me: hasParticipant(action.event, me) ? me : null,
           adminToken: action.event.viewer.isAdmin ? poll.adminToken : null,
         },
       };
+    }
 
     case 'poll/failed':
       return { poll: { ...poll, error: action.error, event: action.error.gone ? null : poll.event } };
 
     case 'poll/identity':
-      return { poll: { ...poll, me: action.me } };
+      return { poll: { ...poll, me: action.me, identityNotice: null, identityError: null } };
 
     case 'poll/close':
       return { poll: null };

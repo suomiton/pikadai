@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { LIMITS } from '@shared/limits';
 import type { CreateParticipantResponse } from '@shared/types';
+import { sha256Hex } from '../lib/crypto';
 import {
   DUMMY_TOKEN,
   addParticipant,
@@ -168,6 +169,88 @@ describe('POST /api/events/:id/participants', () => {
     });
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ code: 'validation_failed' });
+  });
+});
+
+describe('GET /api/events/:id/participants/:participantId', () => {
+  it('validates an existing edit token repeatedly without rotating it or exposing credentials', async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada', { [poll.view.options[0].id]: 'yes' });
+    const path = `/api/events/${poll.id}/participants/${ada.id}`;
+    const stored = await env.DB.prepare('SELECT edit_token_hash FROM participants WHERE id = ?')
+      .bind(ada.id)
+      .first<{ edit_token_hash: string }>();
+    expect(stored?.edit_token_hash).toBe(await sha256Hex(ada.editToken));
+    expect(stored?.edit_token_hash).not.toBe(ada.editToken);
+
+    // A different client address, as when the private link is opened on another device.
+    const otherDevice = client();
+    for (let i = 0; i < 2; i++) {
+      const res = await otherDevice.get(path, bearer(ada.editToken));
+      expect(res.status).toBe(204);
+      expect(res.body).toBeNull();
+      expect(res.headers.get('cache-control')).toBe('no-store');
+    }
+    expect(
+      (await otherDevice.put(path, { votes: { [poll.view.options[0].id]: 'maybe' } }, asParticipant(ada))).status,
+    ).toBe(204);
+    expect((await getView(poll.client, poll.id)).participants[0].votes).toEqual({
+      [poll.view.options[0].id]: 'maybe',
+    });
+  });
+
+  it('rejects missing, guessed, another participant, admin and database-hash tokens', async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    const grace = await addParticipant(poll.client, poll.id, 'Grace');
+    expect(ada.editToken).not.toBe(grace.editToken);
+    const path = `/api/events/${poll.id}/participants/${ada.id}`;
+    for (const headers of [
+      undefined,
+      bearer('x'.repeat(43)),
+      bearer(grace.editToken),
+      bearer(poll.adminToken),
+      bearer(await sha256Hex(ada.editToken)),
+    ]) {
+      const res = await poll.client.get(path, headers);
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({ code: 'not_owner' });
+    }
+  });
+
+  it('rejects a real token with a different participant id or poll id', async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    const otherPoll = await createPoll();
+    const otherAda = await addParticipant(otherPoll.client, otherPoll.id, 'Ada');
+    expect(otherAda.editToken).not.toBe(ada.editToken);
+    for (const path of [
+      `/api/events/${poll.id}/participants/${otherAda.id}`,
+      `/api/events/${otherPoll.id}/participants/${ada.id}`,
+      `/api/events/${poll.id}/participants/missing`,
+    ]) {
+      expect((await poll.client.get(path, bearer(ada.editToken))).status).toBe(403);
+    }
+  });
+
+  it('invalidates private links when the participant is deleted or the poll expires or is deleted', async () => {
+    const poll = await createPoll();
+    const ada = await addParticipant(poll.client, poll.id, 'Ada');
+    const grace = await addParticipant(poll.client, poll.id, 'Grace');
+    const path = `/api/events/${poll.id}/participants/${ada.id}`;
+    expect((await poll.client.delete(path, asParticipant(ada))).status).toBe(204);
+    expect((await poll.client.get(path, asParticipant(ada))).status).toBe(403);
+
+    await env.DB.prepare('UPDATE events SET expires_at = ? WHERE id = ?')
+      .bind(Date.now() - 1, poll.id)
+      .run();
+    expect(
+      (await poll.client.get(`/api/events/${poll.id}/participants/${grace.id}`, asParticipant(grace))).status,
+    ).toBe(410);
+    await env.DB.prepare('DELETE FROM events WHERE id = ?').bind(poll.id).run();
+    expect(
+      (await poll.client.get(`/api/events/${poll.id}/participants/${grace.id}`, asParticipant(grace))).status,
+    ).toBe(404);
   });
 });
 

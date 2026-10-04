@@ -28,9 +28,36 @@ const transient = { message: 'Network error.', gone: false };
 const gone = { message: 'This poll does not exist or was deleted.', gone: true };
 
 describe('appReducer', () => {
+  it('loads a readable event with no active identity while verification waits for a retry', () => {
+    const pending = appReducer(open(), {
+      type: 'poll/loaded',
+      id: 'ev1',
+      event: event(),
+      me: null,
+      identityError: 'Try again.',
+      identityNotice: 'This private link is no longer valid.',
+    });
+    expect(pending.poll?.event?.title).toBe('Dinner');
+    expect(pending.poll?.me).toBeNull();
+    expect(pending.poll?.identityError).toBe('Try again.');
+    expect(pending.poll?.identityNotice).toBe('This private link is no longer valid.');
+    const confirmed = appReducer(pending, { type: 'poll/loaded', id: 'ev1', event: event(), me });
+    expect(confirmed.poll?.me).toEqual(me);
+    expect(confirmed.poll?.identityError).toBeNull();
+    expect(confirmed.poll?.identityNotice).toBeNull();
+  });
+
   it('starts a session with no event and no error, replacing any previous one', () => {
     const next = open(loaded(), 'ev2');
-    expect(next.poll).toEqual({ id: 'ev2', adminToken: 'admin-tok', me, event: null, error: null });
+    expect(next.poll).toEqual({
+      id: 'ev2',
+      adminToken: 'admin-tok',
+      me,
+      event: null,
+      error: null,
+      identityNotice: null,
+      identityError: null,
+    });
   });
 
   it('stores a loaded event for the current poll and clears a previous error', () => {

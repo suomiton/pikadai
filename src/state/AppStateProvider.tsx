@@ -63,6 +63,7 @@ export interface LoadedPoll {
   /** The organiser's token, or null for everyone else; already checked by the server. */
   adminToken: string | null;
   isAdmin: boolean;
+  identityError: string | null;
 }
 
 /** The poll on screen. Only for components EventPage renders once the event has loaded. */
@@ -77,6 +78,7 @@ export function usePoll(): LoadedPoll {
             me: poll.me,
             adminToken: poll.adminToken,
             isAdmin: poll.event.viewer.isAdmin,
+            identityError: poll.identityError,
           }
         : null,
     [poll],
