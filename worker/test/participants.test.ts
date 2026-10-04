@@ -316,6 +316,40 @@ describe('GET /api/events/:id/participants/:participantId', () => {
 });
 
 describe('PUT /api/events/:id/participants/:participantId', () => {
+  it('saves answers for legacy names that differ only in non-ASCII case without re-keying them', async () => {
+    // NOCASE let both in before migration 0006, which backfilled the keys "Äiti" and "äiti".
+    const poll = await createPoll();
+    const [a] = poll.view.options;
+    const now = Date.now();
+    const rows = [
+      { id: `upper-${poll.id.slice(0, 8)}`, name: 'Äiti', token: 'u'.repeat(43) },
+      { id: `lower-${poll.id.slice(0, 8)}`, name: 'äiti', token: 'l'.repeat(43) },
+    ];
+    await env.DB.batch(
+      await Promise.all(
+        rows.map(async (r) =>
+          env.DB.prepare(
+            'INSERT INTO participants (id, event_id, name, name_key, edit_token_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          ).bind(r.id, poll.id, r.name, r.name, await sha256Hex(r.token), now, now),
+        ),
+      ),
+    );
+    const [upper] = rows;
+    const path = `/api/events/${poll.id}/participants/${upper.id}`;
+    const own = { Authorization: `Bearer ${upper.token}`, 'X-Participant-Id': upper.id };
+    expect((await poll.client.put(path, { votes: { [a.id]: 'yes' } }, own)).status).toBe(204);
+    // The organiser's save from the table sends the unchanged name along with the votes.
+    expect(
+      (await poll.client.put(path, { name: 'Äiti', votes: { [a.id]: 'maybe' } }, bearer(poll.adminToken))).status,
+    ).toBe(204);
+    const view = await getView(poll.client, poll.id);
+    expect(view.participants.find((p) => p.id === upper.id)?.votes).toEqual({ [a.id]: 'maybe' });
+    // A real rename onto the other spelling is still refused.
+    const renamed = await poll.client.put(path, { name: 'ÄITI' }, own);
+    expect(renamed.status).toBe(409);
+    expect(renamed.body).toMatchObject({ code: 'name_taken' });
+  });
+
   it('changes only what is sent: a name-only save keeps the votes, a votes-only save keeps the name', async () => {
     const poll = await createPoll();
     const [a, b] = poll.view.options;

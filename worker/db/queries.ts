@@ -273,11 +273,16 @@ export async function updateParticipant(
   patch: ParticipantPatch,
   now: number,
 ): Promise<void> {
-  const name = patch.name ?? participant.name;
+  // Only a real rename rewrites the name and its key. A legacy row may hold a key from before migration 0006
+  // that `nameKey` would now compute differently and that another legacy row already has; re-keying it on a
+  // save of answers would fail on the unique index although nobody asked for a new name.
+  const newName = patch.name !== undefined && patch.name !== participant.name ? patch.name : null;
   const statements = [
-    db
-      .prepare('UPDATE participants SET name = ?, name_key = ?, updated_at = ? WHERE id = ?')
-      .bind(name, nameKey(name), now, participant.id),
+    newName === null
+      ? db.prepare('UPDATE participants SET updated_at = ? WHERE id = ?').bind(now, participant.id)
+      : db
+          .prepare('UPDATE participants SET name = ?, name_key = ?, updated_at = ? WHERE id = ?')
+          .bind(newName, nameKey(newName), now, participant.id),
   ];
   if (patch.votes !== undefined) {
     statements.push(

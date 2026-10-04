@@ -233,7 +233,7 @@ All SQL lives in `worker/db/queries.ts`. The main ones:
 | `fetchEventRows` + `toEventView` | GET                           | four selects (options, participants, votes and comments joined to participants), then a pure mapping in `worker/lib/eventView.ts`            |
 | `insertEventWithOptions`         | POST events                   | batch: 1 event insert + N option inserts                                                                                                     |
 | `insertParticipantWithVotes`     | POST participants             | batch: 1 insert + N vote inserts                                                                                                             |
-| `updateParticipant`              | PUT participant               | batch: name update, and when votes are sent, delete votes and insert the new set                                                             |
+| `updateParticipant`              | PUT participant               | batch: `name` and `name_key` only on a real rename, and when votes are sent, delete votes and insert the new set                             |
 | `nameTaken`                      | POST/PUT participant          | `SELECT id, name … WHERE event_id = ?`, then `nameKey` compared in the Worker                                                                |
 | `insertOption` / `deleteOption`  | options routes                | batch: insert or delete, plus the `expires_at` recalculation from the rows in the same transaction                                           |
 | `insertComment`                  | POST comments                 | one `INSERT … SELECT … WHERE …` carrying the one-per-interval rule and the per-poll cap; `countComments` names a refusal's reason afterwards |
