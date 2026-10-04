@@ -4,7 +4,7 @@ import { expect, futureIso, test } from './fixtures';
 import { answerDate } from './helpers';
 
 /** Dialog tests use deterministic API responses, including failures and requests held in flight. */
-async function openPoll(page: Page, { mine = false, name = 'Ada' } = {}) {
+const openPoll = async (page: Page, { mine = false, name = 'Ada' } = {}) => {
   const poll: EventView = {
     id: 'd'.repeat(22),
     title: 'Board game night',
@@ -52,7 +52,7 @@ async function openPoll(page: Page, { mine = false, name = 'Ada' } = {}) {
   await page.goto(`/e/${poll.id}${mine ? '' : `#admin=${'a'.repeat(43)}`}`);
   await expect(page.getByRole('heading', { level: 1, name: poll.title })).toBeVisible();
   return { poll, deletions: () => deletions };
-}
+};
 
 test('poll confirmation is labelled, contains keyboard focus and cancels without deleting', async ({ page }) => {
   const { deletions } = await openPoll(page);

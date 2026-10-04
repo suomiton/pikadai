@@ -11,22 +11,22 @@ export interface ParticipantIdentity {
 
 const PREFIX = 'pikadai';
 
-function read(key: string): string | null {
+const read = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
   } catch {
     return null;
   }
-}
+};
 
-function write(key: string, value: string | null): void {
+const write = (key: string, value: string | null): void => {
   try {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, value);
   } catch {
     // Private mode or blocked storage: the user can still use the poll in this tab.
   }
-}
+};
 
 export const storage = {
   /**

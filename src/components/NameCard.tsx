@@ -1,11 +1,8 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import type { TurnstileInstance } from '@marsidev/react-turnstile';
+import { useId, useRef, useState } from 'react';
 import { LIMITS } from '@shared/limits';
-import { nameSchema } from '@shared/schemas';
-import { useAsyncAction } from '../hooks/useAsyncAction';
-import { api } from '../lib/api';
+import { useJoinForm, useRenameForm } from '../hooks/useNameForms';
 import { participantLink } from '../lib/participantLink';
-import { usePoll, usePollActions } from '../state/AppStateProvider';
+import { usePoll } from '../state/AppStateProvider';
 import { FormError } from './FormError';
 import { CopyField } from './CopyField';
 import { StatusAnnouncer } from './StatusAnnouncer';
@@ -72,50 +69,9 @@ interface JoinFormProps {
   onCancel?: () => void;
 }
 
-function JoinForm({ id, onCancel }: JoinFormProps) {
-  const { event, adminToken } = usePoll();
-  const { refresh, setIdentity } = usePollActions();
-  const [name, setName] = useState('');
-  const [nameError, setNameError] = useState<string | undefined>();
-  const [token, setToken] = useState<string | null>(null);
-  const { busy, error, run } = useAsyncAction();
-  const turnstileRef = useRef<TurnstileInstance>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Opened on demand: typing is the next step, so focus starts in the field.
-  useEffect(() => {
-    if (onCancel) inputRef.current?.focus();
-  }, [onCancel]);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (busy || !token) return;
-    const parsed = nameSchema.safeParse(name);
-    if (!parsed.success) {
-      setNameError(parsed.error.issues[0].message);
-      inputRef.current?.focus();
-      return;
-    }
-    setNameError(undefined);
-    const joined = await run(async () => {
-      // The admin token, when this browser has one, marks the row as the organiser's.
-      const res = await api.addParticipant(
-        event.id,
-        { name: parsed.data, votes: {}, turnstileToken: token },
-        adminToken,
-      );
-      // Fetch first, so the moment the identity lands the row is on screen with it; the identity is
-      // stored either way, since the row exists.
-      await refresh(event.id);
-      setIdentity(event.id, { id: res.id, token: res.editToken });
-    });
-    if (!joined) {
-      // A Turnstile token is single-use, so get a fresh one for the next attempt.
-      turnstileRef.current?.reset();
-      setToken(null);
-    }
-  }
-
+const JoinForm = ({ id, onCancel }: JoinFormProps) => {
+  const { name, setName, nameError, setNameError, token, setToken, busy, error, turnstileRef, inputRef, submit } =
+    useJoinForm(onCancel);
   return (
     <form className="stack" onSubmit={submit} noValidate aria-label="Join the poll">
       <TextField
@@ -147,7 +103,7 @@ function JoinForm({ id, onCancel }: JoinFormProps) {
       </div>
     </form>
   );
-}
+};
 
 interface RenameProps {
   id: string;
@@ -157,62 +113,22 @@ interface RenameProps {
   auth: { adminToken: string | null; participant: { id: string; token: string } };
 }
 
-function RenameForm({ id, participantId, name, auth }: RenameProps) {
-  const { event } = usePoll();
-  const { refresh } = usePollActions();
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [draftError, setDraftError] = useState<string | undefined>();
-  const [status, setStatus] = useState('');
-  const { busy, error, setError, run } = useAsyncAction();
-  const changeButtonRef = useRef<HTMLButtonElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const returnFocus = useRef(false);
-
-  // The form unmounts when it closes; focus goes back to the button that opened it once the request is done.
-  useEffect(() => {
-    if (open || busy || !returnFocus.current) return;
-    returnFocus.current = false;
-    changeButtonRef.current?.focus();
-  }, [open, busy]);
-
-  function start() {
-    setDraft(name ?? '');
-    setDraftError(undefined);
-    setError(null);
-    setOpen(true);
-  }
-
-  function close() {
-    returnFocus.current = true;
-    setOpen(false);
-    setError(null);
-  }
-
-  async function save(e: FormEvent) {
-    e.preventDefault();
-    if (busy) return;
-    const parsed = nameSchema.safeParse(draft);
-    if (!parsed.success) {
-      setDraftError(parsed.error.issues[0].message);
-      inputRef.current?.focus();
-      return;
-    }
-    setDraftError(undefined);
-    if (parsed.data === name) {
-      close();
-      return;
-    }
-    // Name only: an answer saved from the table at the same moment cannot be overwritten by this.
-    const saved = await run(async () => {
-      await api.updateParticipant(event.id, participantId, { name: parsed.data }, auth);
-      returnFocus.current = true;
-      setOpen(false);
-      await refresh(event.id);
-    });
-    if (saved) setStatus(`Your name is now ${parsed.data}.`);
-  }
-
+const RenameForm = ({ id, participantId, name, auth }: RenameProps) => {
+  const {
+    open,
+    draft,
+    setDraft,
+    draftError,
+    setDraftError,
+    status,
+    busy,
+    error,
+    changeButtonRef,
+    inputRef,
+    start,
+    close,
+    save,
+  } = useRenameForm({ participantId, name, auth });
   return (
     <div className="stack">
       <StatusAnnouncer message={status} />
@@ -266,4 +182,4 @@ function RenameForm({ id, participantId, name, auth }: RenameProps) {
       {!open && <FormError message={error} />}
     </div>
   );
-}
+};

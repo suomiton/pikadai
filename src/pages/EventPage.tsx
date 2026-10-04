@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { LIMITS } from '@shared/limits';
+import type { EventView } from '@shared/types';
 import { AdminPanel } from '../components/AdminPanel';
 import { Comments } from '../components/Comments';
 import { NameCard } from '../components/NameCard';
@@ -9,6 +10,37 @@ import { VoteGrid } from '../components/VoteGrid';
 import { formatTimestamp } from '../lib/dates';
 import { hasAnswered } from '../lib/votes';
 import { useAppState, usePollActions } from '../state/AppStateProvider';
+import type { LoadError } from '../state/app';
+
+const EventHeader = ({ event }: { event: EventView }) => (
+  <header className="event-head">
+    <div className="event-title-row">
+      <h1>{event.title}</h1>
+      {event.viewer.isAdmin && <span className="tag tag-accent">organiser view</span>}
+    </div>
+    {event.description && <p className="event-description">{event.description}</p>}
+    <p className="meta">
+      Created {formatTimestamp(event.createdAt)} · auto-deletes {formatTimestamp(event.expiresAt)}
+    </p>
+  </header>
+);
+
+const PollUnavailable = ({ error, onRetry }: { error: LoadError; onRetry: () => void }) => (
+  <section className="card stack">
+    <h1>Poll unavailable</h1>
+    <p>{error.message}</p>
+    <div className="btn-row">
+      {!error.gone && (
+        <button type="button" className="btn btn-secondary" onClick={onRetry}>
+          Try again
+        </button>
+      )}
+      <Link to="/" className="btn btn-primary">
+        Create a new poll
+      </Link>
+    </div>
+  </section>
+);
 
 export function EventPage() {
   const { id = '' } = useParams();
@@ -39,22 +71,7 @@ export function EventPage() {
     // The first load failed, or the server has since said the poll is deleted or expired. Only the
     // first is worth retrying.
     const error = current.error ?? { message: 'This poll could not be loaded.', gone: false };
-    return (
-      <section className="card stack">
-        <h1>Poll unavailable</h1>
-        <p>{error.message}</p>
-        <div className="btn-row">
-          {!error.gone && (
-            <button type="button" className="btn btn-secondary" onClick={() => void refresh(id)}>
-              Try again
-            </button>
-          )}
-          <Link to="/" className="btn btn-primary">
-            Create a new poll
-          </Link>
-        </div>
-      </section>
-    );
+    return <PollUnavailable error={error} onRetry={() => void refresh(id)} />;
   }
 
   const { event, adminToken, me, error, identityNotice, identityError } = current;
@@ -74,16 +91,7 @@ export function EventPage() {
 
   return (
     <div className="stack-lg">
-      <header className="event-head">
-        <div className="event-title-row">
-          <h1>{event.title}</h1>
-          {isAdmin && <span className="tag tag-accent">organiser view</span>}
-        </div>
-        {event.description && <p className="event-description">{event.description}</p>}
-        <p className="meta">
-          Created {formatTimestamp(event.createdAt)} · auto-deletes {formatTimestamp(event.expiresAt)}
-        </p>
-      </header>
+      <EventHeader event={event} />
 
       {error && (
         // A re-fetch after a change failed. The poll stays, with whatever drafts are open in it;

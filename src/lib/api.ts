@@ -37,10 +37,10 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
-async function request<T>(
+const request = async <T>(
   path: string,
   { method = 'GET', body, headers = {}, signal }: RequestOptions = {},
-): Promise<T> {
+): Promise<T> => {
   const res = await fetch(path, {
     method,
     headers: {
@@ -68,7 +68,7 @@ async function request<T>(
 
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
-}
+};
 
 export interface Auth {
   adminToken: string | null;
@@ -80,13 +80,13 @@ export interface Auth {
  * Cloudflare's log pipeline redacts it. The admin token wins when both exist,
  * because everything a participant may do the admin may do too.
  */
-function authHeaders({ adminToken, participant }: Partial<Auth>): Record<string, string> {
+const authHeaders = ({ adminToken, participant }: Partial<Auth>): Record<string, string> => {
   const headers: Record<string, string> = {};
   const token = adminToken ?? participant?.token;
   if (token) headers.Authorization = `Bearer ${token}`;
   if (participant) headers['X-Participant-Id'] = participant.id;
   return headers;
-}
+};
 
 const eventPath = (id: string) => `/api/events/${encodeURIComponent(id)}`;
 

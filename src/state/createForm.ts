@@ -1,6 +1,6 @@
 /**
  * State of the create-poll form: the draft, the Turnstile token, validation errors and the
- * progress dialog. Pure, so the transitions are unit-tested; CreatePage owns the effects.
+ * progress dialog. Pure, so the transitions are unit-tested; useCreateForm owns the effects.
  */
 export type FieldKey = 'title' | 'description' | 'dates';
 

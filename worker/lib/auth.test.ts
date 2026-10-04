@@ -7,7 +7,7 @@ import { HttpError } from './http';
 const ADMIN_TOKEN = 'admin-token-value';
 const EDIT_TOKEN = 'edit-token-value';
 
-async function fixtures(): Promise<{ event: EventRow; participant: ParticipantRow }> {
+const fixtures = async (): Promise<{ event: EventRow; participant: ParticipantRow }> => {
   return {
     event: {
       id: 'ev1',
@@ -30,7 +30,7 @@ async function fixtures(): Promise<{ event: EventRow; participant: ParticipantRo
       updated_at: 0,
     },
   };
-}
+};
 
 describe('bearerToken', () => {
   it('extracts the token from a Bearer header, whatever the case and spacing', () => {

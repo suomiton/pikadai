@@ -26,26 +26,26 @@ export const participants = new Hono<AppEnv>();
 const nameTakenError = () => errors.conflict('That name is already taken in this poll', 'name_taken');
 
 /** Reject a vote set that refers to a date outside this poll; the input comes back unchanged. */
-async function assertVotesBelongToEvent(
+const assertVotesBelongToEvent = async (
   db: D1Database,
   eventId: string,
   votes: Record<string, Answer>,
-): Promise<Record<string, Answer>> {
+): Promise<Record<string, Answer>> => {
   const valid = new Set((await getOptions(db, eventId)).map((o) => o.id));
   const unknown = Object.keys(votes).find((optionId) => !valid.has(optionId));
   if (unknown !== undefined) throw errors.badRequest('Vote refers to an unknown date', 'unknown_option');
   return votes;
-}
+};
 
 /** A participant may be changed by whoever holds its edit token, and by the organiser. */
-async function ownerOrAdmin(
+const ownerOrAdmin = async (
   token: string | null,
   event: EventRow,
   participant: ParticipantRow | null,
-): Promise<boolean> {
+): Promise<boolean> => {
   if (participant && (await isParticipantOwner(token, participant))) return true;
   return isAdmin(token, event);
-}
+};
 
 participants.post(
   '/',

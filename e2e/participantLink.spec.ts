@@ -3,13 +3,13 @@ import type { CreateParticipantResponse, EventView } from '../shared/types';
 import { createPollViaApi, DUMMY_TURNSTILE_TOKEN, expect, test } from './fixtures';
 import { answerDate, nameField, waitForTurnstile } from './helpers';
 
-async function addAnswer(
+const addAnswer = async (
   request: APIRequestContext,
   clientIp: string,
   pollId: string,
   name = 'Ada',
   adminToken: string | null = null,
-) {
+) => {
   const headers = { 'CF-Connecting-IP': clientIp, ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}) };
   const view = (await (await request.get(`/api/events/${pollId}`, { headers })).json()) as EventView;
   const response = await request.post(`/api/events/${pollId}/participants`, {
@@ -20,7 +20,7 @@ async function addAnswer(
   const { id, editToken } = (await response.json()) as CreateParticipantResponse;
   const identity = { id, token: editToken };
   return { identity, hash: `#participant=${id}&token=${editToken}` };
-}
+};
 
 test.describe('private links', () => {
   test('a saved profile blocks another person’s private link and its admin credential', async ({

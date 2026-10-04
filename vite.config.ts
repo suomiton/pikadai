@@ -19,7 +19,7 @@ const STATIC_HEADERS = `/*
   Cache-Control: public, max-age=31536000, immutable
 `;
 
-function emitStaticHeaders(): Plugin {
+const emitStaticHeaders = (): Plugin => {
   return {
     name: 'pikadai:emit-static-headers',
     apply: 'build',
@@ -28,7 +28,7 @@ function emitStaticHeaders(): Plugin {
       this.emitFile({ type: 'asset', fileName: '_headers', source: STATIC_HEADERS });
     },
   };
-}
+};
 
 export default defineConfig({
   plugins: [react(), cloudflare(), emitStaticHeaders()],

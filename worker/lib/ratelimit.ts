@@ -30,7 +30,7 @@ export function rateLimitKey(ip: string | null): string {
 }
 
 /** Expand an IPv6 address into eight normalised hextets, or null if it does not parse. */
-function expandIpv6(address: string): string[] | null {
+const expandIpv6 = (address: string): string[] | null => {
   const halves = address.split('%')[0].toLowerCase().split('::');
   if (halves.length > 2) return null;
   const head = parseGroups(halves[0]);
@@ -39,10 +39,10 @@ function expandIpv6(address: string): string[] | null {
   const missing = 8 - head.length - tail.length;
   if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
   return [...head, ...Array<string>(missing).fill('0'), ...tail];
-}
+};
 
 /** Colon-separated groups with leading zeros dropped; a trailing dotted quad becomes two hextets. */
-function parseGroups(part: string): string[] | null {
+const parseGroups = (part: string): string[] | null => {
   if (part === '') return [];
   const groups = part.split(':');
   const last = groups.at(-1)!;
@@ -53,7 +53,7 @@ function parseGroups(part: string): string[] | null {
   }
   if (!groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return null;
   return groups.map((g) => g.replace(/^0+(?=.)/, ''));
-}
+};
 
 export function rateLimit(pick: (env: Env) => RateLimit): MiddlewareHandler<AppEnv> {
   return async (c, next) => {

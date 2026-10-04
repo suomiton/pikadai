@@ -33,10 +33,10 @@ export function addMonths(iso: string, months: number): string {
 }
 
 /** Weekday names, Monday first, in the user's locale. 2024-01-01 was a Monday. */
-function weekdayNames(weekday: 'short' | 'long'): readonly string[] {
+const weekdayNames = (weekday: 'short' | 'long'): readonly string[] => {
   const fmt = new Intl.DateTimeFormat(undefined, { weekday });
   return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2024, 0, 1 + i)));
-}
+};
 
 export const WEEKDAYS = weekdayNames('short');
 export const WEEKDAYS_LONG = weekdayNames('long');

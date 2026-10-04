@@ -2,11 +2,11 @@ import { z } from 'zod';
 import { parseIsoParts } from './dates';
 import { LIMITS } from './limits';
 
-function isValidCalendarDate(iso: string): boolean {
+const isValidCalendarDate = (iso: string): boolean => {
   const [y, m, d] = parseIsoParts(iso);
   const date = new Date(Date.UTC(y, m - 1, d));
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
-}
+};
 
 export const isoDateSchema = z
   .string()

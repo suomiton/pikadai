@@ -12,7 +12,7 @@ export function CopyField({ label, value, hint }: Props) {
   const [status, setStatus] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function copy() {
+  const copy = async () => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
@@ -25,7 +25,7 @@ export function CopyField({ label, value, hint }: Props) {
       inputRef.current?.select();
       setStatus('Could not copy automatically. The link is selected; copy it with your keyboard.');
     }
-  }
+  };
 
   return (
     <div className="copy-field">

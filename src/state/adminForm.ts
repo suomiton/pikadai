@@ -1,7 +1,7 @@
 import type { EventView } from '@shared/types';
 
 /**
- * State of the organiser's details form. Pure, so the transitions are unit-tested; AdminPanel
+ * State of the organiser's details form. Pure, so the transitions are unit-tested; useAdminForm
  * owns the request, the focus moves and the live region.
  */
 export type AdminFieldKey = 'title' | 'description';

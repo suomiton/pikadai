@@ -52,6 +52,6 @@ export async function verifyTicket(
   return { ok: true, nonce };
 }
 
-function signedPayload(issuedAt: string, nonce: string, bind: string): string {
+const signedPayload = (issuedAt: string, nonce: string, bind: string): string => {
   return `${issuedAt}.${nonce}.${bind}`;
-}
+};
