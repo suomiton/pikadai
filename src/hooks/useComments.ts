@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createCommentSchema } from '@shared/schemas';
 import { api } from '../lib/api';
-import { isParticipantDisabled } from '../lib/errors';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
-import { useAsyncAction } from './useAsyncAction';
+import { usePollAction } from './usePollAction';
 
 const fitTextarea = (el: HTMLTextAreaElement) => {
   el.style.height = 'auto';
@@ -40,7 +39,7 @@ export function useComments() {
   const [bodyError, setBodyError] = useState<string | undefined>();
   const [posted, setPosted] = useState(false);
   const [status, setStatus] = useState('');
-  const { busy, error, run } = useAsyncAction();
+  const { busy, error, run } = usePollAction();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const postedNoteRef = useRef<HTMLParagraphElement>(null);
 
@@ -79,12 +78,7 @@ export function useComments() {
     }
     setBodyError(undefined);
     const sent = await run(async () => {
-      try {
-        await api.addComment(event.id, parsed.data, me);
-      } catch (err) {
-        if (isParticipantDisabled(err)) void refresh(event.id);
-        throw err;
-      }
+      await api.addComment(event.id, parsed.data, me);
       setPosted(true);
       await refresh(event.id);
     });

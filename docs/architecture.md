@@ -255,6 +255,9 @@ needs the admin token and sets `participants.is_disabled`; nothing is deleted.
 - **What the participant can still do.** Read the poll. Their own token can no longer save answers,
   rename, leave, comment or suggest a date: each answers `403 participant_disabled`. The organiser can
   still change or remove the row.
+- **Finding out.** Nothing refreshes the poll by itself, so someone disabled while their page is open
+  learns it from their next change. Every participant change runs through `usePollAction`, which
+  re-fetches the poll on that refusal, so the page turns read-only whichever change came first.
 - **What it is not.** A ban: in an anonymous poll anyone can join again under another name. The row
   still counts toward the 100-participant cap and keeps its name reserved. Since other people do not
   receive the row, the view carries `isFull`, counted over every row, and the client asks that rather than

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { nameSchema } from '@shared/schemas';
 import { api } from '../lib/api';
-import { isParticipantDisabled } from '../lib/errors';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
 import { useAsyncAction } from './useAsyncAction';
+import { usePollAction } from './usePollAction';
 
 export function useJoinForm(focusOnMount = false) {
   const { event, adminToken } = usePoll();
@@ -70,7 +70,7 @@ export function useRenameForm({ participantId, name, auth }: RenameFormInput) {
   const [draft, setDraft] = useState('');
   const [draftError, setDraftError] = useState<string | undefined>();
   const [status, setStatus] = useState('');
-  const { busy, error, setError, run } = useAsyncAction();
+  const { busy, error, setError, run } = usePollAction();
   const changeButtonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef(false);
@@ -116,12 +116,7 @@ export function useRenameForm({ participantId, name, auth }: RenameFormInput) {
     }
     // Name only: an answer saved from the table at the same moment cannot be overwritten by this.
     const saved = await run(async () => {
-      try {
-        await api.updateParticipant(event.id, participantId, { name: parsed.data }, auth);
-      } catch (err) {
-        if (isParticipantDisabled(err)) void refresh(event.id);
-        throw err;
-      }
+      await api.updateParticipant(event.id, participantId, { name: parsed.data }, auth);
       returnFocus.current = true;
       setOpen(false);
       await refresh(event.id);

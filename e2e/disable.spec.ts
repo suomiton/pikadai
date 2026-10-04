@@ -1,6 +1,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import type { CreateParticipantResponse, EventView } from '../shared/types';
-import { createPollViaApi, DUMMY_TURNSTILE_TOKEN, expect, test, type CreatedPoll } from './fixtures';
+import { createPollViaApi, DUMMY_TURNSTILE_TOKEN, expect, futureIso, test, type CreatedPoll } from './fixtures';
+import { pickDate } from './helpers';
 
 /** A poll where Ada and Grace have both said yes to the first date and Ada has commented. */
 const seed = async (request: APIRequestContext, clientIp: string) => {
@@ -158,5 +159,42 @@ test.describe('disabling a participant', () => {
     await expect(page.getByRole('region', { name: 'Name' })).toContainText('the organiser has disabled you');
     await expect(page.getByText('This private link is no longer valid.')).toHaveCount(0);
     await expect(nameFieldLabel(page)).toHaveCount(0);
+  });
+
+  test('someone disabled while the page is open turns read-only when a date suggestion is refused', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const { poll, ada, headers } = await seed(request, clientIp);
+    await page.goto(privateLink(poll, ada));
+    await page.getByRole('button', { name: 'Suggest a date' }).click();
+    await setDisabled(request, poll, ada, true, headers);
+    await pickDate(page, futureIso(30));
+    const add = page.getByRole('button', { name: /^Add (?!your availability)/ });
+    await add.scrollIntoViewIfNeeded();
+    await add.click();
+    await expect(page.getByRole('region', { name: 'Name' })).toContainText('the organiser has disabled you');
+    await expect(page.getByRole('button', { name: 'Change name' })).toHaveCount(0);
+    await expect(page.getByLabel('Add a comment')).toHaveCount(0);
+  });
+
+  test('someone disabled while the page is open turns read-only when removing their answers is refused', async ({
+    page,
+    request,
+    clientIp,
+  }) => {
+    const { poll, ada, headers } = await seed(request, clientIp);
+    await page.goto(privateLink(poll, ada));
+    await page.getByRole('button', { name: 'Edit your answers' }).click();
+    await page.getByRole('button', { name: 'Remove', exact: true }).click();
+    await setDisabled(request, poll, ada, true, headers);
+    const dialog = page.getByRole('alertdialog', { name: 'Remove your answers?' });
+    await dialog.getByRole('button', { name: 'Remove answers' }).click();
+    await expect(dialog.getByRole('alert')).toHaveText(
+      'The organiser has disabled you in this poll, so you can no longer change anything.',
+    );
+    await expect(page.getByRole('region', { name: 'Name' })).toContainText('the organiser has disabled you');
+    await expect(page.getByLabel('Add a comment')).toHaveCount(0);
   });
 });

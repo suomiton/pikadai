@@ -15,24 +15,31 @@ export interface AsyncAction {
   run: (fn: () => Promise<void>) => Promise<boolean>;
 }
 
-/** The busy / error pair every mutation needs, so components stop writing try/catch/finally. */
-export function useAsyncAction(): AsyncAction {
+/**
+ * The busy / error pair every mutation needs, so components stop writing try/catch/finally. `onError`
+ * sees every failure before its message is shown; keep it stable (useCallback).
+ */
+export function useAsyncAction(onError?: (err: unknown) => void): AsyncAction {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const run = useCallback(async (fn: () => Promise<void>): Promise<boolean> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-      return true;
-    } catch (err) {
-      setError(describeError(err));
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+  const run = useCallback(
+    async (fn: () => Promise<void>): Promise<boolean> => {
+      setBusy(true);
+      setError(null);
+      try {
+        await fn();
+        return true;
+      } catch (err) {
+        onError?.(err);
+        setError(describeError(err));
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onError],
+  );
 
   return { busy, error, setError, run };
 }

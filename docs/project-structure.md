@@ -78,6 +78,7 @@ pikadai/
 │   │   └── voteEditor.ts      The availability table's editing state machine
 │   ├── hooks/
 │   │   ├── useAsyncAction.ts  busy / error / run for one request
+│   │   ├── usePollAction.ts   useAsyncAction for a participant's change; a disabled refusal re-fetches the poll
 │   │   ├── useCreateForm.ts   Creation validation, progress and focus
 │   │   ├── useAdminForm.ts    Organiser draft, requests and focus
 │   │   ├── useNameForms.ts    Joining, renaming and focus for the Name tile

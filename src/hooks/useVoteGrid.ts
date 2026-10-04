@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventOption, Participant } from '@shared/types';
 import { api, ApiRequestError } from '../lib/api';
 import { formatDateLong } from '../lib/dates';
-import { isParticipantDisabled } from '../lib/errors';
 import { computeTallies, hasAnswered, LABEL } from '../lib/votes';
 import { usePoll, usePollActions } from '../state/AppStateProvider';
-import { useAsyncAction, type AsyncAction } from './useAsyncAction';
+import type { AsyncAction } from './useAsyncAction';
 import { useParticipantDisabling } from './useParticipantDisabling';
+import { usePollAction } from './usePollAction';
 import { useVoteEditor, type VoteEditor } from './useVoteEditor';
 import { useVoteEditorFocus, type VoteEditorFocus } from './useVoteEditorFocus';
 import { useVoteRemoval } from './useVoteRemoval';
@@ -50,11 +50,8 @@ const useVoteSaving = (
         { adminToken, participant: me },
       );
     } catch (err) {
-      // Refresh removed dates and prune stale votes, keeping the editor open for another attempt; or show
-      // that the organiser has disabled the viewer.
-      if ((err instanceof ApiRequestError && err.code === 'unknown_option') || isParticipantDisabled(err)) {
-        void refresh(event.id);
-      }
+      // Refresh removed dates and prune stale votes, keeping the editor open for another attempt.
+      if (err instanceof ApiRequestError && err.code === 'unknown_option') void refresh(event.id);
       throw err;
     }
   };
@@ -93,7 +90,7 @@ const useVoteSaving = (
 export function useVoteGrid(showAll: boolean) {
   const { event, me, isAdmin, resultsOnly } = usePoll();
   const editor = useVoteEditor();
-  const action = useAsyncAction();
+  const action = usePollAction();
   const [status, setStatus] = useState('');
   const focus = useVoteEditorFocus(editor.state.returnTo, me?.id, action.busy);
   const saving = useVoteSaving(editor, action, focus, setStatus, showAll);
